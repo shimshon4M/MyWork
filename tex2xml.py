@@ -51,7 +51,7 @@ def read_file(filename):
         ignore_flg=False
         stackline=""
         for line in f.readlines():
-            line=line.replace("\\underline","").replace("\\bfseries","").replace("textbf","")
+            line=line.replace("\\underline","").replace("\\bfseries","").replace("textbf","").replace("\\footnote","")
             line=line.replace("\\%","%").replace("\\&","&")
             #line=re.sub(r"\\cite{no(.*?)}","[\\1]",line) #引用部の書き換え
             line=re.sub(r"\\cite{(.*?)}","",line) #引用部消しちゃう？
