@@ -27,22 +27,23 @@ CURLIES_COMMANDS=[
     ,"ekeywords"  #英語キーワード
     ,"headauthor" #主著者
     ,"headtitle"  #主題目
-    ,"footnote"   #フッタ参照 「*」
-    ,"ref"        #論文内セクション参照 「*節」
-    ,"cite"       #引用 「[*]」
     ,"mbox"
     ,"caption"    #表・図題
     ,"input"      #外部からのデータ入力 表を作るときなどに使用
     ,"addtolength"#表の設定か何か？
     ,"notice"
     ,"bibliographystyle" #
-    ,"bioauthor"  #著者情報
+    ,"bioauthor"    #著者情報
     ,"bibitem"      #参考文献１件に関するブロック
 ] #command{}*
 
-OMIT_COMMANDS=[
-    "affiref"    #所属参照 「†」
+REF_COMMANDS=[
+    "affiref"     #所属参照 「†」
     ,"affilabel"  #所属被参照 「†○○大学」
+    ,"footnote"   #フッタ参照 「*」
+    ,"ref"        #論文内セクション参照 「*節」
+    ,"cite"       #引用 「[*]」
+    ,"label"      #参照じゃないけど読み飛ばすからとりあえず
 ]#参照、引用
 SECTION_COMMANDS=[
     "section"           # 大節
@@ -51,7 +52,7 @@ SECTION_COMMANDS=[
 ]#command{}*...章構造を作る
 labelCommands=["label"]
 pbCommands=["pagebreak"]
-beginAndEndCommands=[
+BEGINEND_COMMANDS=[
     "begin"
     ,"end"
 ] #この２つは独立させとく？
@@ -60,7 +61,7 @@ tmpCommands=[
     "item"   #列挙　「●〜 (1)〜」
     ,"acknowledgment" #謝辞
 ]# 後ろに文字のみがくる 論文の形式を作る
-decorateCommands=[
+DECORATE_COMMANDS=[
     "bf" #太字
     ,"Jem"
     ,"BCAY"
@@ -69,8 +70,10 @@ decorateCommands=[
     ,"BPGS"
     ,"Bbf"
 ]# 文字の装飾 後ろには文字だけまたは{}？
-nonCommands=["maketitle","Jetal","protect","biodate"]# 何も装飾せずコマンドだけのもの
-symbolCommands=[
+nonCommands=[
+    "maketitle","Jetal","protect","biodate"
+]# 何も装飾せずコマンドだけのもの
+SYMBOL_COMMANDS=[
     "BBOP"  # (
     ,"BBCP" # )
     ,"BBOQ" # "
@@ -79,13 +82,13 @@ symbolCommands=[
     ,"BBACOMMA"
     ,"JBA"  # ,
     ,"newblock" # 改行?
-]#記号や文字に置換されるもの
+]#記号や文字に置換される
 beginEndType=[
     "table"           #表
     "thebibliography" #参考文献の節
     "biography"       #著者情報
 ]#begin-endの種類
-itemType=[
+ITEM_TYPE=[
     "itemize"     # ●
     "enumerate"   # (1)(2)... (a)(b)...
 ]#列挙の種類
@@ -107,7 +110,9 @@ def writeFile(xml_tree):
 
 def analyze(text):
     root=ET.Element("root") #xmlのroot
-    for i in range(len(text)):
+    i=0
+    while i<len(text):
+    #for i in range(len(text)):
         read_text=""
         if text[i]=="\\":
             cmd,c_len=readCommand(text[i+1:])
@@ -132,7 +137,12 @@ def analyze(text):
             elif cmd in SECTION_COMMANDS:
                 tag,t_len=readText(text[i+1:],"CURLY")
                 i+=t_len
-                    
+                txt,t_len=readText(text[i+1:],"NOBRACK")
+                createSubElement(root,cmd,txt,key="title",value=tag)
+            elif cmd in REF_COMMANDS:
+                txt,t_len=readText(text[i+1:],"CURLY")
+                i+=t_len
+        i+=1
     return root
                 
 def createSubElement(root,tag,text,key=None,value=None):
@@ -143,38 +153,71 @@ def createSubElement(root,tag,text,key=None,value=None):
     return sub
         
 
+def isAlpha(s):
+    return re.compile(r"[a-zA-Z]").match(s)
+
 def readCommand(text):
     read_cmd=""
     for i in range(len(text)):
-        if text[i].isalpha():# and text[i]!="{" and text[i]!="[":
+        if isAlpha(text[i]): #普通のisalpha()だと日本語全角文字もTrueになってまう
             read_cmd+=text[i]
         else:
             break
     return read_cmd,i
 
 def readText(text,brack_type=None):
-    OBRACK={"BOX":"[","CURLY":"{"}
-    CBRACK={"BOX":"]","CURLY":"}"}
+    OBRACK={"BOX":"[","CURLY":"{","NOBRACK":""}
+    CBRACK={"BOX":"]","CURLY":"}","NOBRACK":""}
     open_curly_brack_num=0
     close_curly_brack_num=0
+    isEndSection=False
+    isUpBegin=False
     read_text=""
-    if brack_type!=None and text[0]!=OBRACK[brack_type]: #指定の括弧で始まらなければ空の読み取り文字列として返す
+    if brack_type not in ["OBRACK","CBRACL","NOBRACK"] and text[0]!=OBRACK[brack_type]: #指定の括弧で始まらなければ空の読み取り文字列として返す
         return "",0
-    for i in range(len(text)):
+    i=0
+    while i<len(text):
+    #for i in range(len(text)):
+        if isUpBegin:
+            if text[i]!="\\":
+                i+=1
+                continue
+            cmd,c_len=readCommand(text[i+1:])
+            if cmd not in BEGINEND_COMMANDS:
+                i+=1
+                continue
         if text[i]==OBRACK[brack_type]:
             open_curly_brack_num+=1
         elif text[i]==CBRACK[brack_type]:
             close_curly_brack_num+=1
-        elif text[i]=="\\": #未対応
+        elif text[i]=="\\": #未完成
             cmd,c_len=readCommand(text[i+1:])
             i+=c_len
             inner_read_text,t_len=readText(text[i+1:],"CURLY")
             i+=t_len
-            read_text+=inner_read_text
+            if cmd in REF_COMMANDS:
+                i+=1
+                continue
+            elif cmd in SECTION_COMMANDS or cmd=="acknowledgment":
+                i-=t_len
+                i-=c_len
+                isEndSection=True
+            elif cmd in BEGINEND_COMMANDS and inner_read_text=="table":
+                if isUpBegin:
+                    isUpBegin=False
+                else:
+                    isUpBegin=True
+            else:
+                read_text+=inner_read_text
         else:
             read_text+=text[i]
-        if open_curly_brack_num==close_curly_brack_num:
+
+        if brack_type!="NOBRACK" and open_curly_brack_num==close_curly_brack_num:
             break
+        elif brack_type=="NOBRACK" and isEndSection:
+            break
+        i+=1
+    read_text=read_text.replace("itemize","").replace("enumerate","")
     return read_text,i+1
 
 if __name__=="__main__":
