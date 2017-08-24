@@ -1,0 +1,17 @@
+import tensorflow as tf
+import numpy as np
+from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
+import gensim.models
+import sys
+
+def readTrainData(filename):
+    with open(filename,"r") as f:
+        for line in f.readlines():
+            
+
+def train():
+    y=tf.nn.softmax(tf.matmul(x,W)+b)
+
+if __name__=="__main__":
+    readTrainData("aaa")
