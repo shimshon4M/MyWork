@@ -12,8 +12,9 @@ import re
 def main(filename):
     tree=ET.parse(filename)
     root=tree.getroot()
-    attribs,texts=removeTags(root)
-    extractTerms(attribs,texts)
+    texts=removeTags(root)
+    #attribs,texts=removeTags(root)
+    #extractTerms(attribs,texts)
     #analyze(root)
     
 def extractTerms(attribs,texts):
@@ -37,15 +38,15 @@ def toMorphemes(texts):
     return ret_texts
 
 def removeTags(root):
-    attribs=[]
-    texts=[]
+    rettexts={}
     for elem in root.iter():
-        if len(elem.attrib)>0:
-            attribs.append(elem.attrib["title"])
-        if elem.text!="":
-            texts.append(elem.text)
-    
-    return attribs,texts
+        if elem.tag=="title":
+            rettexts["title"]=elem.text
+        elif elem.tag=="abstract":
+            rettexts["abstract"]=elem.text
+        elif "section" in elem.tag:
+            rettexts[elem.attrib["title"]]=elem.text
+    return rettexts
 
 
 def analyze(root):
