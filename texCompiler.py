@@ -35,7 +35,7 @@ CURLIES_COMMANDS=[
     #,"bibliographystyle" #
     ,"bioauthor"    #著者情報
     ,"bibitem"      #参考文献１件に関するブロック
-] #command{}*
+]#command{}*
 
 REF_COMMANDS=[
     "affiref"     #所属参照 「†」
@@ -54,7 +54,7 @@ REF_COMMANDS=[
     ,"caption"
     ,"setcounter"
     ,"hspace"
-]#参照、引用ほか 直後にくるカッコ内は無視する
+]#command{}参照、引用ほか 直後にくるカッコ内は無視する
 TREE_COMMANDS=[
     "tree" #command[]{}
     ,"leaf"#command{}
@@ -196,6 +196,9 @@ def readText(text,brack_type=None):
         return "",0
     i=0
     while i<len(text):#1文字ずつ読んでいく
+        if text[i]=="$":
+            i+=1
+            continue
         if isUpBegin:
             if text[i]!="\\":
                 i+=1
@@ -222,7 +225,7 @@ def readText(text,brack_type=None):
                 i-=t_len
                 i-=c_len
                 isEndSection=True
-            elif cmd in BEGINEND_COMMANDS and inner_read_text in ["table","center","figure","tabular","screen"]:
+            elif cmd in BEGINEND_COMMANDS and inner_read_text in ["table","center","figure","tabular","screen","equation"]:
                     isUpBegin=not isUpBegin
             else:
                 read_text+=inner_read_text
