@@ -27,9 +27,9 @@ CURLIES_COMMANDS=[
     ,"ekeywords"  #英語キーワード
     ,"headauthor" #主著者
     ,"headtitle"  #主題目
-    ,"mbox"
-    ,"caption"    #表・図題
-    ,"input"      #外部からのデータ入力 表を作るときなどに使用
+    #,"mbox"
+    #,"caption"    #表・図題
+    #,"input"      #外部からのデータ入力 表を作るときなどに使用
     ,"addtolength"#表の設定か何か？
     ,"notice"
     #,"bibliographystyle" #
@@ -54,6 +54,9 @@ REF_COMMANDS=[
     ,"caption"
     ,"setcounter"
     ,"hspace"
+    ,"mbox"
+    ,"input"
+    ,"caption"
 ]#command{}参照、引用ほか 直後にくるカッコ内は無視する
 TREE_COMMANDS=[
     "tree" #command[]{}
@@ -155,6 +158,8 @@ def analyze(text):
                 tag,t_len=readText(text[i+1:],"CURLY")
                 i+=t_len
                 txt,t_len=readText(text[i+1:],"NOBRACK")
+                if txt=="":#微妙
+                    txt=" "
                 createSubElement(root,cmd,txt,key="title",value=tag)
             elif cmd in REF_COMMANDS:
                 txt,t_len=readText(text[i+1:],"CURLY")
@@ -225,7 +230,7 @@ def readText(text,brack_type=None):
                 i-=t_len
                 i-=c_len
                 isEndSection=True
-            elif cmd in BEGINEND_COMMANDS and inner_read_text in ["table","center","figure","tabular","screen","equation"]:
+            elif cmd in BEGINEND_COMMANDS :#and inner_read_text in ["table","center","figure","tabular","screen","equation"]:
                     isUpBegin=not isUpBegin
             else:
                 read_text+=inner_read_text
@@ -237,7 +242,7 @@ def readText(text,brack_type=None):
         elif brack_type=="NOBRACK" and isEndSection:
             break
         i+=1
-    read_text=read_text.replace("itemize","").replace("enumerate","")
+    read_text=read_text.replace("itemize","").replace("enumerate","").replace("}","")
     return read_text,i+1
 
 if __name__=="__main__":
