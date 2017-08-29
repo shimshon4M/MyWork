@@ -29,6 +29,7 @@ def processEachTerm(term_dic,mecab_results,n=2): #n:素性とするngramの範�
     outputdata=[] #素性 リストのリスト
     for term,imp in term_dic.items():
         term=term.replace(" ","")
+        imp=str(imp)
         tmpdata=[term,imp]#対象語 TermExtractの重要度 表題か 概要or序論か 前後ngramの基本形及び品詞
         for attrib,mecab_result in mecab_results.items():
             mecab_result_spl=mecab_result.split("\n")
@@ -44,7 +45,7 @@ def processEachTerm(term_dic,mecab_results,n=2): #n:素性とするngramの範�
                     kihon,hinshi=getBANgram(mecab_result_spl,i,i,n)
                     tmpdata.extend(kihon)
                     tmpdata.extend(hinshi)
-                    print(tmpdata)
+                    #print(tmpdata)
                     outputdata.append(tmpdata)
                     tmpdata=[term,imp]
                 elif term.startswith(appear):#部分一致の場合
@@ -56,12 +57,12 @@ def processEachTerm(term_dic,mecab_results,n=2): #n:素性とするngramの範�
                             kihon,hinshi=getBANgram(mecab_result_spl,i,tmp_i-1,n)
                             tmpdata.extend(kihon)
                             tmpdata.extend(hinshi)
-                            print(tmpdata)
+                            #print(tmpdata)
                             outputdata.append(tmpdata)
                             tmpdata=[term,imp]
     return outputdata
 
-def getBANgram(mecab_results,s_pos,e_pos,n):
+def getBANgram(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複合語)のpos
     kihonkei=[]
     hinshi=[]
     for i in range (s_pos-n,e_pos+n+1):
@@ -76,7 +77,11 @@ def getBANgram(mecab_results,s_pos,e_pos,n):
                 kihonkei.append("EOS")
                 hinshi.append("EOS")
             else:
-                kihonkei.append(mecab_results[i].split("\t")[1].split(",")[6])
+                tmp_kihon=mecab_results[i].split("\t")[1].split(",")[6]
+                if tmp_kihon=="*":
+                    kihonkei.append(mecab_results[i].split("\t")[0])
+                else:
+                    kihonkei.append(tmp_kihon)
                 hinshi.append(mecab_results[i].split("\t")[1].split(",")[0])
     return kihonkei,hinshi
 
@@ -91,15 +96,22 @@ def removeSpecificValueFromDict(target_dict,rmv_value):
             del(target_dict[k])
     return target_dict
 
+def writeFile(filename,datas):
+    with open(filename,"w")as f:
+        for data in datas:
+            f.write("\t".join(data)+"\n")
+
 if __name__=="__main__":
-    tree=ET.parse(sys.argv[1])
+    filename=sys.argv[1]
+    tree=ET.parse(filename)
     root=tree.getroot()
-    texts=removeTags(root)
+    texts=removeTags(root) #dict{section title:body text}
     mecab_results={}
     for attrib,text in texts.items():
         mecab_result=mecab(text)
         mecab_results[attrib]=mecab_result
     mecab_result_joined="".join(mecab_results.values())
-    term_imp_dic=processTermExtract("".join(mecab_result_joined))
-    term_imp_dic=removeSpecificValueFromDict(term_imp_dic,1.0)
-    processEachTerm(term_imp_dic,mecab_results,3)#第３引数は前後何gramまで素性にするか
+    term_imp_dic=processTermExtract("".join(mecab_result_joined)) # dict{word:imp}
+    term_imp_dic=removeSpecificValueFromDict(term_imp_dic,1.0) # 指定重要度以下の語を除去
+    data=processEachTerm(term_imp_dic,mecab_results,3)#前後の語の分析 第3引数は前後何gramまで素性にするか
+    writeFile(filename+".txt",data)
