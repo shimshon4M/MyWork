@@ -25,12 +25,18 @@ def processTermExtract(text):
     #    print(termextract.core.modify_agglutinative_lang(cmp_noun),value,sep="\t")
     return term_imp_dic
 
-def processEachTerm(term_dic,mecab_results,n=2): #n:素性とするngramの範囲
+def processEachTerm(term_dic,mecab_results,n=2,titleabst_str=""): #n:素性とするngramの範囲
     outputdata=[] #素性 リストのリスト
     for term,imp in term_dic.items():
         term=term.replace(" ","")
         imp=str(imp)
-        tmpdata=[term,imp]#対象語 TermExtractの重要度 表題か 概要or序論か 前後ngramの基本形及び品詞
+        in_title="0"
+        in_abst="0"
+        if term in titleabst_str[0]:
+            in_title="1"
+        if term in titleabst_str[1]:
+            in_abst="1"
+        tmpdata=[term,imp,in_title,in_abst]#対象語 TermExtractの重要度 表題か 概要or序論か 前後ngramの基本形及び品詞
         for attrib,mecab_result in mecab_results.items():
             mecab_result_spl=mecab_result.split("\n")
             for i in range(len(mecab_result_spl)):
@@ -47,7 +53,7 @@ def processEachTerm(term_dic,mecab_results,n=2): #n:素性とするngramの範�
                     tmpdata.extend(hinshi)
                     #print(tmpdata)
                     outputdata.append(tmpdata)
-                    tmpdata=[term,imp]
+                    tmpdata=[term,imp,in_title,in_abst]
                 elif term.startswith(appear):#部分一致の場合
                     tmp_i=i+1
                     while term.startswith(part_term+mecab_result_spl[tmp_i].split("\t")[0]):
@@ -59,7 +65,7 @@ def processEachTerm(term_dic,mecab_results,n=2): #n:素性とするngramの範�
                             tmpdata.extend(hinshi)
                             #print(tmpdata)
                             outputdata.append(tmpdata)
-                            tmpdata=[term,imp]
+                            tmpdata=[term,imp,in_title,in_abst]
     return outputdata
 
 def getBANgram(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複合語)のpos
@@ -113,5 +119,13 @@ if __name__=="__main__":
     mecab_result_joined="".join(mecab_results.values())
     term_imp_dic=processTermExtract("".join(mecab_result_joined)) # dict{word:imp}
     term_imp_dic=removeSpecificValueFromDict(term_imp_dic,1.0) # 指定重要度以下の語を除去
-    data=processEachTerm(term_imp_dic,mecab_results,3)#前後の語の分析 第3引数は前後何gramまで素性にするか
+    if "title" in texts:
+        title=texts["title"]
+    else:
+        title=""
+    if "abstract" in texts:
+        abst=texts["abstract"]
+    else:
+        abst=""
+    data=processEachTerm(term_imp_dic,mecab_results,3,[title,abst])#前後の語の分析 arg3:前後何gramまで素性にするか arg4:タイトル・アブスト素性用
     writeFile(filename+".txt",data)

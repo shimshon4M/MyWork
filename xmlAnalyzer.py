@@ -39,11 +39,15 @@ def toMorphemes(texts):
 
 def removeTags(root):
     rettexts={}
+    did_title=False
+    did_abst=False
     for elem in root.iter():
-        if elem.tag=="title":
+        if "title" in elem.tag and not did_title:
             rettexts["title"]=elem.text
-        elif elem.tag=="abstract":
+            did_title=True
+        elif "abstract" in elem.tag and not did_abst:
             rettexts["abstract"]=elem.text
+            did_abst=True
         elif "section" in elem.tag:
             rettexts[elem.attrib["title"]]=elem.text
     return rettexts
