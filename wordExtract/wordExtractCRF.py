@@ -35,7 +35,14 @@ def train(train_data):
     trainer.train("model.crfsuite")
 
 def data2features(data):
-    return data[1:-1]
+    if float(data[1])>100:
+        imp="1"
+    else:
+        imp="0"
+    ret_data=[str(imp)]
+    ret_data.extend(data[2:-1])
+    return ret_data
+    #return data[1:-1]
 
 def data2labels(data):
     return data[-1]
