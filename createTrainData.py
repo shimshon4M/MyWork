@@ -68,6 +68,10 @@ def processEachTerm(term_dic,mecab_results,n=2,titleabst_str=""): #n:素性と�
                             tmpdata=[term,imp,in_title,in_abst]
     return outputdata
 
+def processEachTermPair(term_dic,mecab_results,n=2,titleabst_str=""):
+    outputdata=[] #素性 リストのリスト
+    return outputdata
+
 def getBANgram(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複合語)のpos
     kihonkei=[]
     hinshi=[]
@@ -107,7 +111,7 @@ def writeFile(filename,datas):
         for data in datas:
             f.write("\t".join(data)+"\n")
 
-def process_to_one_word(filename,texts):
+def process(filename,texts):
     mecab_results={}
     for attrib,text in texts.items():
         mecab_result=mecab(text)
@@ -126,12 +130,12 @@ def process_to_one_word(filename,texts):
     data=processEachTerm(term_imp_dic,mecab_results,3,[title,abst])#前後の語の分析 arg3:前後何gramまで素性にするか arg4:タイトル・アブスト素性用
     writeFile(filename+".txt",data)
 
-def process_to_pair_word(filename,texts):
-    mecab_results={}
-
-if __name__=="__main__":
+def main():
     filename=sys.argv[1]
     tree=ET.parse(filename)
     root=tree.getroot()
     texts=removeTags(root) #dict{section title:body text}
-    process_to_one_word(filename,texts)
+    process(filename,texts)
+
+if __name__=="__main__":
+    main()
