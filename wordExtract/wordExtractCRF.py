@@ -16,7 +16,7 @@ def readData(filename):
             data.append(tmp_data)
            """
             data.append(line.split("\t"))
-    train_num=int(len(data)*0.9)
+    train_num=0#int(len(data)*0.9)
     train_data=data[:train_num]
     test_data=data[train_num:]
     return train_data,test_data
@@ -35,7 +35,14 @@ def train(train_data):
     trainer.train("model.crfsuite")
 
 def data2features(data):
-    return data[1:-1]
+    if float(data[1])>100:
+        imp="1"
+    else:
+        imp="0"
+    ret_data=[str(imp)]
+    ret_data.extend(data[2:-1])
+    return ret_data
+    #return data[1:-1]
 
 def data2labels(data):
     return data[-1]
@@ -57,10 +64,12 @@ def test(test_data):
         correct_label=test_labels[i].strip()
         if pred_label==correct_label:
             correct_num+=1
+        if pred_label=="1":
+            print(test_terms[i],":",test_features[i][4],test_features[i][5],test_terms[i],test_features[i][6],test_features[i][7],"\n")
         #print(test_terms[i],"pred:%s"%pred_label,"correct:%s"%correct_label)
     print(correct_num/len(test_terms))
 
 if __name__=="__main__":
     train_data,test_data=readData(sys.argv[1])
-    train(train_data)
+    #train(train_data)
     test(test_data)

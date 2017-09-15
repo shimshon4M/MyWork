@@ -107,11 +107,7 @@ def writeFile(filename,datas):
         for data in datas:
             f.write("\t".join(data)+"\n")
 
-if __name__=="__main__":
-    filename=sys.argv[1]
-    tree=ET.parse(filename)
-    root=tree.getroot()
-    texts=removeTags(root) #dict{section title:body text}
+def process_to_one_word(filename,texts):
     mecab_results={}
     for attrib,text in texts.items():
         mecab_result=mecab(text)
@@ -129,3 +125,13 @@ if __name__=="__main__":
         abst=""
     data=processEachTerm(term_imp_dic,mecab_results,3,[title,abst])#前後の語の分析 arg3:前後何gramまで素性にするか arg4:タイトル・アブスト素性用
     writeFile(filename+".txt",data)
+
+def process_to_pair_word(filename,texts):
+    mecab_results={}
+
+if __name__=="__main__":
+    filename=sys.argv[1]
+    tree=ET.parse(filename)
+    root=tree.getroot()
+    texts=removeTags(root) #dict{section title:body text}
+    process_to_one_word(filename,texts)
