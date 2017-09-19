@@ -38,20 +38,29 @@ def toMorphemes(texts):
     return ret_texts
 
 def removeTags(root):
+    """
+    key:section title value:[body text]の辞書を返す
+    """
     rettexts={}
-    did_title=False
-    did_abst=False
+    appeared_title=False#titleが処理済みか
+    appeared_abst=False#abstが処理済みか
     for elem in root.iter():
-        if "title" in elem.tag and not did_title:
+        if "title" in elem.tag and not appeared_title:
             rettexts["title"]=elem.text
-            did_title=True
-        elif "abstract" in elem.tag and not did_abst:
+            appeared_title=True
+        elif "abstract" in elem.tag and not appeared_abst:
             rettexts["abstract"]=elem.text
-            did_abst=True
+            appeared_abst=True
         elif "section" in elem.tag:
             rettexts[elem.attrib["title"]]=elem.text
     return rettexts
 
+def period_split(text):
+    """
+    textを句点で分割したlistを返す
+    普通のsplitと違い句点自体は消さない
+    """
+    i=0
 
 def analyze(root):
     for elem in root.findall("section"):

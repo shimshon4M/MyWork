@@ -115,26 +115,39 @@ ITEM_TYPE=[
 ]#列挙の種類
 
 def main(filename):
-    text=readFile(filename)
+    text=readFile(filename)#改行詰め
     xml_tree=analyze(text)
     writeFile(filename,xml_tree)
 
 def readFile(filename):
+    """
+    texの読み込み
+    改行詰めで全部つなげる
+    """
     with open(filename,"r")as f:
         text=f.read()
     return text.replace("\n","")
 
 def writeFile(in_filename,xml_tree):
+    """
+    引数のElementTreeをtexファイル名+".xml"という名前のxmlで保存
+    """
     pretty_string=minidom.parseString(ET.tostring(xml_tree,"utf-8")).toprettyxml(indent="  ")
     with open(in_filename+".xml","w")as f:
         f.write(pretty_string)
 
 def analyze(text):
     root=ET.Element("root") #xmlのroot
-    i=0
+    read(text,root,i=0)
+    return root
+
+def read(text,root,i):
     while i<len(text):#1文字ずつ読んでいく
         read_text=""
-        if text[i]=="\\":
+        if text[i]=="$":
+            i+=1
+            continue
+        if text[i]=="\\":#こまんどの始まり
             cmd,c_len=readCommand(text[i+1:])#コマンドとその長さ
             i+=c_len
             #print(cmd)
@@ -167,23 +180,31 @@ def analyze(text):
             #elif cmd in BEGIN_END_COMMANDS:
                 
         i+=1
-    return root
                 
 def createSubElement(root,tag,text,key=None,value=None):
+    """
+    受け取ったElementTreeのrootにサブElementをつける
+    """
     sub=ET.SubElement(root,tag)
     sub.text=text
     if key!=None and value!=None:
         sub.set(key,value)
-    return sub
+    return sub#返す必要ない？
         
 
 def isAlpha(s):
+    """
+    アルファベット(a-z A-Z)ならTrueを返す
+    """
     return re.compile(r"[a-zA-Z]").match(s)
 
 def readCommand(text):
+    """
+    コマンドとその長さを返す
+    """
     read_cmd=""
-    for i in range(len(text)):
-        if isAlpha(text[i]): #普通のisalpha()だと日本語全角文字もTrueになってまう
+    for i in range(len(text)):#アルファベットである間読み続ける
+        if isAlpha(text[i]): #普通のisalpha()だと日本語全角文字もTrueになってまうので自作ので
             read_cmd+=text[i]
         else:
             break

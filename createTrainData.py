@@ -127,7 +127,8 @@ def process(filename,texts):
         abst=texts["abstract"]
     else:
         abst=""
-    data=processEachTerm(term_imp_dic,mecab_results,3,[title,abst])#前後の語の分析 arg3:前後何gramまで素性にするか arg4:タイトル・アブスト素性用
+    #data=processEachTerm(term_imp_dic,mecab_results,3,[title,abst])#前後の語の分析 arg3:前後何gramまで素性にするか arg4:タイトル・アブスト素性用
+    data=processEachTermPair(term_imp_dic,mecab_results,3,[title,abst])#
     writeFile(filename+".txt",data)
 
 def main():
