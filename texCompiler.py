@@ -5,35 +5,42 @@ import xml.dom.minidom as minidom
 import sys
 import re
 
-BOX_CURLY_COMMANDS=["documentclass"
-                    ,"usepackage"
-] #command[]{}
+OBRACK={"BOX":"[","CURLY":"{","NOBRACK":""}
+CBRACK={"BOX":"]","CURLY":"}","NOBRACK":""}
+
+BOX_CURLY_COMMANDS=["cite"
+                    #,"documentclass"
+                    #,"documentstyle"
+                    #,"usepackage"
+] #command[]{} いらない？
 CURLIES_COMMANDS=[
-    "Volume"
-    ,"Number"
-    ,"Month"
-    ,"Year"
-    ,"received"
-    ,"revised"
-    ,"accepted"
+    #"Volume"
+    #,"Number"
+    #,"Month"
+    #,"Year"
+    #,"received"
+    #,"revised"
+    #,"accepted"
     #,"setcounter"
+    "title"      #言語指定なし題目(昔のだとこれ？)
+    ,"author"     #言語指定なし著者(〃)
     ,"jtitle"     #日本語題目
     ,"jauthor"    #日本語著者
     ,"jabstract"  #日本語概要
     ,"jkeywords"  #日本語キーワード
-    ,"etitle"     #英語題目
-    ,"eauthor"    #英語著者
-    ,"eabstract"  #英語概要
-    ,"ekeywords"  #英語キーワード
-    ,"headauthor" #主著者
-    ,"headtitle"  #主題目
+    #,"etitle"     #英語題目
+    #,"eauthor"    #英語著者
+    #,"eabstract"  #英語概要
+    #,"ekeywords"  #英語キーワード
+    #,"headauthor" #主著者
+    #,"headtitle"  #主題目
     #,"mbox"
     #,"caption"    #表・図題
     #,"input"      #外部からのデータ入力 表を作るときなどに使用
     ,"addtolength"#表の設定か何か？
     ,"notice"
     #,"bibliographystyle" #
-    ,"bioauthor"    #著者情報
+    #,"bioauthor"    #著者情報
     ,"bibitem"      #参考文献１件に関するブロック
 ]#command{}*
 
@@ -57,6 +64,7 @@ REF_COMMANDS=[
     ,"mbox"
     ,"input"
     ,"caption"
+    #,"appendix"
 ]#command{}参照、引用ほか 直後にくるカッコ内は無視する
 TREE_COMMANDS=[
     "tree" #command[]{}
@@ -137,50 +145,84 @@ def writeFile(in_filename,xml_tree):
         f.write(pretty_string)
 
 def analyze(text):
+    """
+    etreeを作るメイン作業
+    """
     root=ET.Element("root") #xmlのroot
-    read(text,root,i=0)
+    read(text,root)
     return root
 
-def read(text,root,i):
-    while i<len(text):#1文字ずつ読んでいく
-        read_text=""
-        if text[i]=="$":
+def read(text,root,brack_type="NOBRACK",read_inner=False):
+    """
+    1文字ずつ読んで構文解析
+    brack_type:括弧の種類(形)
+    read_inner:括弧内を読むのか否か
+    """
+    if brack_type not in ["OBRACK","CBRACL","NOBRACK"] and text[0]!=OBRACK[brack_type]:
+        return "",0#指定の括弧で始まらなければ空の読み取り文字列として返す(ここに入らないように作るけど)
+    open_curly_brack_num=0
+    close_curly_brack_num=0
+    appear_open_brack=False#出現の有無 上記numでなくこっち使うか？
+    appear_close_brack=False
+    is_end_section=False #NOBRACKの場合は括弧の出現での範囲同定ができないのでこのフラグで管理
+    is_up_begin=False
+    read_text=""
+    i=0
+    while i<len(text):
+        #read_text=""
+        if text[i]=="$":#andとか記号に使われる
             i+=1
             continue
-        if text[i]=="\\":#こまんどの始まり
-            cmd,c_len=readCommand(text[i+1:])#コマンドとその長さ
+        elif text[i]=="\\":#コマンドの始まり "\"
+            cmd,c_len=readCommand(text[i+1:])#コマンドとその長さを得る
             i+=c_len
             #print(cmd)
-            if cmd in BOX_CURLY_COMMANDS:
-                txt,t_len=readText(text[i+1:],"BOX")
+            if cmd in BOX_CURLY_COMMANDS:#[]{}で出てくるものは不要なものしかない？
+                txt,t_len=read(text[i+1:],root,"BOX")
                 i+=t_len
-                read_text+=txt
-                read_text+=" "
-                txt,t_len=readText(text[i+1:],"CURLY")
+                #read_text+=txt
+                #read_text+=" "
+                txt,t_len=read(text[i+1:],root,"CURLY")
                 i+=t_len
-                read_text+=txt
-                createSubElement(root,cmd,read_text)
+                #read_text+=txt
+                #createSubElement(root,cmd,read_text)
             elif cmd in CURLIES_COMMANDS:
                 txts=[]
                 while text[i+1]=="{":
-                    txt,t_len=readText(text[i+1:],"CURLY")
+                    txt,t_len=read(text[i+1:],root,"CURLY")
                     i+=t_len
                     txts.append(txt)
                 createSubElement(root,cmd," ".join(txts))
-            elif cmd in SECTION_COMMANDS:
-                tag,t_len=readText(text[i+1:],"CURLY")
+            elif cmd in SECTION_COMMANDS or cmd=="acknowledgment":
+                tag,t_len=read(text[i+1:],root,"CURLY")
                 i+=t_len
-                txt,t_len=readText(text[i+1:],"NOBRACK")
-                if txt=="":#微妙
+                txt,t_len=read(text[i+1:],root,"NOBRACK")
+                if txt=="":#スマートじゃないけどｗ
                     txt=" "
                 createSubElement(root,cmd,txt,key="title",value=tag)
+                is_end_section=True
             elif cmd in REF_COMMANDS:
-                txt,t_len=readText(text[i+1:],"CURLY")
+                txt,t_len=read(text[i+1:],root,"CURLY")
                 i+=t_len
-            #elif cmd in BEGIN_END_COMMANDS:
-                
+            elif cmd in BEGINEND_COMMANDS:
+                is_up_begin=not is_up_begin
+        else:#コマンドではない(本文を読む)場合
+            if text[i]==OBRACK[brack_type]:
+                open_curly_brack_num+=1
+                appear_open_brack=True
+            elif text[i]==CBRACK[brack_type]:
+                close_curly_brack_num+=1
+                appear_close_brack=True
+            else:
+                read_text+=text[i]
+            if brack_type!="NOBRACK" and appear_open_brack and appear_close_brack:#open_curly_brack_num==close_curly_brack_num: #NOBRCAKのときは括弧で判定できない
+                break
+            elif brack_type=="NOBRACK" and is_end_section:
+                break
         i+=1
-                
+    read_text=read_text.replace("{itemize}","").replace("{enumerate}","")#.replace("}","") #暫定処置
+    return read_text,i+1
+        
 def createSubElement(root,tag,text,key=None,value=None):
     """
     受け取ったElementTreeのrootにサブElementをつける
@@ -189,12 +231,13 @@ def createSubElement(root,tag,text,key=None,value=None):
     sub.text=text
     if key!=None and value!=None:
         sub.set(key,value)
-    return sub#返す必要ない？
+    return sub#返す必要ない？>subの下にsubを作るときには使う
         
 
 def isAlpha(s):
     """
     アルファベット(a-z A-Z)ならTrueを返す
+    (普通のisalpha()だと日本語全角もTrueになってしまうので自作)
     """
     return re.compile(r"[a-zA-Z]").match(s)
 
@@ -203,68 +246,12 @@ def readCommand(text):
     コマンドとその長さを返す
     """
     read_cmd=""
-    for i in range(len(text)):#アルファベットである間読み続ける
-        if isAlpha(text[i]): #普通のisalpha()だと日本語全角文字もTrueになってまうので自作ので
+    for i in range(len(text)):#アルファベットである間読み続けることで判別
+        if isAlpha(text[i]): #普通のisalpha()だと日本語全角文字もTrueになってまうので自作
             read_cmd+=text[i]
         else:
             break
     return read_cmd,i
-
-def readText(text,brack_type=None):
-    OBRACK={"BOX":"[","CURLY":"{","NOBRACK":""}
-    CBRACK={"BOX":"]","CURLY":"}","NOBRACK":""}
-    open_curly_brack_num=0#開き括弧の数
-    close_curly_brack_num=0#閉じ括弧の数
-    isEndSection=False
-    isUpBegin=False
-    read_text=""
-    if brack_type not in ["OBRACK","CBRACL","NOBRACK"] and text[0]!=OBRACK[brack_type]: #指定の括弧で始まらなければ空の読み取り文字列として返す
-        return "",0
-    i=0
-    while i<len(text):#1文字ずつ読んでいく
-        if text[i]=="$":
-            i+=1
-            continue
-        if isUpBegin:
-            if text[i]!="\\":
-                i+=1
-                continue
-            cmd,c_len=readCommand(text[i+1:])
-            if cmd not in BEGINEND_COMMANDS:
-                i+=1
-                continue
-        if text[i]==OBRACK[brack_type]:
-            open_curly_brack_num+=1
-        elif text[i]==CBRACK[brack_type]:
-            close_curly_brack_num+=1
-        elif text[i]=="\\": #未完成
-            cmd,c_len=readCommand(text[i+1:])
-            i+=c_len
-            inner_read_text,t_len=readText(text[i+1:],"CURLY")
-            i+=t_len
-            if cmd in REF_COMMANDS:
-                txt,tmp_t_len=readText(text[i+1:],"CURLY")
-                i+=tmp_t_len
-                #i+=1
-                continue
-            elif cmd in SECTION_COMMANDS or cmd=="acknowledgment":
-                i-=t_len
-                i-=c_len
-                isEndSection=True
-            elif cmd in BEGINEND_COMMANDS :#and inner_read_text in ["table","center","figure","tabular","screen","equation"]:
-                    isUpBegin=not isUpBegin
-            else:
-                read_text+=inner_read_text
-        else:
-            read_text+=text[i]
-
-        if brack_type!="NOBRACK" and open_curly_brack_num==close_curly_brack_num:
-            break
-        elif brack_type=="NOBRACK" and isEndSection:
-            break
-        i+=1
-    read_text=read_text.replace("itemize","").replace("enumerate","").replace("}","")
-    return read_text,i+1
 
 if __name__=="__main__":
     main(sys.argv[1])
