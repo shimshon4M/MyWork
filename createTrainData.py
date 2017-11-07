@@ -1,7 +1,12 @@
+"""
+実行時は引数に論文xmlファイルを指定
+"""
+
 import termextract.mecab
 import termextract.core
 import collections
 import sys
+import re
 from utils import get_files
 import xml.etree.ElementTree as ET
 from xmlAnalyzer import removeTags
@@ -12,10 +17,10 @@ def processOneFile(filename):
         words=f.readlines() #いっぺん全部読み込んでおく
     processTermExtract("".join(words))
 
-"""
-分かち書きテキストを引数とする
-"""
 def processTermExtract(text):
+    """
+    分かち書きテキストを引数に
+    """
     freq=termextract.mecab.cmp_noun_dict(text)
     LR=termextract.core.score_lr(freq,ignore_words=termextract.mecab.IGNORE_WORDS,lr_mode=1,average_rate=1)
     term_imp_dic=termextract.core.term_importance(freq,LR)
@@ -69,7 +74,15 @@ def processEachTerm(term_dic,mecab_results,n=2,titleabst_str=""): #n:素性と�
     return outputdata
 
 def processEachTermPair(term_dic,mecab_results,n=2,titleabst_str=""):
+    """
+    文中の二単語について
+    TermExtract使わないverで作った
+    """
     outputdata=[] #素性 リストのリスト
+    for attrib,mecab_result in mecab_results.items():
+        for i,morpheme in enumerate(mecab_result.split("\n")):
+            appear=morpheme.split("\n")[0]
+    
     return outputdata
 
 def getBANgram(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複合語)のpos
@@ -96,9 +109,10 @@ def getBANgram(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複�
     return kihonkei,hinshi
 
 def mecab(text):
-    m=MeCab.Tagger("")
+    #m=MeCab.Tagger("")
+    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC
     m.parse("")
-    return m.parse(text)
+    return m.parse(text)#結果はstr型
 
 def removeSpecificValueFromDict(target_dict,rmv_value):
     for k,v in list(target_dict.items()):
@@ -111,7 +125,10 @@ def writeFile(filename,datas):
         for data in datas:
             f.write("\t".join(data)+"\n")
 
-def process(filename,texts):
+def process_withTE(filename,texts):
+    """
+    TermExtractを使うver
+    """
     mecab_results={}
     for attrib,text in texts.items():
         mecab_result=mecab(text)
@@ -131,12 +148,85 @@ def process(filename,texts):
     data=processEachTermPair(term_imp_dic,mecab_results,3,[title,abst])#
     writeFile(filename+".txt",data)
 
+def process(filename,texts):
+    """
+    TermExtractを使わず、複合名詞や用語的表現(○○の△△)などのキーワードリストを作ってから関係抽出するver
+    """
+    mecab_results={}
+    term_dic={}#キーワードリスト key:キーワード value:文番号リスト(lenで出現回数も求まる)
+    for attrib,text in texts.items():
+        mecab_result=mecab(text)#mecab_resultは1行1形態素情報のstr
+        mecab_results[attrib]=mecab_result
+        #キーワード抽出
+        partof_term="" #複合名詞抽出用tmp
+        partof_termex="" #用語的行源抽出用tmp
+        now_pos=0 #用語的表現抽出用 現在の場所 0:空 1:○○済 2:の済 3:△△済
+        for i,morpheme in enumerate(mecab_result.split("\n")): #複合名詞の抽出と用語的表現の抽出はこのfor文中で別々に
+            print(morpheme)
+            if morpheme not in ["EOS",""]:
+                appear,infos=morpheme.split("\t")#出現形と品詞情報
+                if(len(infos.split(","))==9):
+                    hinshi,hinshi_det1,hinshi_det2,hinshi_det3,katsuyo1,katsuyo2,base,read,pron=infos.split(",")
+                else:
+                    hinshi,hinshi_det1,hinshi_det2,hinshi_det3,katsuyo1,katsuyo2,base=infos.split(",")
+                #---複合名詞抽出処理---
+                if(hinshi=="名詞"):
+                    partof_term+=appear
+                elif(hinshi!="名詞" and len(partof_term)>0):
+                    if(partof_term in term_dic):term_dic[partof_term].append((attrib,i))
+                    else:term_dic[partof_term]=[(attrib,i)]
+                    partof_term=""
+                #---用語的表現抽出処理---
+                if(hinshi=="名詞" and now_pos==0):#○○の部分
+                    partof_termex+=appear
+                    now_pos=1
+                elif(appear in ["の","を"] and now_pos==1):#「の」の部分
+                    partof_termex+="の"
+                    now_pos=2
+                elif(hinshi!="名詞" and now_pos==2):#「の」までいいけど次に名詞が来ない場合
+                    partof_termex=""
+                    now_pos=0
+                elif(hinshi=="名詞" and hinshi_det1=="サ変接続" and now_pos==2):#△△の部分
+                    partof_termex+=appear
+                    if(partof_termex in term_dic):term_dic[partof_termex].append((attrib,i))
+                    else:term_dic[partof_termex]=[(attrib,i)]
+                    partof_termex=""
+                    now_pos=0
+                #----------------------
+    remove_terms=[term for term,appear_pos in term_dic.items() if len(appear_pos)<2]#任意の出現回数以下のものは除く
+    for rmterm in remove_terms:
+        term_dic.pop(rmterm)
+    for k,v in term_dic.items():
+        print(k,v)
+    print(len(term_dic))
+    if "title" in texts:
+        title=texts["title"]
+    else:
+        title=""
+    if "abstract" in texts:
+        abst=texts["abstract"]
+    else:
+        abst=""
+    #data=processEachTermPair(term_dic,mecab_results,4,[title,abst])#単語ペアについて分析して素性作成 arg3:前後何gramまで素性にするか arg4:タイトル・アブスト文字列リスト
+    #writeFile(filename+".txt",data)
+
+def split_texts(unit_texts):
+    """
+    ピリオドでsplitした方が後々やりやすい？
+    """
+    for attrib,texts in unit_texts.items():
+        a
+    
+    
 def main():
     filename=sys.argv[1]
     tree=ET.parse(filename)
     root=tree.getroot()
-    texts=removeTags(root) #dict{section title:body text}
-    process(filename,texts)
+    texts=removeTags(root) #texts = dict{section title:body text}
+    split_texts(texts)
+    #process_withTE(filename,texts)
+    #process(filename,texts)
 
+    
 if __name__=="__main__":
     main()

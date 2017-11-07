@@ -52,7 +52,10 @@ def removeTags(root):
             rettexts["abstract"]=elem.text
             appeared_abst=True
         elif "section" in elem.tag:
-            rettexts[elem.attrib["title"]]=elem.text
+            if elem.text==None:
+                rettexts[elem.attrib["title"]]=""
+            else:
+                rettexts[elem.attrib["title"]]=elem.text
     return rettexts
 
 def period_split(text):
