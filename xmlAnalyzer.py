@@ -1,8 +1,8 @@
 #!usr/bin/env python
 
 import xml.etree.ElementTree as ET
-import termextract.mecab
-import termextract.core
+#import termextract.mecab
+#import termextract.core
 import collections
 import MeCab
 from pprint import pprint

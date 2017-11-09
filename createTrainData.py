@@ -2,8 +2,9 @@
 実行時は引数に論文xmlファイルを指定
 """
 
-import termextract.mecab
-import termextract.core
+
+#import termextract.mecab
+#import termextract.core
 import collections
 import sys
 import re
@@ -11,6 +12,7 @@ from utils import get_files
 import xml.etree.ElementTree as ET
 from xmlAnalyzer import removeTags
 import MeCab
+import CaboCha
 
 def processOneFile(filename):
     with open(filename)as f:
@@ -159,7 +161,7 @@ def process(filename,texts):
         mecab_results[attrib]=mecab_result
         #キーワード抽出
         partof_term="" #複合名詞抽出用tmp
-        partof_termex="" #用語的行源抽出用tmp
+        partof_termex="" #用語的表現抽出用tmp
         now_pos=0 #用語的表現抽出用 現在の場所 0:空 1:○○済 2:の済 3:△△済
         for i,morpheme in enumerate(mecab_result.split("\n")): #複合名詞の抽出と用語的表現の抽出はこのfor文中で別々に
             print(morpheme)
@@ -215,8 +217,8 @@ def split_texts(unit_texts):
     ピリオドでsplitした方が後々やりやすい？
     """
     for attrib,texts in unit_texts.items():
-        a
-    
+        unit_texts[attrib]=re.split(r"\.|。|．",texts) #。も残したい？(素性になりうるかもなので)
+        print(unit_texts[attrib])
     
 def main():
     filename=sys.argv[1]
