@@ -201,7 +201,7 @@ def process(filename,text,title,abstract):
     feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_result.split("\n"))),4,[title,abstract])
     #for f in feature_data:
     #   print(f)
-    #writeFile(filename[:-4]+"_feature.txt",feature_data)
+    writeFile(filename[:-4]+"_feature.txt",feature_data)
 
 def split_texts(unit_texts):
     """
