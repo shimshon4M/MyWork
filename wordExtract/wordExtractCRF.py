@@ -62,6 +62,7 @@ def test(test_data):
     for i in range(len(test_terms)):
         pred_label=pred_labels[i].strip()
         correct_label=test_labels[i].strip()
+        #print("pred:",pred_label," correct:",correct_label)
         if pred_label==correct_label:
             correct_num+=1
         if pred_label=="1":
