@@ -44,7 +44,10 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
         if term in titleabst_str[1]:
             in_abst="1"
         freq=calcFreqFeature(freq_list,len(pos_list),10)#これ使うか単純に出現頻度そのまま入れるか
-        tmpdata=[term,"freq="+str(freq),"in_title="+in_title,"in_abst="+in_abst]#対象語 出現回数 表題か 概要or序論か 前後ngramの基本形及び品詞
+        is_uni=0
+        if len(term)==1:
+            is_uni=1
+        tmpdata=[term,"freq="+str(freq),"is_uni="+str(is_uni),"in_title="+in_title,"in_abst="+in_abst]#対象語 出現回数 表題か 概要or序論か 前後ngramの基本形及び品詞
         #print("term : ",term)
         for pos in pos_list:
             #print("  pos : ",pos)
@@ -59,7 +62,7 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
             tmpdata.extend(appendFeatureLabel(kihon,n,"kihon"))
             tmpdata.extend(appendFeatureLabel(hinshi,n,"hinshi"))
             outputdata.append(tmpdata)
-            tmpdata=[term,"freq="+str(freq),"in_title="+in_title,"in_abst="+in_abst]
+            tmpdata=[term,"freq="+str(freq),"is_uni="+str(is_uni),"in_title="+in_title,"in_abst="+in_abst]
     return outputdata
 
 def appendFeatureLabel(target_list,n,label):#前後ngramのn
