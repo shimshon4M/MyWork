@@ -4,19 +4,22 @@ import sklearn
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelBinarizer
 import sys
+from utils import get_files
 
-def readData(filename):
+def readData(dirname):
     data=[]
-    with open(filename,"r",encoding="utf-8") as f:
-        for line in f.readlines():
-            """
-            tmp_data=[]
-            for d in line.split("\t"):
-                tmp_data.append(str(d.encode("utf-8")))
-            data.append(tmp_data)
-           """
-            data.append(line.split("\t"))
-    train_num=0#int(len(data)*0.9)
+    files=get_files(dirname)
+    for filename in files:
+        with open(filename,"r",encoding="utf-8") as f:
+            for line in f.readlines():
+                """
+                tmp_data=[]
+                for d in line.split("\t"):
+                    tmp_data.append(str(d.encode("utf-8")))
+                data.append(tmp_data)
+                """
+                data.append(line.split("\t"))
+    train_num=int(len(data)*0.9)
     train_data=data[:train_num]
     test_data=data[train_num:]
     return train_data,test_data
@@ -35,14 +38,7 @@ def train(train_data):
     trainer.train("model.crfsuite")
 
 def data2features(data):
-    if float(data[1])>100:
-        imp="1"
-    else:
-        imp="0"
-    ret_data=[str(imp)]
-    ret_data.extend(data[2:-1])
-    return ret_data
-    #return data[1:-1]
+    return data[2:-1]
 
 def data2labels(data):
     return data[-1]

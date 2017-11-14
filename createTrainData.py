@@ -34,6 +34,7 @@ def processTermExtract(text):
 
 def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性とするngramの範囲
     outputdata=[] #素性 リストのリスト returnする
+    freq_list=getFreqList(term_dic)
     for term,pos_list in term_dic.items():
         #term=term.replace(" ","")
         in_title="0"
@@ -42,7 +43,8 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
             in_title="1"
         if term in titleabst_str[1]:
             in_abst="1"
-        tmpdata=[term,"freq="+str(len(pos_list)),"in_title="+in_title,"in_abst="+in_abst]#対象語 出現回数 表題か 概要or序論か 前後ngramの基本形及び品詞
+        freq=calcFreqFeature(freq_list,len(pos_list),10)#これ使うか単純に出現頻度そのまま入れるか
+        tmpdata=[term,"freq="+str(freq),"in_title="+in_title,"in_abst="+in_abst]#対象語 出現回数 表題か 概要or序論か 前後ngramの基本形及び品詞
         #print("term : ",term)
         for pos in pos_list:
             #print("  pos : ",pos)
@@ -51,14 +53,38 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
             while tmp_term_len!=len(term):#単語の末尾posを求める
                 tmp_term_len+=len(mecab_result_list[e_pos+1].split("\t")[0])
                 e_pos+=1
-            kihon,hinshi=getBANgram(mecab_result_list,pos,e_pos,n)
+            kihon,hinshi=getBANgram(mecab_result_list,pos,e_pos,n)            
             #print("".join(kihon[:4]),term,"".join(kihon[4:]))
-            tmpdata.append("pos="+str(pos))
-            tmpdata.extend(kihon)
-            tmpdata.extend(hinshi)
+            tmpdata.insert(1,"pos="+str(pos))
+            tmpdata.extend(appendFeatureLabel(kihon,n,"kihon"))
+            tmpdata.extend(appendFeatureLabel(hinshi,n,"hinshi"))
             outputdata.append(tmpdata)
-            tmpdata=[term,"freq="+str(len(pos_list)),"in_title="+in_title,"in_abst="+in_abst]
+            tmpdata=[term,"freq="+str(freq),"in_title="+in_title,"in_abst="+in_abst]
     return outputdata
+
+def appendFeatureLabel(target_list,n,label):#前後ngramのn
+    pos=-n
+    labeled_list=[]
+    for i,elem in enumerate(target_list):
+        labeled_list.append(label+"["+str(pos)+"]="+elem)
+        pos+=1
+        if pos==0:pos+=1
+    return labeled_list
+        
+def getFreqList(term_dic):
+    freq_list=[len(pos_list) for pos_list in term_dic.values()]
+    freq_list.sort()
+    return freq_list
+
+def calcFreqFeature(freq_list,freq,n):#n:分割数
+    pos_dif=len(freq_list)//n
+    pos=pos_dif
+    ret=0
+    for i in range(n-1):
+        if freq>=freq_list[pos]:
+            ret=i+1
+        pos+=pos_dif
+    return ret
 
 def processEachTermPair(term_dic,mecab_results,n=2,titleabst_str=""):
     """
@@ -95,12 +121,12 @@ def getBANgram(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複�
                     kihonkei.append(mecab_results[i].split("\t")[0])
                 else:
                     kihonkei.append(tmp_kihon)
-                hinshi.append("-".join(mecab_results[i].split("\t")[1].split(",")[0:1]))
+                hinshi.append("-".join(mecab_results[i].split("\t")[1].split(",")[0:2]))
     return kihonkei,hinshi
 
 def mecab(text):
-    m=MeCab.Tagger("")
-    #m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC
+    #m=MeCab.Tagger("")
+    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC
     m.parse("")
     return m.parse(text)#type:str
 

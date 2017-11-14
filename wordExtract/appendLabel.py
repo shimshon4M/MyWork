@@ -8,7 +8,10 @@ def append_label(filename):
             if i%10==1:
                 print("----0:not term 1:raw data 2:formated data 3:method 4:goal----")
             line_spl=line.split("\t")
-            print(str(i)+"/"+str(len(lines)),"".join(line.split("\t")[5:9])+"<"+line_spl[0]+">"+"".join(line.split("\t")[9:13]),":",end="")
+            #作業サポート用print
+            back_text=[s.split("=")[1] for s in line.split("\t")[5:9]]
+            fromt_text=[s.split("=")[1] for s in line.split("\t")[9:13]]
+            print(str(i)+"/"+str(len(lines)),"".join(back_text)+"<"+line_spl[0]+">"+"".join(fromt_text),"     :",end="")
             label=input()
             outdata.append(line.strip()+"\t"+label+"\n")
 
