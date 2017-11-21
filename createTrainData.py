@@ -52,19 +52,22 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
 
 def extend_feature_vector(feature_list,extend_list,vec_type):
     if vec_type=="kihon":
-        with open("./data/bow/BOW.txt","r")as f:
-            for word in f.read().split(" "):
-                if word in extend_list:
-                    feature_list.append("1")
-                else:
-                    feature_list.append("0")
+        for ex_elem in extend_list:
+            with open("./data/bow/df_list_0.4.txt","r")as f:
+                for line in f.readlines():
+                    word=line.split("\t")[0]
+                    if word==ex_elem:
+                        feature_list.append("1.0")
+                    else:
+                        feature_list.append("0.0")
     elif vec_type=="hinshi":
-        with open("./data/bow/HINSHI.txt","r")as f:
-            for word in f.read().split(" "):
-                if word in extend_list:
-                    feature_list.append("1")
-                else:
-                    feature_list.append("0")
+        for ex_elem in extend_list:
+            with open("./data/bow/HINSHI.txt","r")as f:
+                for word in f.read().split(" "):
+                    if word==ex_elem:
+                        feature_list.append("1.0")
+                    else:
+                        feature_list.append("0.0")
 
 def getFreqList(term_dic):
     freq_list=[len(pos_list) for pos_list in term_dic.values()]
@@ -112,7 +115,7 @@ def mecab(text):
     引数strに対してmecab実行、結果strを返す
     """
     #m=MeCab.Tagger("")
-    m=MeCab.Tagger("-d /home/momoi/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
+    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
     m.parse("")
     return m.parse(text)#type:str
 
