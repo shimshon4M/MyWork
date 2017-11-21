@@ -87,7 +87,7 @@ def main(filename):
     print(len(word_list))
 
 def extract_upper_df_word():
-    thr=0.3
+    thr=0.4
     with open("./data/bow/df_list.txt","r")as fr:
         with open("./data/bow/df_list_"+str(thr)+".txt","w")as fw:
             word_list=[]
@@ -103,4 +103,4 @@ if __name__=="__main__":
     #main(sys.argv[1])
     #vectorizer_main()
     #paper2only_text(sys.argv[1])
-    #extract_upper_df_word()
+    extract_upper_df_word()

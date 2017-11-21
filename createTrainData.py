@@ -44,8 +44,9 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
             tmpdata.extend(kihon)
             tmpdata.extend(hinshi)
             tmpdata.append("以下ベクトル")
-            extend_feature_vector(tmpdata,kihon,"kihon")
-            extend_feature_vector(tmpdata,hinshi,"hinshi")
+            extend_feature_vector(tmpdata,[term],"kihon")#自身
+            extend_feature_vector(tmpdata,kihon,"kihon")#周辺の基本形
+            extend_feature_vector(tmpdata,hinshi,"hinshi")#周辺の品詞
             outputdata.append(tmpdata)
             tmpdata=[term,str(freq),str(is_uni),in_title,in_abst]
     return outputdata
@@ -115,7 +116,7 @@ def mecab(text):
     引数strに対してmecab実行、結果strを返す
     """
     #m=MeCab.Tagger("")
-    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
+    m=MeCab.Tagger("-d /home/momoi/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
     m.parse("")
     return m.parse(text)#type:str
 
