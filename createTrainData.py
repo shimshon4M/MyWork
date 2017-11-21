@@ -2,9 +2,6 @@
 実行時は引数に論文xmlファイルを指定
 """
 
-
-#import termextract.mecab
-#import termextract.core
 import collections
 import sys
 import re
@@ -14,25 +11,10 @@ from xmlAnalyzer import removeTags
 import MeCab
 import CaboCha
 
-def processOneFile(filename):
-    with open(filename)as f:
-        words=f.readlines() #いっぺん全部読み込んでおく
-    processTermExtract("".join(words))
-
-def processTermExtract(text):
-    """
-    分かち書きテキストを引数に
-    """
-    freq=termextract.mecab.cmp_noun_dict(text)
-    LR=termextract.core.score_lr(freq,ignore_words=termextract.mecab.IGNORE_WORDS,lr_mode=1,average_rate=1)
-    term_imp_dic=termextract.core.term_importance(freq,LR)
-    #print(term_imp_dic)
-    #data_collection=collections.Counter(term_imp_dic)#大きい順にソート
-    #for cmp_noun, value in data_collection.most_common():
-    #    print(termextract.core.modify_agglutinative_lang(cmp_noun),value,sep="\t")
-    return term_imp_dic
-
 def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性とするngramの範囲
+    """
+    各語に対する処理
+    """
     outputdata=[] #素性 リストのリスト returnする
     freq_list=getFreqList(term_dic)
     for term,pos_list in term_dic.items():
@@ -47,7 +29,7 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
         is_uni=0
         if len(term)==1:
             is_uni=1
-        tmpdata=[term,"freq="+str(freq),"is_uni="+str(is_uni),"in_title="+in_title,"in_abst="+in_abst]#対象語 出現回数 表題か 概要or序論か 前後ngramの基本形及び品詞
+        tmpdata=[term,str(freq),str(is_uni),in_title,in_abst]#対象語 出現回数 表題か 概要or序論か 前後ngramの基本形及び品詞
         #print("term : ",term)
         for pos in pos_list:
             #print("  pos : ",pos)
@@ -56,24 +38,34 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
             while tmp_term_len!=len(term):#単語の末尾posを求める
                 tmp_term_len+=len(mecab_result_list[e_pos+1].split("\t")[0])
                 e_pos+=1
-            kihon,hinshi=getBANgram(mecab_result_list,pos,e_pos,n)            
+            kihon,hinshi=getBehindFrontNMorphenes(mecab_result_list,pos,e_pos,n)            
             #print("".join(kihon[:4]),term,"".join(kihon[4:]))
-            tmpdata.insert(1,"pos="+str(pos))
-            tmpdata.extend(appendFeatureLabel(kihon,n,"kihon"))
-            tmpdata.extend(appendFeatureLabel(hinshi,n,"hinshi"))
+            tmpdata.insert(1,str(pos))
+            tmpdata.extend(kihon)
+            tmpdata.extend(hinshi)
+            tmpdata.append("以下ベクトル")
+            extend_feature_vector(tmpdata,kihon,"kihon")
+            extend_feature_vector(tmpdata,hinshi,"hinshi")
             outputdata.append(tmpdata)
-            tmpdata=[term,"freq="+str(freq),"is_uni="+str(is_uni),"in_title="+in_title,"in_abst="+in_abst]
+            tmpdata=[term,str(freq),str(is_uni),in_title,in_abst]
     return outputdata
 
-def appendFeatureLabel(target_list,n,label):#前後ngramのn
-    pos=-n
-    labeled_list=[]
-    for i,elem in enumerate(target_list):
-        labeled_list.append(label+"["+str(pos)+"]="+elem)
-        pos+=1
-        if pos==0:pos+=1
-    return labeled_list
-        
+def extend_feature_vector(feature_list,extend_list,vec_type):
+    if vec_type=="kihon":
+        with open("./data/bow/BOW.txt","r")as f:
+            for word in f.read().split(" "):
+                if word in extend_list:
+                    feature_list.append("1")
+                else:
+                    feature_list.append("0")
+    elif vec_type=="hinshi":
+        with open("./data/bow/HINSHI.txt","r")as f:
+            for word in f.read().split(" "):
+                if word in extend_list:
+                    feature_list.append("1")
+                else:
+                    feature_list.append("0")
+
 def getFreqList(term_dic):
     freq_list=[len(pos_list) for pos_list in term_dic.values()]
     freq_list.sort()
@@ -89,21 +81,9 @@ def calcFreqFeature(freq_list,freq,n):#n:分割数
         pos+=pos_dif
     return ret
 
-def processEachTermPair(term_dic,mecab_results,n=2,titleabst_str=""):
+def getBehindFrontNMorphenes(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複合語)のpos
     """
-    文中の二単語について
-    TermExtract使わないverで作った
-    """
-    outputdata=[] #素性 リストのリスト
-    for attrib,mecab_result in mecab_results.items():
-        for i,morpheme in enumerate(mecab_result.split("\n")):
-            appear=morpheme.split("\n")[0]
-    
-    return outputdata
-
-def getBANgram(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複合語)のpos
-    """
-    前後ngramの基本形と品詞をそれぞれリストで返す
+    前後n形態素の基本形と品詞をそれぞれリストで返す
     """
     kihonkei=[]
     hinshi=[]
@@ -124,50 +104,48 @@ def getBANgram(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複�
                     kihonkei.append(mecab_results[i].split("\t")[0])
                 else:
                     kihonkei.append(tmp_kihon)
-                hinshi.append("-".join(mecab_results[i].split("\t")[1].split(",")[0:2]))
+                hinshi.append(mecab_results[i].split("\t")[1].split(",")[0])
     return kihonkei,hinshi
 
 def mecab(text):
+    """
+    引数strに対してmecab実行、結果strを返す
+    """
     #m=MeCab.Tagger("")
-    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC
+    m=MeCab.Tagger("-d /home/momoi/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
     m.parse("")
     return m.parse(text)#type:str
 
 def removeUnderValueFromDict(target_dict,rmv_value):
+    """
+    指定のrmv_value以下の出現回数の語を辞書から除去
+    """
     for k,v in list(target_dict.items()):
-        #if v<rmv_value:
         if len(v)<rmv_value:
             del(target_dict[k])
 
+def remove_later_pos_terms(term_dic,rmv_pos):
+    """
+    引数pos以降にしか出現しない語は除去する
+    """
+    is_appear=False
+    for term,poses in list(term_dic.items()):
+        for pos in poses:
+            if pos<rmv_pos:
+                is_appear=True
+                break
+        if not is_appear:
+            del(term_dic[term])
+        
+            
 def writeFile(filename,datas):
     with open(filename,"w")as f:
         for data in datas:
             f.write("\t".join(data)+"\n")
-"""
-def process_withTE(filename,texts):
-    mecab_results={}
-    for attrib,text in texts.items():
-        mecab_result=mecab(text)
-        mecab_results[attrib]=mecab_result
-    mecab_result_joined="".join(mecab_results.values())
-    term_imp_dic=processTermExtract("".join(mecab_result_joined)) # dict{word:imp}
-    term_imp_dic=removeSpecificValueFromDict(term_imp_dic,1.0) # 指定重要度以下の語を除去
-    if "title" in texts:
-        title=texts["title"]
-    else:
-        title=""
-    if "abstract" in texts:
-        abst=texts["abstract"]
-    else:
-        abst=""
-    #data=processEachTerm(term_imp_dic,mecab_results,3,[title,abst])#前後の語の分析 arg3:前後何gramまで素性にするか arg4:タイトル・アブスト素性用
-    data=processEachTermPair(term_imp_dic,mecab_results,3,[title,abst])#
-    writeFile(filename+".txt",data)
-"""
-    
+            
 def process(filename,text,title,abstract):
     """
-    TermExtractを使わず、複合名詞や用語的表現(○○の△△)などのキーワードリストを作ってから関係抽出するver
+    メイン処理
     """
     term_dic={}#キーワードリスト key:キーワード value:出現位置リスト(lenで出現回数も求まる) i-1(形態素番号)かword_head_pos(文字番号)か要検討
     mecab_result=mecab(text)#mecab_resultは1行1形態素情報のstr
@@ -223,7 +201,8 @@ def process(filename,text,title,abstract):
                 now_pos=0
             #----------------------
             nowread_head_pos+=len(appear)
-    removeUnderValueFromDict(term_dic,2)#任意の出現回数以下の単語を除去
+    #removeUnderValueFromDict(term_dic,2)#任意の出現回数以下の単語を除去
+    #remove_later_pos_terms(term_dic,1)#pos以降にしか出現しない語を除去(タイトル・アブストのみ分析するとき用)
     #for k,v in term_dic.items(): #表示テスト
     #    print(k,v)
     #print(len(term_dic))
@@ -232,6 +211,10 @@ def process(filename,text,title,abstract):
     #   print(f)
     writeFile(filename[:-4]+"_feature.txt",feature_data)
 
+#def process_part(filename,term_dic_part,term_dic_all):
+ #   for term,pos_list in term_dic_part.items():
+        
+    
 def split_texts(unit_texts):
     """
     ピリオドでsplitした方が後々やりやすい？
@@ -240,22 +223,64 @@ def split_texts(unit_texts):
         unit_texts[attrib]=re.split(r"\.|。|．",texts) #。も残したい？(素性になりうるかもなので)
         print(unit_texts[attrib])
 
-def joinBodyText(texts):
+def join_body_text(texts,join_section_pattern):
+    """
+    join_section_patternは[a,b,c,d,e]の5要素リスト
+    a==1->title b==1->abstract c==1->序論 d==1->結論 e==1->本文 をjoined_textに含む
+    """
     joined_text=""
     for attrib,text in texts.items():
-        if attrib!="title":
+        if attrib=="title" and join_section_pattern[0]==1:
+            joined_text+=get_section_text(texts,"title")
+            joined_text+="."
+        elif attrib=="abstract" and join_section_pattern[1]==1:
+            joined_text+=get_section_text(texts,"abstract")
+        elif attrib not in ["title","abstract"] and join_section_pattern[2]==1:
+            joined_text+=text.replace(" ","")
+    return joined_text
+
+def join_body_text_all(texts):
+    joined_text=""
+    for attrib,text in texts.items():
+        if attrib =="title":
+            joined_text+=text
+            joined_text+="."
+        else:
             joined_text+=text
     return joined_text
-        
+
+"""
+序論って背景とか一般知識も書かれているから使うべきじゃない？
+セクション見てて発見したもの
+・まとめとおわりにが両方あるもの
+・「序論-○○」みたいな特殊形
+"""
+def get_section_text(texts,section_type):
+    """
+    辞書textsの中から引数section_typeの本文を返す
+    title,abstract,intro,conclusion,etc
+    """
+    if section_type=="title":
+        return texts["title"].replace(" ","")
+    elif section_type=="abstract":
+        return texts["abstract"].replace(" ","")
+    for attrib,text in texts.items():
+        if section_type=="intro" and attrib in ["はじめに","序論","まえがき","はしがき"]:
+            return text.replace(" ","")
+        elif section_type=="conclusion" and attrib in ["おわりに","終わりに","結論","結論と今後の課題","結論および今後の課題","むすび","結び","まとめ","まとめと今後の課題","まとめと今後の方針","まとめ,及び今後の課題","まとめと今後の研究","あとがき"]:
+            return text.replace(" ","")
+    return ""
+    
+
 def main():
     filename=sys.argv[1]
     tree=ET.parse(filename)
     root=tree.getroot()
-    texts=removeTags(root) #texts = dict{section title:body text}
-    #split_texts(texts)
-    joined_text=joinBodyText(texts).replace(" ","")
-    #process_withTE(filename,texts)
-    process(filename,joined_text,texts["title"],texts["abstract"])
-
+    texts=removeTags(root) #texts=dict{section title:body text}                   
+    joined_text_part=join_body_text(texts,[1,1,0,0,0])#[title,abst,intro,conclusion,etc]
+    #joined_text_all=join_body_text_all(texts)
+    process(filename,joined_text_part,texts["title"],texts["abstract"])
+    
 if __name__=="__main__":
     main()
+    

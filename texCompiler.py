@@ -139,6 +139,8 @@ BEGINEND_TYPE=[
     ,"picture"
     ,"quote"
     ,"description"
+    ,"equation"
+    ,"array"
 ]#begin-endの種類 読み飛ばすもの
 ITEM_TYPE=[
     "itemize"     # ●
@@ -160,10 +162,11 @@ def readFile(filename):
     """
     texの読み込み
     改行詰めで全部つなげる
+    空白も詰め
     """
     with open(filename,"r")as f:
         text=f.read()
-    return text.replace("\n","")
+    return text.replace("\n","")#.replace(" ","").replace("　","")
 
 def writeFile(in_filename,xml_tree):
     """
@@ -316,13 +319,13 @@ def createSubElementAll(root,text):#従来手法だと順序崩れる＆subsub�
 
     for elem in info_parts:
         sub=ET.SubElement(root,elem.get("tag"))
-        sub.text=elem.get("text")
+        sub.text=elem.get("text").replace("{","").replace("}","").replace(" ","").replace("　","")#{}除去ゴリ押し
         if elem.get("key")!=None and elem.get("value")!=None:
             sub.set(elem.get("key"),elem.get("value"))
 
     for elem in sections.values():
         sub=ET.SubElement(root,elem.get("tag"))
-        sub.text=elem.get("text")[0:-1]
+        sub.text=elem.get("text")[0:-1].replace("{","").replace("}","").replace(" ","").replace("　","")
         if elem.get("key")!=None and elem.get("value")!=None:
             sub.set(elem.get("key"),elem.get("value"))
     
