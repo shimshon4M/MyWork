@@ -11,25 +11,30 @@ from xmlAnalyzer import removeTags
 import MeCab
 import CaboCha
 
+f_type="BoW"
+
 def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性とするngramの範囲
     """
-    各語に対する処理
+    各語に対する素性抽出処理
+    素性データは[対象語,出現場所pos,出現頻度,1文字か,タイトルに含まれるか,アブストに含まれるか,前後n形態素基本形列挙,前後n形態素品詞列挙,基本形ベクトル化,品詞ベクトル化]
     """
     outputdata=[] #素性 リストのリスト returnする
     freq_list=getFreqList(term_dic)
     for term,pos_list in term_dic.items():
         #term=term.replace(" ","")
-        in_title="0"
-        in_abst="0"
+        in_title="0.0"
+        in_abst="0.0"
         if term in titleabst_str[0]:
-            in_title="1"
+            in_title="1.0"
         if term in titleabst_str[1]:
-            in_abst="1"
+            in_abst="1.0"
         freq=calcFreqFeature(freq_list,len(pos_list),10)#これ使うか単純に出現頻度そのまま入れるか
-        is_uni=0
+        is_uni="0.0"
         if len(term)==1:
-            is_uni=1
-        tmpdata=[term,str(freq),str(is_uni),in_title,in_abst]#対象語 出現回数 表題か 概要or序論か 前後ngramの基本形及び品詞
+            is_uni="1.0"
+        digit_rate=str(digit_num_per_term(term))
+        alpha_rate=str(alpha_num_per_term(term))
+        tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst]
         #print("term : ",term)
         for pos in pos_list:
             #print("  pos : ",pos)
@@ -41,22 +46,99 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性と
             kihon,hinshi=getBehindFrontNMorphenes(mecab_result_list,pos,e_pos,n)            
             #print("".join(kihon[:4]),term,"".join(kihon[4:]))
             tmpdata.insert(1,str(pos))
-            tmpdata.extend(kihon)
-            tmpdata.extend(hinshi)
-            tmpdata.append("以下ベクトル")
-            extend_feature_vector(tmpdata,[term],"kihon")#自身
-            extend_feature_vector(tmpdata,kihon,"kihon")#周辺の基本形
-            extend_feature_vector(tmpdata,hinshi,"hinshi")#周辺の品詞
+            tmpdata.insert(2,str(2+n*2*2+1))#素性が始まる場所
+            tmpdata[3:3]=(hinshi)
+            tmpdata[3:3]=(kihon)
+            #extend_feature_vector(tmpdata,term,kihon,hinshi,"BoW")#ベクトルの作り方選択
+            extend_feature_vector(tmpdata,term,kihon,hinshi,f_type)
             outputdata.append(tmpdata)
-            tmpdata=[term,str(freq),str(is_uni),in_title,in_abst]
+            tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst]
     return outputdata
 
-def extend_feature_vector(feature_list,extend_list,vec_type):
+def digit_num_per_term(term):
+    cnt=0
+    for t in term:
+        if t.isdigit():
+            cnt+=1
+    return cnt/len(term)
+
+def alpha_num_per_term(term):
+    cnt=0
+    for t in term:
+        if t.isalpha():
+            cnt+=1
+    return cnt/len(term)
+
+def extend_feature_vector(feature_list,term,kihon,hinshi,vec_type):
+    components_kihon,components_hinshi=get_term_components(term)
+    if vec_type=="BoW":
+        extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
+        extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
+        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
+        extend_feature_vector_BoW(feature_list,kihon,"kihon")#周辺の基本形
+        extend_feature_vector_BoW(feature_list,hinshi,"hinshi")#周辺の品詞
+    elif vec_type=="posBoW":
+        extend_feature_vector_posBoW(feature_list,components_kihon,"kihon")#自身
+        extend_feature_vector_posBoW(feature_list,components_hinshi,"hinshi")#自身
+        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
+        extend_feature_vector_posBoW(feature_list,kihon,"kihon")#周辺の基本形
+        extend_feature_vector_posBoW(feature_list,hinshi,"hinshi")#周辺の品詞
+
+def extend_feature_vector_contains_NO(feature_list,term):
+    mecab_results=mecab(term).split("\n")
+    if "の\t助詞,連体化,*,*,*,*,の,ノ,ノ" in mecab_results:
+        #print("contain")
+        feature_list.append("1.0")
+    else:
+        #print("not contain")
+        feature_list.append("0.0")
+
+def get_term_components(term):
+    kihon=[]
+    hinshi=[]
+    mecab_results=mecab(term).split("\n")
+    if mecab_results[0].split("\t")[1].split(",")[6]=="*":
+        kihon.append(mecab_results[0].split("\t")[0])
+    else:
+        kihon.append(mecab_results[0].split("\t")[1].split(",")[6])
+    if mecab_results[-3].split("\t")[1].split(",")[6]=="*":
+        kihon.append(mecab_results[-3].split("\t")[0])
+    else:
+        kihon.append(mecab_results[-3].split("\t")[1].split(",")[6])
+    hinshi.extend(["-".join(mecab_results[0].split("\t")[1].split(",")[0:2]),"-".join(mecab_results[-3].split("\t")[1].split(",")[0:2])])
+    #print(kihon,hinshi)
+    return kihon,hinshi
+
+def extend_feature_vector_BoW(feature_list,extend_list,vec_type):
+    """
+    出現頻度を考慮しない単純なBoW(前後n形態素を見るがその位置情報は不保持)
+    """
+    if vec_type=="kihon":
+        with open("./data/bow/df_list_0.4.txt","r")as f:
+                for line in f.readlines():
+                    word=line.split("\t")[0]
+                    if word in extend_list:
+                        feature_list.append("1.0")
+                    else:
+                        feature_list.append("0.0")
+    elif vec_type=="hinshi":
+        with open("./data/bow/HINSHI.txt","r")as f:
+                for word in f.readlines():
+                    if word.strip() in extend_list:
+                        feature_list.append("1.0")
+                    else:
+                        feature_list.append("0.0")
+
+
+def extend_feature_vector_posBoW(feature_list,extend_list,vec_type):
+    """
+    出現順序を考慮したBoW(長さはn(前後)*次元数になる)
+    """
     if vec_type=="kihon":
         for ex_elem in extend_list:
             with open("./data/bow/df_list_0.4.txt","r")as f:
                 for line in f.readlines():
-                    word=line.split("\t")[0]
+                    word=line.split("\t")[0].strip()
                     if word==ex_elem:
                         feature_list.append("1.0")
                     else:
@@ -64,8 +146,8 @@ def extend_feature_vector(feature_list,extend_list,vec_type):
     elif vec_type=="hinshi":
         for ex_elem in extend_list:
             with open("./data/bow/HINSHI.txt","r")as f:
-                for word in f.read().split(" "):
-                    if word==ex_elem:
+                for word in f.readlines():
+                    if word.strip()==ex_elem:
                         feature_list.append("1.0")
                     else:
                         feature_list.append("0.0")
@@ -108,7 +190,8 @@ def getBehindFrontNMorphenes(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキー
                     kihonkei.append(mecab_results[i].split("\t")[0])
                 else:
                     kihonkei.append(tmp_kihon)
-                hinshi.append(mecab_results[i].split("\t")[1].split(",")[0])
+                #hinshi.append(mecab_results[i].split("\t")[1].split(",")[0])
+                hinshi.append("-".join(mecab_results[i].split("\t")[1].split(",")[0:2]))
     return kihonkei,hinshi
 
 def mecab(text):
@@ -186,12 +269,16 @@ def process(filename,text,title,abstract):
                 now_pos=1
                 word_head_pos=nowread_head_pos
                 tmp_i_termex=i
+            elif(hinshi=="名詞" and now_pos==1):
+                partof_termex+=appear
             elif(appear in ["の","を"] and now_pos==1):#「の」の部分
                 partof_termex+="の"
                 now_pos=2
             elif(hinshi!="名詞" and now_pos==2):#「の」までいいけど次に名詞が来ない場合
                 partof_termex=""
                 now_pos=0
+            elif(hinshi=="名詞" and hinshi_det1!="サ変接続" and now_pos==2):
+                partof_termex+=appear
             elif(hinshi=="名詞" and hinshi_det1=="サ変接続" and now_pos==2):#△△の部分
                 partof_termex+=appear
                 if(partof_termex in term_dic):
@@ -213,11 +300,7 @@ def process(filename,text,title,abstract):
     feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_result.split("\n"))),4,[title,abstract])
     #for f in feature_data:
     #   print(f)
-    writeFile(filename[:-4]+"_feature.txt",feature_data)
-
-#def process_part(filename,term_dic_part,term_dic_all):
- #   for term,pos_list in term_dic_part.items():
-        
+    writeFile(filename[:-4]+"_feature_"+f_type+".txt",feature_data)
     
 def split_texts(unit_texts):
     """

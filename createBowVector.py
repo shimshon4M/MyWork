@@ -42,6 +42,7 @@ def vectorizer_main():
                 word_dic_all[word]+=1
             else:
                 word_dic_all[word]=0
+    word_dic_all["*"]=10
     with open("./data/bow/df_list.txt","w")as f:
         i=1
         for word,cnt in word_dic_all.items():
