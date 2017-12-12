@@ -11,7 +11,7 @@ from xmlAnalyzer import removeTags
 import MeCab
 import CaboCha
 
-f_type="BoW"
+f_type="posW2V"
 
 def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性とするngramの範囲
     """
@@ -72,8 +72,8 @@ def alpha_num_per_term(term):
 def extend_feature_vector(feature_list,term,kihon,hinshi,vec_type):
     components_kihon,components_hinshi=get_term_components(term)
     if vec_type=="BoW":
-        extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
-        extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
+        #extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
+        #extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
         extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
         extend_feature_vector_BoW(feature_list,kihon,"kihon")#周辺の基本形
         extend_feature_vector_BoW(feature_list,hinshi,"hinshi")#周辺の品詞
@@ -83,7 +83,13 @@ def extend_feature_vector(feature_list,term,kihon,hinshi,vec_type):
         extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
         extend_feature_vector_posBoW(feature_list,kihon,"kihon")#周辺の基本形
         extend_feature_vector_posBoW(feature_list,hinshi,"hinshi")#周辺の品詞
-
+    elif vec_type=="posW2V":
+        extend_feature_vector_posW2V(feature_list,components_kihon,"kihon")#自身
+        extend_feature_vector_posW2V(feature_list,components_hinshi,"hinshi")#自身
+        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
+        extend_feature_vector_posW2V(feature_list,kihon,"kihon")#周辺の基本形
+        extend_feature_vector_posW2V(feature_list,hinshi,"hinshi")#周辺の品詞
+        
 def extend_feature_vector_contains_NO(feature_list,term):
     mecab_results=mecab(term).split("\n")
     if "の\t助詞,連体化,*,*,*,*,の,ノ,ノ" in mecab_results:
@@ -152,6 +158,27 @@ def extend_feature_vector_posBoW(feature_list,extend_list,vec_type):
                     else:
                         feature_list.append("0.0")
 
+def extend_feature_vector_posW2V(feature_list,extend_list,vec_type):
+    if vec_type=="kihon":
+        dic={}
+        with open("./data/jvectors50000.txt","r")as f:
+            for line in f.readlines():
+                word=line.split(" ")[0].strip()
+                dic[word]=[str(v).strip() for v in line.split(" ")[2:]]
+        for ex_elem in extend_list:
+            if ex_elem in dic:
+                feature_list.extend(dic[ex_elem])
+            else:
+                feature_list.extend([str(0.0) for i in range(200)])    
+    elif vec_type=="hinshi":
+        for ex_elem in extend_list:
+            with open("./data/bow/HINSHI.txt","r")as f:
+                for word in f.readlines():
+                    if word.strip()==ex_elem:
+                        feature_list.append("1.0")
+                    else:
+                        feature_list.append("0.0")
+                        
 def getFreqList(term_dic):
     freq_list=[len(pos_list) for pos_list in term_dic.values()]
     freq_list.sort()
@@ -199,7 +226,7 @@ def mecab(text):
     引数strに対してmecab実行、結果strを返す
     """
     #m=MeCab.Tagger("")
-    m=MeCab.Tagger("-d /home/momoi/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
+    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
     m.parse("")
     return m.parse(text)#type:str
 

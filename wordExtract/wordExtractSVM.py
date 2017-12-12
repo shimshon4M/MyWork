@@ -9,6 +9,8 @@ from utils import get_files
 import random
 
 test_all=False
+feature_type="posW2V"
+classifier_pkl_name="term_extract_svc_"+feature_type+".pkl"
 
 def readData(dirname):
     print("read data")
@@ -16,7 +18,7 @@ def readData(dirname):
     files=get_files(dirname)
     i=0
     for filename in files:
-        feature_filename=filename.replace("labeled","BoW")
+        feature_filename=filename.replace("labeled",feature_type)
         with open(feature_filename,"r") as f:
             for line in f.readlines():
                 line=line.strip()
@@ -28,13 +30,13 @@ def readData(dirname):
                 i+=1
     if test_all:train_num=0
     else:train_num=int(len(data)*0.9)
-    random.shuffle(data)
+    #random.shuffle(data)
     train_data=data[:train_num]
     test_data=data[train_num:]
     return train_data,test_data
 
 def data2features(data):
-    f_pos=d[2]
+    f_pos=int(data[0][2])#素性ベクトルの開始位置
     return [d[f_pos:-1] for d in data]
 
 def data2labels(data):
@@ -52,14 +54,14 @@ def train(train_data):
     estimator=svm.SVC(kernel='linear', C=1.0, class_weight="balanced")
     classifier=OneVsRestClassifier(estimator)
     classifier.fit(train_features,train_labels)
-    joblib.dump(classifier,"term_extract_svc.pkl",compress=True)
+    joblib.dump(classifier,classifier_pkl_name,compress=True)
 
 def test(test_data):
     print("predict")
     test_features=data2features(test_data)#d) for d in test_data]
     test_labels=data2labels(test_data)#d) for d in test_data]
     test_terms=data2terms(test_data)#d) for d in test_data]#分類対象キーワード候補
-    classifier=joblib.load("term_extract_svc.pkl")
+    classifier=joblib.load("classifier_pkl_name")
     #予測
     pred_labels=classifier.predict(test_features)
     correct_num=0
