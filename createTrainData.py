@@ -11,7 +11,7 @@ from xmlAnalyzer import removeTags
 import MeCab
 import CaboCha
 
-f_type="posW2V"
+f_type="BoW"
 
 def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性とするngramの範囲
     """
@@ -72,8 +72,8 @@ def alpha_num_per_term(term):
 def extend_feature_vector(feature_list,term,kihon,hinshi,vec_type):
     components_kihon,components_hinshi=get_term_components(term)
     if vec_type=="BoW":
-        #extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
-        #extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
+        extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
+        extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
         extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
         extend_feature_vector_BoW(feature_list,kihon,"kihon")#周辺の基本形
         extend_feature_vector_BoW(feature_list,hinshi,"hinshi")#周辺の品詞
