@@ -44,6 +44,7 @@ def removeTags(root):
     rettexts={}
     appeared_title=False#titleが処理済みか
     appeared_abst=False#abstが処理済みか
+    appeared_kw=False#kwが処理済みか
     for elem in root.iter():
         if "title" in elem.tag and not appeared_title:
             rettexts["title"]=elem.text
@@ -51,6 +52,9 @@ def removeTags(root):
         elif "abstract" in elem.tag and not appeared_abst:
             rettexts["abstract"]=elem.text
             appeared_abst=True
+        elif "keywords" in elem.tag and not appeared_kw:
+            rettexts["keywords"]=elem.text
+            appeared_kw=True
         elif "section" in elem.tag:
             if elem.text==None:
                 rettexts[elem.attrib["title"]]=""

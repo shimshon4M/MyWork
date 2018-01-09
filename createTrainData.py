@@ -5,52 +5,55 @@
 import collections
 import sys
 import re
+import pdb
 from utils import get_files
 import xml.etree.ElementTree as ET
 from xmlAnalyzer import removeTags
 import MeCab
 import CaboCha
 
-f_type="BoW"
+f_type="posBoW"
 
-def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[]): #n:素性とするngramの範囲
+def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[]): #n:素性とするngramの範囲
     """
     各語に対する素性抽出処理
-    素性データは[対象語,出現場所pos,出現頻度,1文字か,タイトルに含まれるか,アブストに含まれるか,前後n形態素基本形列挙,前後n形態素品詞列挙,基本形ベクトル化,品詞ベクトル化]
+    素性データは[対象語,出現場所pos,出現頻度,1文字か,タイトルに含まれるか,アブストに含まれるか,キーワードに含まれるか,前後n形態素基本形列挙,前後n形態素品詞列挙,基本形ベクトル化,品詞ベクトル化]
     """
     outputdata=[] #素性 リストのリスト returnする
-    freq_list=getFreqList(term_dic)
+    #freq_list=getFreqList(term_dic)
     for term,pos_list in term_dic.items():
-        #term=term.replace(" ","")
         in_title="0.0"
         in_abst="0.0"
+        in_kw="0.0"
         if term in titleabst_str[0]:
             in_title="1.0"
         if term in titleabst_str[1]:
             in_abst="1.0"
-        freq=calcFreqFeature(freq_list,len(pos_list),10)#これ使うか単純に出現頻度そのまま入れるか
+        if term in keywords:
+            int_kw="1.0"
+        #freq=calcFreqFeature(freq_list,len(pos_list),10)#これ使うか単純に出現頻度そのまま入れるか
         is_uni="0.0"
         if len(term)==1:
             is_uni="1.0"
         digit_rate=str(digit_num_per_term(term))
         alpha_rate=str(alpha_num_per_term(term))
-        tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst]
+        tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
         #print("term : ",term)
         for pos in pos_list:
             #print("  pos : ",pos)
-            e_pos=pos
-            tmp_term_len=len(mecab_result_list[pos].split("\t")[0])
+            e_pos=pos[1]
+            sec_num=pos[0]
+            tmp_term_len=len(mecab_result_list[sec_num].split("\n")[pos[1]].split("\t")[0])
             while tmp_term_len!=len(term):#単語の末尾posを求める
-                tmp_term_len+=len(mecab_result_list[e_pos+1].split("\t")[0])
+                tmp_term_len+=len(mecab_result_list[sec_num].split("\n")[e_pos+1].split("\t")[0])
                 e_pos+=1
-            kihon,hinshi=getBehindFrontNMorphenes(mecab_result_list,pos,e_pos,n)            
+            kihon,hinshi=getBehindFrontNMorphenes(mecab_result_list[sec_num].split("\n"),pos[1],e_pos,n)            
             #print("".join(kihon[:4]),term,"".join(kihon[4:]))
-            tmpdata.insert(1,str(pos))
+            tmpdata.insert(1,str(pos[0])+","+str(pos[1])+","+str(pos[2]))
             tmpdata.insert(2,str(2+n*2*2+1))#素性が始まる場所
             tmpdata[3:3]=(hinshi)
             tmpdata[3:3]=(kihon)
-            #extend_feature_vector(tmpdata,term,kihon,hinshi,"BoW")#ベクトルの作り方選択
-            extend_feature_vector(tmpdata,term,kihon,hinshi,f_type)
+            extend_feature_vector(tmpdata,term,kihon,hinshi,f_type)#f_typeで指定した作り方でベクトル追加
             outputdata.append(tmpdata)
             tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst]
     return outputdata
@@ -209,8 +212,8 @@ def getBehindFrontNMorphenes(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキー
         else:
             #print("  "+mecab_results[i])
             if mecab_results[i]=="EOS":
-                kihonkei.append("EOS")
-                hinshi.append("EOS")
+                kihonkei.append("*")
+                hinshi.append("*")
             else:
                 tmp_kihon=mecab_results[i].split("\t")[1].split(",")[6]
                 if tmp_kihon=="*":
@@ -226,7 +229,7 @@ def mecab(text):
     引数strに対してmecab実行、結果strを返す
     """
     #m=MeCab.Tagger("")
-    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
+    m=MeCab.Tagger("-d /home/momoi/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
     m.parse("")
     return m.parse(text)#type:str
 
@@ -257,77 +260,105 @@ def writeFile(filename,datas):
         for data in datas:
             f.write("\t".join(data)+"\n")
             
-def process(filename,text,title,abstract):
+def process(filename,text_list,title,abstract,keywords):
     """
     メイン処理
     """
-    term_dic={}#キーワードリスト key:キーワード value:出現位置リスト(lenで出現回数も求まる) i-1(形態素番号)かword_head_pos(文字番号)か要検討
-    mecab_result=mecab(text)#mecab_resultは1行1形態素情報のstr
-    #キーワード抽出
-    partof_term="" #複合名詞抽出用tmp
-    partof_termex="" #用語的表現抽出用tmp
-    now_pos=0 #用語的表現抽出用 現在の場所 0:空 1:○○済 2:の済 3:△△済
-    word_head_pos=0 #複合語の頭の位置
-    nowread_head_pos=0 #現在処理している形態素の頭の位置
-    tmp_i_term=0
-    tmp_i_termex=0
-    for i,morpheme in enumerate(mecab_result.split("\n")): #複合名詞の抽出と用語的表現の抽出はこのfor文中で別々に
-        if morpheme not in ["EOS",""]:
-            appear,infos=morpheme.split("\t")#出現形と品詞情報
-            if(len(infos.split(","))==9):
-                hinshi,hinshi_det1,hinshi_det2,hinshi_det3,katsuyo1,katsuyo2,base,read,pron=infos.split(",")
-            else:
-                hinshi,hinshi_det1,hinshi_det2,hinshi_det3,katsuyo1,katsuyo2,base=infos.split(",")
-            #---複合名詞抽出処理---
-            if(hinshi=="名詞"):
-                if(len(partof_term)==0):
-                    word_head_pos=nowread_head_pos
-                    tmp_i_term=i
-                partof_term+=appear
-            elif(hinshi!="名詞" and len(partof_term)>0):
-                if(partof_term in term_dic):
-                    term_dic[partof_term].append(tmp_i_term)#(word_head_pos)
+    term_dic={}#キーワードリスト key:キーワード value:出現位置リスト(lenで出現回数も求まる) セクションナンバーと出現位置(形態素番号)と出現位置(単純文字列)のタプル
+    mecab_results=[]
+    for sec_i,text in enumerate(text_list):
+        mecab_result=mecab(text)#mecab_resultは1行1形態素情報のstr
+        mecab_results.append(mecab_result)
+        #キーワード抽出
+        partof_term="" #複合名詞抽出用tmp
+        partof_termex="" #用語的表現抽出用tmp
+        tmp_partof_termex="" #「○○の△△」の△△の部分を保存しておき、次の○○にする
+        now_pos=0 #用語的表現抽出用 現在の場所 0:空 1:○○中 2:"の"済 3:△△中
+        word_head_pos=0 #複合語の頭の位置
+        word_head_posex=0 #用語的表現の頭の位置
+        tmp_word_head_posex=0 #tmp_partof_termexと同じく
+        nowread_head_pos=0 #現在処理している形態素の頭の位置
+        tmp_i_term=0
+        tmp_i_termex=0
+        tmp_tmp_i_termex=0
+        for i,morpheme in enumerate(mecab_result.split("\n")): #複合名詞の抽出と用語的表現の抽出はこのfor文中で別々に
+            if morpheme not in ["EOS",""]:
+                appear,infos=morpheme.split("\t")#出現形と品詞情報
+                if(len(infos.split(","))==9):
+                    hinshi,hinshi_det1,hinshi_det2,hinshi_det3,katsuyo1,katsuyo2,base,read,pron=infos.split(",")
                 else:
-                    term_dic[partof_term]=[tmp_i_term]#word_head_pos]
-                partof_term=""
-            #---用語的表現抽出処理---
-            if(hinshi=="名詞" and now_pos==0):#○○の部分
-                partof_termex+=appear
-                now_pos=1
-                word_head_pos=nowread_head_pos
-                tmp_i_termex=i
-            elif(hinshi=="名詞" and now_pos==1):
-                partof_termex+=appear
-            elif(appear in ["の","を"] and now_pos==1):#「の」の部分
-                partof_termex+="の"
-                now_pos=2
-            elif(hinshi!="名詞" and now_pos==2):#「の」までいいけど次に名詞が来ない場合
-                partof_termex=""
-                now_pos=0
-            elif(hinshi=="名詞" and hinshi_det1!="サ変接続" and now_pos==2):
-                partof_termex+=appear
-            elif(hinshi=="名詞" and hinshi_det1=="サ変接続" and now_pos==2):#△△の部分
-                partof_termex+=appear
-                if(partof_termex in term_dic):
-                    term_dic[partof_termex].append(tmp_i_termex)#word_head_pos)
-                else:
-                    term_dic[partof_termex]=[tmp_i_termex]#word_head_pos]
-                partof_termex=""
-                now_pos=0
-            else:
-                partof_termex=""
-                now_pos=0
-            #----------------------
+                    hinshi,hinshi_det1,hinshi_det2,hinshi_det3,katsuyo1,katsuyo2,base=infos.split(",")
+                #---用語抽出処理---
+                if((hinshi=="名詞" or appear in ["-","・"]) and appear!="，"):#なぜか","が名詞になる？？？
+                    #複合名詞
+                    if(len(partof_term)==0):
+                        word_head_pos=nowread_head_pos
+                        tmp_i_term=i
+                    partof_term+=appear
+                    #用語表現
+                    if(now_pos==0):#空
+                        now_pos=1
+                    if(len(partof_termex)==0):
+                        word_head_posex=nowread_head_pos
+                        tmp_i_termex=i
+                    if(now_pos==2):#の済
+                        now_pos=3
+                    if(now_pos>=2):
+                        if(len(tmp_partof_termex)==0):
+                            tmp_tmp_i_termex=i
+                            tmp_word_head_posex=nowread_head_pos
+                        tmp_partof_termex+=appear
+                    partof_termex+=appear
+                elif((hinshi!="名詞" or appear not in ["-","・"]) and len(partof_term)>0):
+                    #複合名詞
+                    if(partof_term in term_dic):
+                        term_dic[partof_term].append((sec_i,tmp_i_term,word_head_pos))
+                    else:
+                        term_dic[partof_term]=[(sec_i,tmp_i_term,word_head_pos)]
+                    partof_term=""
+                    word_head_pos=0
+                    #用語表現
+                    if appear in ["の","を"] and hinshi=="助詞" and now_pos==1:
+                        partof_termex+="の"
+                        now_pos=2
+                        nowread_head_pos+=1
+                        continue
+                    elif now_pos==3:
+                        if(partof_termex in term_dic):
+                            term_dic[partof_termex].append((sec_i,tmp_i_termex,word_head_posex))
+                        else:
+                            term_dic[partof_termex]=[(sec_i,tmp_i_termex,word_head_posex)]
+                        if appear in ["の","を"] and hinshi=="助詞":
+                            partof_termex=tmp_partof_termex+"の"
+                            tmp_partof_termex=""
+                            now_pos=2
+                            word_head_posex=tmp_word_head_posex
+                            tmp_i_termex=tmp_tmp_i_termex
+                        else:
+                            now_pos=0
+                            partof_termex=""
+                            tmp_partof_termex=""
+                    else:
+                        partof_termex=""
+                        tmp_partof_termex=""
+            elif(morpheme==""):
+                if(len(partof_term)>0):
+                    if(partof_term in term_dic):
+                        term_dic[partof_term].append((sec_i,tmp_i_term,word_head_pos))
+                    else:
+                        term_dic[partof_term]=[(sec_i,tmp_i_term,word_head_pos)]
+                if(len(partof_termex)>0 and now_pos==3):
+                    if(partof_termex in term_dic):
+                        term_dic[partof_termex].append((sec_i,tmp_i_termex,word_head_posex))
+                    else:
+                        term_dic[partof_termex]=[(sec_i,tmp_i_termex,word_head_posex)]
             nowread_head_pos+=len(appear)
-    #removeUnderValueFromDict(term_dic,2)#任意の出現回数以下の単語を除去
-    #remove_later_pos_terms(term_dic,1)#pos以降にしか出現しない語を除去(タイトル・アブストのみ分析するとき用)
-    #for k,v in term_dic.items(): #表示テスト
-    #    print(k,v)
+    print(term_dic.keys())
     #print(len(term_dic))
-    feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_result.split("\n"))),4,[title,abstract])
+    #feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_results)),4,[title,abstract],keywords.split(","))
     #for f in feature_data:
     #   print(f)
-    writeFile(filename[:-4]+"_feature_"+f_type+".txt",feature_data)
+    #writeFile(filename[:-4]+"_feature_"+f_type+".txt",feature_data)
     
 def split_texts(unit_texts):
     """
@@ -337,21 +368,23 @@ def split_texts(unit_texts):
         unit_texts[attrib]=re.split(r"\.|。|．",texts) #。も残したい？(素性になりうるかもなので)
         print(unit_texts[attrib])
 
-def join_body_text(texts,join_section_pattern):
+def get_partof_text_list(texts,join_section_pattern):
     """
-    join_section_patternは[a,b,c,d,e]の5要素リスト
-    a==1->title b==1->abstract c==1->序論 d==1->結論 e==1->本文 をjoined_textに含む
+    join_section_patternは[a,b,c,d,e,f]の5要素リスト
+    a==1->title b==1->abstract c==1->キーワード d==1->序論 e==1->結論 f==1->残り をjoined_textに含む
     """
-    joined_text=""
+    ret_text_list=[]
+    keywords=""
     for attrib,text in texts.items():
         if attrib=="title" and join_section_pattern[0]==1:
-            joined_text+=get_section_text(texts,"title")
-            joined_text+="."
+            ret_text_list.append(get_section_text(texts,"title"))
         elif attrib=="abstract" and join_section_pattern[1]==1:
-            joined_text+=get_section_text(texts,"abstract")
+            ret_text_list.append(get_section_text(texts,"abstract"))
+        elif attrib=="keywords" and join_section_pattern[2]==1:
+            keywords+=get_section_text(texts,"keywords")
         elif attrib not in ["title","abstract"] and join_section_pattern[2]==1:
-            joined_text+=text.replace(" ","")
-    return joined_text
+            ret_text_list.append(text)
+    return ret_text_list,keywords
 
 def join_body_text_all(texts):
     joined_text=""
@@ -378,6 +411,8 @@ def get_section_text(texts,section_type):
         return texts["title"].replace(" ","")
     elif section_type=="abstract":
         return texts["abstract"].replace(" ","")
+    elif section_type=="keywords":
+        return texts["keywords"].replace(" ","")
     for attrib,text in texts.items():
         if section_type=="intro" and attrib in ["はじめに","序論","まえがき","はしがき"]:
             return text.replace(" ","")
@@ -390,10 +425,9 @@ def main():
     filename=sys.argv[1]
     tree=ET.parse(filename)
     root=tree.getroot()
-    texts=removeTags(root) #texts=dict{section title:body text}                   
-    joined_text_part=join_body_text(texts,[1,1,0,0,0])#[title,abst,intro,conclusion,etc]
-    #joined_text_all=join_body_text_all(texts)
-    process(filename,joined_text_part,texts["title"],texts["abstract"])
+    texts=removeTags(root) #texts=dict{section title:body text}
+    process_text_list,keywords=get_partof_text_list(texts,[1,1,1,0,0,0])#[title,abst,keywords,intro,conclusion,etc]
+    process(filename,process_text_list,texts["title"],texts["abstract"],keywords)
     
 if __name__=="__main__":
     main()
