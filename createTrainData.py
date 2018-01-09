@@ -12,7 +12,7 @@ from xmlAnalyzer import removeTags
 import MeCab
 import CaboCha
 
-f_type="posBoW"
+f_type="BoW"
 
 def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[]): #n:素性とするngramの範囲
     """
@@ -341,6 +341,15 @@ def process(filename,text_list,title,abstract,keywords):
                     else:
                         partof_termex=""
                         tmp_partof_termex=""
+                        now_pos=0
+                else:
+                    partof_term=""
+                    partof_termex=""
+                    tmp_partof_termex=""
+                    now_pos=0
+                    word_head_pos=0
+                    word_head_posex=0 
+                    tmp_word_head_posex=0
             elif(morpheme==""):
                 if(len(partof_term)>0):
                     if(partof_term in term_dic):
@@ -353,12 +362,12 @@ def process(filename,text_list,title,abstract,keywords):
                     else:
                         term_dic[partof_termex]=[(sec_i,tmp_i_termex,word_head_posex)]
             nowread_head_pos+=len(appear)
-    print(term_dic.keys())
+    #print(term_dic.keys())
     #print(len(term_dic))
-    #feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_results)),4,[title,abstract],keywords.split(","))
+    feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_results)),4,[title,abstract],keywords.split(","))
     #for f in feature_data:
     #   print(f)
-    #writeFile(filename[:-4]+"_feature_"+f_type+".txt",feature_data)
+    writeFile(filename[:-4]+"_feature_"+f_type+".txt",feature_data)
     
 def split_texts(unit_texts):
     """
