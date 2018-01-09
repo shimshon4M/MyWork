@@ -10,10 +10,10 @@ import pandas
 import sys
 from utils import get_files
 
-feature_type="BoW"
+feature_type="posBoW"
 classifier_pkl_name="term_extract_svc_"+feature_type+".pkl"
 
-def readData(dirname,all_return=False):
+def readData(dirname,all_return=False,shuffle=True):
     print("read data")
     data=[]
     files=get_files(dirname)
@@ -31,6 +31,9 @@ def readData(dirname,all_return=False):
                 i+=1
     if all_return:
         return np.array(data)
+    elif not shuffle:
+        train_num=int(len(data)*0.9)
+        return data[:train_num],data[train_num:]
     else:
         train_data,test_data=train_test_split(np.array(data),test_size=0.1,shuffle=True)
         return train_data,test_data
@@ -51,7 +54,7 @@ def cross_valid(data):
     train_features,test_features,train_labels,test_labels=train_test_split(features,labels,test_size=0.2)
     tune_params=[
         #{"estimator__kernel":["rbf"],"estimator__gamma":[1e-3,1e-4],"estimator__C":[1,10,100,1000],"estimator__class_weight":["balanced"]},
-        {"estimator__kernel":["linear"],"estimator__C":[1,10,100,1000],"estimator__class_weight":["balanced"]}
+        {"estimator__kernel":["linear"],"estimator__C":[1,10],"estimator__class_weight":["balanced"]}
     ]
     scores=["precision","recall"]
     for score in scores:
@@ -107,7 +110,7 @@ def test(test_data):
     print(confusion_matrix(test_labels,pred_labels))
 
 if __name__=="__main__":
-    train_data,test_data=readData(sys.argv[1])
+    train_data,test_data=readData(sys.argv[1],shuffle=False)
     train(train_data)
     test(test_data)
     #data=readData(sys.argv[1],all_return=True)

@@ -12,7 +12,7 @@ from xmlAnalyzer import removeTags
 import MeCab
 import CaboCha
 
-f_type="BoW"
+f_type="posW2V"
 
 def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[]): #n:素性とするngramの範囲
     """
@@ -55,7 +55,7 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[]): 
             tmpdata[3:3]=(kihon)
             extend_feature_vector(tmpdata,term,kihon,hinshi,f_type)#f_typeで指定した作り方でベクトル追加
             outputdata.append(tmpdata)
-            tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst]
+            tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
     return outputdata
 
 def digit_num_per_term(term):
@@ -229,7 +229,7 @@ def mecab(text):
     引数strに対してmecab実行、結果strを返す
     """
     #m=MeCab.Tagger("")
-    m=MeCab.Tagger("-d /home/momoi/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
+    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
     m.parse("")
     return m.parse(text)#type:str
 
