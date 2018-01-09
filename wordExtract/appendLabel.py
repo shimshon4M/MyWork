@@ -2,13 +2,13 @@ import sys
 import os.path
 
 def append_label(filename):
+    #existの方使わないように！
     if os.path.exists(filename.replace("BoW","labeled")):
         with open(filename.replace("BoW","labeled"),"r")as f:
             exist_data=[line for line in f.readlines()]
         outdata=[]
         with open(filename,"r")as f:
-            lines=f.readlines()
-            for i,(line_feature,line_exist) in enumerate(zip(lines,exist_data),1):
+            for i,line_feature in enumerate(lines,1):
                 if i%10==1:
                     print("----0:not term 1:raw data 2:formated data 3:method 4:goal----")
                 line_spl=line_feature.split("\t")
