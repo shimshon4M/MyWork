@@ -5,6 +5,7 @@
 import collections
 import sys
 import re
+import os
 import pdb
 from utils import get_files
 import xml.etree.ElementTree as ET
@@ -432,6 +433,8 @@ def get_section_text(texts,section_type):
 
 def main():
     filename=sys.argv[1]
+    if os.path.exists(filename[:-4]+"_feature_"+f_type+".txt"):
+        sys.exit()
     tree=ET.parse(filename)
     root=tree.getroot()
     texts=removeTags(root) #texts=dict{section title:body text}
