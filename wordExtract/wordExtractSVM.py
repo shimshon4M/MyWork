@@ -4,13 +4,16 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
 #from sklearn.grid_search import GridSearchCV
 import numpy as np
 import pandas
 import sys
 from utils import get_files
 
-feature_type="posBoW"
+doPCA=False
+pca=PCA(n_components=300)
+feature_type="BoW"
 classifier_pkl_name="term_extract_svc_"+feature_type+".pkl"
 
 def readData(dirname,all_return=False,shuffle=True):
@@ -29,6 +32,7 @@ def readData(dirname,all_return=False,shuffle=True):
             for line in f.readlines():
                 data[i].append(line.strip().split("\t")[-1])
                 i+=1
+    """
     if all_return:
         return np.array(data)
     elif not shuffle:
@@ -36,7 +40,12 @@ def readData(dirname,all_return=False,shuffle=True):
         return data[:train_num],data[train_num:]
     else:
         train_data,test_data=train_test_split(np.array(data),test_size=0.1,shuffle=True)
-        return train_data,test_data
+    """
+    if all_return:
+        return np.array(data2features(data)).astype(np.float32),np.array(data2labels(data)).astype(np.float32)
+    train_data,test_data=train_test_split(np.array(data),test_size=0.1,shuffle=False)
+    #return train_data,test_data
+    return np.array(data2features(train_data)).astype(np.float32),np.array(data2labels(train_data)).astype(np.float32),np.array(data2features(test_data)).astype(np.float32),np.array(data2labels(test_data)).astype(np.float32)
 
 def data2features(data):
     f_pos=int(data[0][2])#素性ベクトルの開始位置
@@ -72,27 +81,29 @@ def cross_valid(data):
         print(classification_report(test_labels,pred_labels,target_names=["None","data","formated_data","method","purpose"]))
         print()
 
-def train(train_data):
+def train(train_features,train_labels):
     print("train")
     #学習データ
-    train_features=np.array(data2features(train_data))#d) for d in train_data])
-    train_labels=np.array(data2labels(train_data))#d) for d in train_data])
+    #train_features=np.array(data2features(train_data))#d) for d in train_data])
+    #train_labels=np.array(data2labels(train_data))#d) for d in train_data])
     #学習
-    estimator=svm.SVC(kernel='linear', C=1.0, class_weight="balanced")
+    #estimator=svm.SVC(kernel='linear', C=10.0, class_weight="balanced")
+    estimator=svm.SVC(kernel='rbf', C=10.0, gamma=0.01 ,class_weight="balanced")
     classifier=OneVsRestClassifier(estimator)
     classifier.fit(train_features,train_labels)
     joblib.dump(classifier,classifier_pkl_name,compress=True)
 
-def test(test_data):
+def test(test_features,test_labels):
     print("predict")
-    test_features=data2features(test_data)#d) for d in test_data]
-    test_labels=data2labels(test_data)#d) for d in test_data]
-    test_terms=data2terms(test_data)#d) for d in test_data]#分類対象キーワード候補
+    #test_features=data2features(test_data)#d) for d in test_data]
+    #test_labels=data2labels(test_data)#d) for d in test_data]
+    test_terms=data2terms(test_features)#d) for d in test_data]#分類対象キーワード候補
     classifier=joblib.load(classifier_pkl_name)
     #予測
     pred_labels=classifier.predict(test_features)
     correct_num=0
-    
+
+    """
     for i in range(len(test_data)):
         pred_label=pred_labels[i].strip()
         correct_label=test_labels[i].strip()
@@ -104,14 +115,23 @@ def test(test_data):
             else:
                 print("incorrect : ",end="")
             print(test_data[i][1],test_data[i][0],":","pred",pred_label,"correct",correct_label)
+    """
     
     #print(correct_num,"/",len(test_labels),"=",correct_num/len(test_labels))
     print(classification_report(test_labels,pred_labels,target_names=["None","data","formated_data","method","purpose"]))
     print(confusion_matrix(test_labels,pred_labels))
 
-if __name__=="__main__":
-    train_data,test_data=readData(sys.argv[1],shuffle=False)
-    train(train_data)
-    test(test_data)
+def main():
+    #train_features,train_labels,test_features,test_labels=readData(sys.argv[1],shuffle=False)
+    if doPCA:
+        pca.fit(train_features)
+        train_features=pca.transform(train_features)
+        test_features=pca.transform(test_features)
+    test_features,test_labels=readData(sys.argv[1],shuffle=False,all_return=True) #全部でテスト
+    #train(train_features,train_labels)
+    test(test_features,test_labels)
     #data=readData(sys.argv[1],all_return=True)
     #cross_valid(data)
+    
+if __name__=="__main__":
+    main()
