@@ -13,7 +13,7 @@ from utils import get_files
 
 doPCA=False
 pca=PCA(n_components=300)
-feature_type="BoW"
+feature_type="posW2V"
 classifier_pkl_name="term_extract_svc_"+feature_type+".pkl"
 
 def readData(dirname,all_return=False,shuffle=True):
@@ -122,13 +122,13 @@ def test(test_features,test_labels):
     print(confusion_matrix(test_labels,pred_labels))
 
 def main():
-    #train_features,train_labels,test_features,test_labels=readData(sys.argv[1],shuffle=False)
+    train_features,train_labels,test_features,test_labels=readData(sys.argv[1],shuffle=False)
     if doPCA:
         pca.fit(train_features)
         train_features=pca.transform(train_features)
         test_features=pca.transform(test_features)
-    test_features,test_labels=readData(sys.argv[1],shuffle=False,all_return=True) #全部でテスト
-    #train(train_features,train_labels)
+    #test_features,test_labels=readData(sys.argv[1],shuffle=False,all_return=True) #全部でテスト
+    train(train_features,train_labels)
     test(test_features,test_labels)
     #data=readData(sys.argv[1],all_return=True)
     #cross_valid(data)

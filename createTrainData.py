@@ -13,7 +13,17 @@ from xmlAnalyzer import removeTags
 import MeCab
 import CaboCha
 
-f_type="posW2V"
+f_type="W2VSum"
+
+        
+def read_w2v():
+    dic={}
+    with open("./data/jvectors50000.txt","r")as f:
+        for line in f.readlines():
+            word=line.split(" ")[0].strip()
+            dic[word]=[str(v).strip() for v in line.split(" ")[2:]]
+    return dic
+w2vDic=read_w2v()
 
 def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[]): #n:素性とするngramの範囲
     """
@@ -93,7 +103,13 @@ def extend_feature_vector(feature_list,term,kihon,hinshi,vec_type):
         extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
         extend_feature_vector_posW2V(feature_list,kihon,"kihon")#周辺の基本形
         extend_feature_vector_posW2V(feature_list,hinshi,"hinshi")#周辺の品詞
-        
+    elif vec_type=="W2VSum":
+        extend_feature_vector_W2VSum(feature_list,components_kihon,"kihon")#自身
+        extend_feature_vector_W2VSum(feature_list,components_hinshi,"hinshi")#自身
+        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
+        extend_feature_vector_W2VSum(feature_list,kihon,"kihon")#周辺の基本形
+        extend_feature_vector_W2VSum(feature_list,hinshi,"hinshi")#周辺の品詞
+
 def extend_feature_vector_contains_NO(feature_list,term):
     mecab_results=mecab(term).split("\n")
     if "の\t助詞,連体化,*,*,*,*,の,ノ,ノ" in mecab_results:
@@ -164,16 +180,11 @@ def extend_feature_vector_posBoW(feature_list,extend_list,vec_type):
 
 def extend_feature_vector_posW2V(feature_list,extend_list,vec_type):
     if vec_type=="kihon":
-        dic={}
-        with open("./data/jvectors50000.txt","r")as f:
-            for line in f.readlines():
-                word=line.split(" ")[0].strip()
-                dic[word]=[str(v).strip() for v in line.split(" ")[2:]]
         for ex_elem in extend_list:
-            if ex_elem in dic:
-                feature_list.extend(dic[ex_elem])
+            if ex_elem in w2vDic:
+                feature_list.extend(w2vDic[ex_elem])
             else:
-                feature_list.extend([str(0.0) for i in range(200)])    
+                feature_list.extend([str(0.0) for i in range(200)])   #研究室のw2vが200次元  
     elif vec_type=="hinshi":
         for ex_elem in extend_list:
             with open("./data/bow/HINSHI.txt","r")as f:
@@ -183,6 +194,28 @@ def extend_feature_vector_posW2V(feature_list,extend_list,vec_type):
                     else:
                         feature_list.append("0.0")
                         
+def extend_feature_vector_W2VSum(feature_list,extend_list,vec_type): #位置考慮せずベクトル全加算
+    if vec_type=="kihon":
+        append_vector=[0.0 for i in range(200)]
+        exist_num=0 #素性単語の中で辞書に存在する単語の数
+        for ex_elem in extend_list:
+            if ex_elem in w2vDic:
+                append_vector=[x+float(y) for x,y in zip(append_vector,w2vDic[ex_elem])]
+                exist_num+=1
+        if exist_num>0:
+            append_vector=[str(x/exist_num) for x in append_vector]
+        else:
+            append_vector=["0.0" for i in range(200)]
+        feature_list.extend(append_vector)
+    elif vec_type=="hinshi":
+        for ex_elem in extend_list:
+            with open("./data/bow/HINSHI.txt","r")as f:
+                for word in f.readlines():
+                    if word.strip()==ex_elem:
+                        feature_list.append("1.0")
+                    else:
+                        feature_list.append("0.0")
+
 def getFreqList(term_dic):
     freq_list=[len(pos_list) for pos_list in term_dic.values()]
     freq_list.sort()
