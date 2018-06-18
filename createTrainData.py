@@ -14,24 +14,27 @@ import MeCab
 import CaboCha
 
 f_type="W2VSum"
+#BoW W2V posBoW posW2V W2VSum W2VSumBoW
 
         
 def read_w2v():
     dic={}
-    with open("./data/jvectors50000.txt","r")as f:
-        for line in f.readlines():
+    with open("../fastText/model.vec","r")as f:
+    #with open("./data/jvectors50000.txt","r")as f:
+    #with open("./data/model/word2vec_NLP_LCorpus.txt","r")as f:
+        for line in f.readlines()[1:]:
             word=line.split(" ")[0].strip()
-            dic[word]=[str(v).strip() for v in line.split(" ")[2:]]
+            dic[word]=[str(v).strip() for v in line.split(" ")[1:]] #研究室ｗ２ｖなら２,fasttextなら１,gensimword2vecなら1：
     return dic
 w2vDic=read_w2v()
 
-def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[]): #n:素性とするngramの範囲
+def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[],fulltext=""): #n:素性とするngramの範囲
     """
     各語に対する素性抽出処理
     素性データは[対象語,出現場所pos,出現頻度,1文字か,タイトルに含まれるか,アブストに含まれるか,キーワードに含まれるか,前後n形態素基本形列挙,前後n形態素品詞列挙,基本形ベクトル化,品詞ベクトル化]
     """
     outputdata=[] #素性 リストのリスト returnする
-    #freq_list=getFreqList(term_dic)
+    freq_list=getFreqList(term_dic,fulltext)
     for term,pos_list in term_dic.items():
         in_title="0.0"
         in_abst="0.0"
@@ -42,13 +45,13 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[]): 
             in_abst="1.0"
         if term in keywords:
             int_kw="1.0"
-        #freq=calcFreqFeature(freq_list,len(pos_list),10)#これ使うか単純に出現頻度そのまま入れるか
+        freq=str(calcFreqFeature(freq_list,len(pos_list),10))#これ使うか単純に出現頻度そのまま入れるか
         is_uni="0.0"
         if len(term)==1:
             is_uni="1.0"
         digit_rate=str(digit_num_per_term(term))
         alpha_rate=str(alpha_num_per_term(term))
-        tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
+        tmpdata=[term,freq,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
         #print("term : ",term)
         for pos in pos_list:
             #print("  pos : ",pos)
@@ -66,7 +69,7 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[]): 
             tmpdata[3:3]=(kihon)
             extend_feature_vector(tmpdata,term,kihon,hinshi,f_type)#f_typeで指定した作り方でベクトル追加
             outputdata.append(tmpdata)
-            tmpdata=[term,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
+            tmpdata=[term,freq,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
     return outputdata
 
 def digit_num_per_term(term):
@@ -86,8 +89,8 @@ def alpha_num_per_term(term):
 def extend_feature_vector(feature_list,term,kihon,hinshi,vec_type):
     components_kihon,components_hinshi=get_term_components(term)
     if vec_type=="BoW":
-        extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
-        extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
+        #extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
+        #extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
         extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
         extend_feature_vector_BoW(feature_list,kihon,"kihon")#周辺の基本形
         extend_feature_vector_BoW(feature_list,hinshi,"hinshi")#周辺の品詞
@@ -109,7 +112,14 @@ def extend_feature_vector(feature_list,term,kihon,hinshi,vec_type):
         extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
         extend_feature_vector_W2VSum(feature_list,kihon,"kihon")#周辺の基本形
         extend_feature_vector_W2VSum(feature_list,hinshi,"hinshi")#周辺の品詞
-
+    elif vec_type=="W2VSumBoW":
+        extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
+        extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
+        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
+        extend_feature_vector_BoW(feature_list,kihon,"kihon")#周辺の基本形
+        extend_feature_vector_BoW(feature_list,hinshi,"hinshi")#周辺の品詞
+        extend_feature_vector_W2VSum(feature_list,components_kihon,"kihon")#自身
+        extend_feature_vector_W2VSum(feature_list,kihon,"kihon")#周辺の基本形
 def extend_feature_vector_contains_NO(feature_list,term):
     mecab_results=mecab(term).split("\n")
     if "の\t助詞,連体化,*,*,*,*,の,ノ,ノ" in mecab_results:
@@ -216,8 +226,8 @@ def extend_feature_vector_W2VSum(feature_list,extend_list,vec_type): #位置考�
                     else:
                         feature_list.append("0.0")
 
-def getFreqList(term_dic):
-    freq_list=[len(pos_list) for pos_list in term_dic.values()]
+def getFreqList(term_dic,fulltext):
+    freq_list=[len(re.findall(key,fulltext)) for key in term_dic.keys()]
     freq_list.sort()
     return freq_list
 
@@ -294,7 +304,7 @@ def writeFile(filename,datas):
         for data in datas:
             f.write("\t".join(data)+"\n")
             
-def process(filename,text_list,title,abstract,keywords):
+def process(filename,text_list,title,abstract,keywords,fulltext):
     """
     メイン処理
     """
@@ -398,7 +408,7 @@ def process(filename,text_list,title,abstract,keywords):
             nowread_head_pos+=len(appear)
     #print(term_dic.keys())
     #print(len(term_dic))
-    feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_results)),4,[title,abstract],keywords.split(","))
+    feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_results)),3,[title,abstract],keywords.split(","),fulltext)
     #for f in feature_data:
     #   print(f)
     writeFile(filename[:-4]+"_feature_"+f_type+".txt",feature_data)
@@ -472,7 +482,9 @@ def main():
     root=tree.getroot()
     texts=removeTags(root) #texts=dict{section title:body text}
     process_text_list,keywords=get_partof_text_list(texts,[1,1,1,0,0,0])#[title,abst,keywords,intro,conclusion,etc]
-    process(filename,process_text_list,texts["title"],texts["abstract"],keywords)
+    tmp_fulltext,tmp_kw=get_partof_text_list(texts,[1,1,0,1,1,1])
+    fulltext="".join(tmp_fulltext)
+    process(filename,process_text_list,texts["title"],texts["abstract"],keywords,fulltext)
     
 if __name__=="__main__":
     main()

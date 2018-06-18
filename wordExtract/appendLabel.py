@@ -17,8 +17,8 @@ def append_label(filename):
                     print("already exists",line_exist.split("\t")[0])
                     continue
                 #作業サポート用print
-                back_text=[s for s in line_spl[3:7]]
-                fromt_text=[s for s in line_spl[7:11]]
+                back_text=[s for s in line_spl[3:6]]
+                fromt_text=[s for s in line_spl[6:9]]
                 print(str(i)+"/"+str(len(lines)),"".join(back_text)+"<"+line_spl[0]+">"+"".join(fromt_text),":",end="")
                 label=input()
                 outdata.append(line_spl[0]+"\t"+line_spl[1]+"\t"+label+"\n")
@@ -34,8 +34,8 @@ def append_label(filename):
                 line_spl=line.split("\t")
             
                 #作業サポート用print
-                back_text=[s for s in line.split("\t")[3:7]]
-                fromt_text=[s for s in line.split("\t")[7:11]]
+                back_text=[s for s in line.split("\t")[3:6]]
+                fromt_text=[s for s in line.split("\t")[6:9]]
                 print(str(i)+"/"+str(len(lines)),"".join(back_text)+"<"+line_spl[0]+">"+"".join(fromt_text),":",end="")
                 label=input()
                 outdata.append(line_spl[0]+"\t"+line_spl[1]+"\t"+label+"\n")
