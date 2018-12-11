@@ -223,7 +223,6 @@ def read(text,root,brack_type="NOBRACK",read_body=True):
         elif text[i]=="\\":#コマンドの始まり "\"
             cmd,c_len=readCommand(text[i+1:])#コマンドとその長さを得る
             i+=c_len
-            #print(cmd)
             if cmd in BEGIN_COMMANDS:
                 b_type,t_len=read(text[i+1:],root,"CURLY")
                 i+=t_len

@@ -6,34 +6,69 @@ import collections
 import sys
 import re
 import os
+import math
 import pdb
 from utils import get_files
 import xml.etree.ElementTree as ET
 from xmlAnalyzer import removeTags
-import MeCab
-import CaboCha
+import pyknp
+import pandas as pd
+import json
 
-f_type="W2VSum"
+
+f_type="BoW"
 #BoW W2V posBoW posW2V W2VSum W2VSumBoW
 
         
 def read_w2v():
     dic={}
-    with open("../fastText/model.vec","r")as f:
+    with open("../fastText/model_J_d200n25w10.vec","r")as f:
     #with open("./data/jvectors50000.txt","r")as f:
     #with open("./data/model/word2vec_NLP_LCorpus.txt","r")as f:
         for line in f.readlines()[1:]:
             word=line.split(" ")[0].strip()
-            dic[word]=[str(v).strip() for v in line.split(" ")[1:]] #研究室ｗ２ｖなら２,fasttextなら１,gensimword2vecなら1：
+            dic[word]=[str(v).strip() for v in line.split(" ")[1:]] #研究室w2vなら2,fasttextなら1,gensimword2vecなら1：
     return dic
 w2vDic=read_w2v()
 
-def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[],fulltext=""): #n:素性とするngramの範囲
+def processEachTerm(term_num,term_dic,mecab_result_list,n,titleabst_str=[],keywords=[],fulltext=""): #n:素性とするngramの範囲
     """
     各語に対する素性抽出処理
     素性データは[対象語,出現場所pos,出現頻度,1文字か,タイトルに含まれるか,アブストに含まれるか,キーワードに含まれるか,前後n形態素基本形列挙,前後n形態素品詞列挙,基本形ベクトル化,品詞ベクトル化]
     """
-    outputdata=[] #素性 リストのリスト returnする
+    knp=pyknp.KNP(command='knp',option='-tab -anaphora',jumancommand='jumanpp',jumanpp=True)
+    knp_results=[[],[]] #list of title,list of abst
+    knp_results[0].append(knp.parse(titleabst_str[0]))
+    for sentence in re.split(r"\.|。",replaceDpoint(titleabst_str[1].replace("．","."))):
+    #for sentence in replaceDpoint(titleabst_str[1].replace("．",".")).split("."):
+        #print(sentence.replace("<dpoint>","."))
+        knp_results[1].append(knp.parse(sentence.replace("<dpoint>",".")+"．"))
+        #print(sentence.replace("<dpoint>",".")+"．")
+    head_morph_ids=[0]#abst各文の先頭の形態素番号を保持
+    #print(re.split(r"\.|。",replaceDpoint(titleabst_str[1].replace("．",".")).replace("<dpoint>",".")))
+    #sys.exit()
+    now=0
+    for rslt in knp_results[1]:
+        now=now+len(rslt.mrph_list())
+        head_morph_ids.append(now)
+        #print(len(rslt.mrph_list()))
+        #for m in rslt.mrph_list():
+        #    print(m.midasi+" ",end="")
+        #print()
+    head_morph_ids.pop()
+
+    #for rslt in knp_results:
+    #    for r in rslt:
+    #        for m in r.mrph_list():
+    #            print(m.midasi)
+
+    #num=0
+    #for rslt in knp_results[1]:
+    #    print(rslt.mrph_list()[0].midasi,num)
+    #    num+=len(rslt.mrph_list())
+    #print(head_morph_ids)
+    #sys.exit()
+    outputdata=[] #素性 dictのlist returnする
     freq_list=getFreqList(term_dic,fulltext)
     for term,pos_list in term_dic.items():
         in_title="0.0"
@@ -45,32 +80,157 @@ def processEachTerm(term_dic,mecab_result_list,n,titleabst_str=[],keywords=[],fu
             in_abst="1.0"
         if term in keywords:
             int_kw="1.0"
-        freq=str(calcFreqFeature(freq_list,len(pos_list),10))#これ使うか単純に出現頻度そのまま入れるか
+        #freq=str(calcFreqFeature(freq_list,len(pos_list),10))#これ使うか単純に出現頻度そのまま入れるか
+        freq=str(calcTfidfFeature(term,len(pos_list),term_num))
         is_uni="0.0"
         if len(term)==1:
             is_uni="1.0"
         digit_rate=str(digit_num_per_term(term))
         alpha_rate=str(alpha_num_per_term(term))
-        tmpdata=[term,freq,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
+        #tmpdata=[term,freq,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
+        tmpdata={"term":term,"freq":freq,"is_uni":is_uni,"digit_rate":digit_rate,"alpha_rate":alpha_rate,"in_title":in_title,"in_abst":in_abst,"in_kw":in_kw}
         #print("term : ",term)
         for pos in pos_list:
             #print("  pos : ",pos)
             e_pos=pos[1]
             sec_num=pos[0]
-            tmp_term_len=len(mecab_result_list[sec_num].split("\n")[pos[1]].split("\t")[0])
+            #単語が含まれているknp解析結果を取得
+            if sec_num==0:
+                knprslt=knp_results[0][0]
+                s_id=pos[1]
+            else:
+                #print(term,e_pos,":")
+                for h_i,head in enumerate(head_morph_ids):
+                    if e_pos<head:
+                        #print(e_pos,head)
+                        knprslt=knp_results[1][h_i-1]
+                        h=head_morph_ids[h_i-1]
+                        break
+                s_id=e_pos-h#その文での形態素id
+                #print(term,knprslt.mrph_list()[s_id].midasi,s_id,h)
+                
+            e_id=s_id
+            tmp_term_len=len(mecab_result_list[sec_num][e_pos][0])
+            #print(term)
             while tmp_term_len!=len(term):#単語の末尾posを求める
-                tmp_term_len+=len(mecab_result_list[sec_num].split("\n")[e_pos+1].split("\t")[0])
+                #print(" ",mecab_result_list[sec_num][e_pos+1][0])
+                tmp_term_len+=len(mecab_result_list[sec_num][e_pos+1][0])
                 e_pos+=1
-            kihon,hinshi=getBehindFrontNMorphenes(mecab_result_list[sec_num].split("\n"),pos[1],e_pos,n)            
+                e_id+=1
+            #print(term,s_id,e_id,knprslt)
+            #kihon_b,kihon_f,hinshi_b,hinshi_f=getBehindFrontNMorphenes(mecab_result_list[sec_num],pos[1],e_pos,n)
+            kihon_b,kihon_f,hinshi_b,hinshi_f=getBehindFrontNMorphenesByKNP(knprslt,s_id,e_id,n)            
+            #print(kihon_b,term,kihon_f)
+            kihon_kakari_f,hinshi_kakari_f=getBehindFrontNMorphenesKakariByKNP(knprslt,s_id,e_id,n)
+            #print(term,kihon_kakari_f)
+            
             #print("".join(kihon[:4]),term,"".join(kihon[4:]))
-            tmpdata.insert(1,str(pos[0])+","+str(pos[1])+","+str(pos[2]))
-            tmpdata.insert(2,str(2+n*2*2+1))#素性が始まる場所
-            tmpdata[3:3]=(hinshi)
-            tmpdata[3:3]=(kihon)
-            extend_feature_vector(tmpdata,term,kihon,hinshi,f_type)#f_typeで指定した作り方でベクトル追加
+            tmpdata["pos"]=pos
+            tmpdata["kihon_before_appear"]=(kihon_b)
+            tmpdata["kihon_front_appear"]=(kihon_f)
+            tmpdata["hinshi_before_appear"]=(hinshi_b)
+            tmpdata["hinshi_front_appear"]=(hinshi_f)
+            tmpdata["kihon_kakari_front_appear"]=(kihon_kakari_f)
+            tmpdata["hinshi_kakari_front_appear"]=(hinshi_kakari_f)
+            extend_feature_vector(tmpdata,term,kihon_b,kihon_f,hinshi_b,hinshi_f,kihon_kakari_f,hinshi_kakari_f)
             outputdata.append(tmpdata)
-            tmpdata=[term,freq,is_uni,digit_rate,alpha_rate,in_title,in_abst,in_kw]
+            tmpdata={"term":term,"freq":freq,"is_uni":is_uni,"digit_rate":digit_rate,"alpha_rate":alpha_rate,"in_title":in_title,"in_abst":in_abst,"in_kw":in_kw}
+    #sys.exit()
     return outputdata
+
+def getBehindFrontNMorphenesKakariByKNP(knp_result,s_id,e_id,n):
+    """
+    とりあえず係り先だけでいい？
+    """
+    #文節idの特定
+    for bnst in knp_result.bnst_list():
+        for mrph in bnst.mrph_list():
+            #print(mrph.midasi,mrph.mrph_id,e_id)
+            #if mrph.mrph_id==s_id:
+            #    s_bnst_id=bnst.bnst_id
+            if mrph.mrph_id==e_id:
+                e_bnst_id=bnst.bnst_id
+                break
+    if knp_result.bnst_list()[e_bnst_id].parent!=None:
+        if knp_result.bnst_list()[e_bnst_id].dpndtype=="P":
+            if knp_result.bnst_list()[e_bnst_id].parent.parent!=None:
+                kakari_bnst_id=knp_result.bnst_list()[e_bnst_id].parent.parent.bnst_id
+            else:
+                kakari_bnst_id=None
+        else:
+            kakari_bnst_id=knp_result.bnst_list()[e_bnst_id].parent.bnst_id
+    else:
+        kakari_bnst_id=None
+    kihon_f=[]
+    hinshi_f=[]
+    #まずは同文節内に出現するならそれを
+    flg=True
+    for i,mrph in enumerate(knp_result.bnst_list()[e_bnst_id].mrph_list()):
+        if mrph.mrph_id!=e_id and flg:
+            continue
+        flg=False
+        if i+1<len(knp_result.bnst_list()[e_bnst_id].mrph_list()) and len(kihon_f)<3:
+            kihon_f.append(knp_result.bnst_list()[e_bnst_id].mrph_list()[i+1].genkei)
+            hinshi_f.append("-".join([knp_result.bnst_list()[e_bnst_id].mrph_list()[i+1].hinsi,knp_result.bnst_list()[e_bnst_id].mrph_list()[i+1].bunrui]))
+    #次に係り先文節から
+    while len(kihon_f)<3:
+        if kakari_bnst_id==None:
+            kihon_f.append("*")
+            hinshi_f.append("*")
+            continue
+        for i,mrph in enumerate(knp_result.bnst_list()[kakari_bnst_id].mrph_list()):
+            if len(kihon_f)<3:
+                kihon_f.append(knp_result.bnst_list()[kakari_bnst_id].mrph_list()[i].genkei)
+                hinshi_f.append("-".join([knp_result.bnst_list()[kakari_bnst_id].mrph_list()[i].hinsi,knp_result.bnst_list()[kakari_bnst_id].mrph_list()[i].bunrui]))
+        if knp_result.bnst_list()[kakari_bnst_id].parent!=None:
+            if knp_result.bnst_list()[kakari_bnst_id].dpndtype=="P":
+                if knp_result.bnst_list()[kakari_bnst_id].parent.parent!=None:
+                    kakari_bnst_id=knp_result.bnst_list()[kakari_bnst_id].parent.parent.bnst_id
+                else:
+                    kakari_bnst_id=None
+            else:
+                kakari_bnst_id=knp_result.bnst_list()[kakari_bnst_id].parent.bnst_id
+        else:
+            kakari_bnst_id=None
+    return kihon_f,hinshi_f
+        
+def getBehindFrontNMorphenesByKNP(knp_result,s_id,e_id,n):
+    """
+    前後n形態素の基本形と品詞をそれぞれリストで返す
+    """
+    kihon_b=[]
+    kihon_f=[]
+    hinshi_b=[]
+    hinshi_f=[]
+    for i in range(s_id-n,s_id):
+        #print(i)
+        if i<0 or i>=len(knp_result.mrph_list()): #文外は＊で埋める
+            kihon_b.append("*")
+            hinshi_b.append("*")
+        else:
+            kihon_b.append(knp_result.mrph_list()[i].genkei)
+            hinshi_b.append("-".join([knp_result.mrph_list()[i].hinsi,knp_result.mrph_list()[i].bunrui]))
+    for i in range(e_id+1,e_id+n+1):
+        #print(i)
+        if i<0 or i>=len(knp_result.mrph_list()): #文外は＊で埋める
+            kihon_f.append("*")
+            hinshi_f.append("*")
+        else:
+            kihon_f.append(knp_result.mrph_list()[i].genkei)
+            hinshi_f.append("-".join([knp_result.mrph_list()[i].hinsi,knp_result.mrph_list()[i].bunrui]))
+    return kihon_b,kihon_f,hinshi_b,hinshi_f
+
+
+def calcTfidfFeature(term,appear_num,term_num):
+    tf=appear_num/term_num
+    with open("./data/df.txt","r")as f:
+        lines=f.readlines()
+        for line in lines:
+            if line.split("\t")[0]==term:
+                df=float(line.split("\t")[1])
+                idf=math.log(len(lines)/df)+1
+                return tf*idf
+    return 0.0
 
 def digit_num_per_term(term):
     cnt=0
@@ -86,145 +246,100 @@ def alpha_num_per_term(term):
             cnt+=1
     return cnt/len(term)
 
-def extend_feature_vector(feature_list,term,kihon,hinshi,vec_type):
+def extend_feature_vector(feature_dict,term,kihon_b,kihon_f,hinshi_b,hinshi_f,kihon_kakari_f,hinshi_kakari_f):
     components_kihon,components_hinshi=get_term_components(term)
-    if vec_type=="BoW":
-        #extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
-        #extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
-        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
-        extend_feature_vector_BoW(feature_list,kihon,"kihon")#周辺の基本形
-        extend_feature_vector_BoW(feature_list,hinshi,"hinshi")#周辺の品詞
-    elif vec_type=="posBoW":
-        extend_feature_vector_posBoW(feature_list,components_kihon,"kihon")#自身
-        extend_feature_vector_posBoW(feature_list,components_hinshi,"hinshi")#自身
-        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
-        extend_feature_vector_posBoW(feature_list,kihon,"kihon")#周辺の基本形
-        extend_feature_vector_posBoW(feature_list,hinshi,"hinshi")#周辺の品詞
-    elif vec_type=="posW2V":
-        extend_feature_vector_posW2V(feature_list,components_kihon,"kihon")#自身
-        extend_feature_vector_posW2V(feature_list,components_hinshi,"hinshi")#自身
-        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
-        extend_feature_vector_posW2V(feature_list,kihon,"kihon")#周辺の基本形
-        extend_feature_vector_posW2V(feature_list,hinshi,"hinshi")#周辺の品詞
-    elif vec_type=="W2VSum":
-        extend_feature_vector_W2VSum(feature_list,components_kihon,"kihon")#自身
-        extend_feature_vector_W2VSum(feature_list,components_hinshi,"hinshi")#自身
-        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
-        extend_feature_vector_W2VSum(feature_list,kihon,"kihon")#周辺の基本形
-        extend_feature_vector_W2VSum(feature_list,hinshi,"hinshi")#周辺の品詞
-    elif vec_type=="W2VSumBoW":
-        extend_feature_vector_BoW(feature_list,components_kihon,"kihon")#自身
-        extend_feature_vector_BoW(feature_list,components_hinshi,"hinshi")#自身
-        extend_feature_vector_contains_NO(feature_list,term)#"○○の△△"か
-        extend_feature_vector_BoW(feature_list,kihon,"kihon")#周辺の基本形
-        extend_feature_vector_BoW(feature_list,hinshi,"hinshi")#周辺の品詞
-        extend_feature_vector_W2VSum(feature_list,components_kihon,"kihon")#自身
-        extend_feature_vector_W2VSum(feature_list,kihon,"kihon")#周辺の基本形
-def extend_feature_vector_contains_NO(feature_list,term):
-    mecab_results=mecab(term).split("\n")
-    if "の\t助詞,連体化,*,*,*,*,の,ノ,ノ" in mecab_results:
-        #print("contain")
-        feature_list.append("1.0")
-    else:
-        #print("not contain")
-        feature_list.append("0.0")
+    #General
+    extend_feature_vector_BoW(feature_dict,components_hinshi,"hinshi","own_hinshi_bow")#自身
+    extend_feature_vector_BoW(feature_dict,hinshi_b,"hinshi","hinshi_b_bow")#周辺の品詞b
+    extend_feature_vector_BoW(feature_dict,hinshi_f,"hinshi","hinshi_f_bow")#周辺の品詞f
+    extend_feature_vector_BoW(feature_dict,hinshi_kakari_f,"hinshi","hinshi_kakari_f_bow")#周辺の品詞f_kakari
+    extend_feature_vector_contains_NO(feature_dict,term)#"○○の△△"か
+    #BOW
+    extend_feature_vector_BoW(feature_dict,components_kihon,"kihon","own_kihon_bow")#自身
+    extend_feature_vector_BoW(feature_dict,kihon_b,"kihon","kihon_b_bow")#周辺の基本形before
+    extend_feature_vector_BoW(feature_dict,kihon_f,"kihon","kihon_f_bow")#周辺の基本形front
+    extend_feature_vector_BoW(feature_dict,kihon_kakari_f,"kihon","kihon_kakari_f_bow")#周辺の基本形front_kakari
+    #W2V
+    extend_feature_vector_W2VSum(feature_dict,components_kihon,"own_kihon_w2v")#自身
+    extend_feature_vector_W2VSum(feature_dict,kihon_b,"kihon_b_w2v")#周辺の基本形
+    extend_feature_vector_W2VSum(feature_dict,kihon_f,"kihon_f_w2v")#周辺の品詞
+    extend_feature_vector_W2VSum(feature_dict,kihon_kakari_f,"kihon_kakari_f_w2v")#周辺の品詞_kakari
+        
 
+    
+def extend_feature_vector_contains_NO(feature_dict,term):
+    #mecab_results=mecab(term).split("\n")
+    #if "の\t助詞,連体化,*,*,*,*,の,ノ,ノ" in mecab_results:
+        #print("contain")
+    #    feature_list.append("1.0")
+    #else:
+        #print("not contain")
+    #    feature_list.append("0.0")
+    juman_result=juman2mecab(execJuman(term))
+    for morph in juman_result:
+        if morph[0]=="の" and morph[3]=="助詞":
+            feature_dict["contains_no"]="1.0"
+            return
+    feature_dict["contains_no"]="0.0"
+    
 def get_term_components(term):
     kihon=[]
     hinshi=[]
-    mecab_results=mecab(term).split("\n")
-    if mecab_results[0].split("\t")[1].split(",")[6]=="*":
-        kihon.append(mecab_results[0].split("\t")[0])
-    else:
-        kihon.append(mecab_results[0].split("\t")[1].split(",")[6])
-    if mecab_results[-3].split("\t")[1].split(",")[6]=="*":
-        kihon.append(mecab_results[-3].split("\t")[0])
-    else:
-        kihon.append(mecab_results[-3].split("\t")[1].split(",")[6])
-    hinshi.extend(["-".join(mecab_results[0].split("\t")[1].split(",")[0:2]),"-".join(mecab_results[-3].split("\t")[1].split(",")[0:2])])
+    juman_result=juman2mecab(execJuman(term))
+    kihon.append(juman_result[0][2])
+    kihon.append(juman_result[-1][2])
+    hinshi.append("-".join(juman_result[0][3:4]))
+    hinshi.append("-".join(juman_result[-1][3:4]))
+    #mecab_results=mecab(term).split("\n")
+    #if mecab_results[0].split("\t")[1].split(",")[6]=="*":
+    #    kihon.append(mecab_results[0].split("\t")[0])
+    #else:
+    #    kihon.append(mecab_results[0].split("\t")[1].split(",")[6])
+    #if mecab_results[-3].split("\t")[1].split(",")[6]=="*":
+    #    kihon.append(mecab_results[-3].split("\t")[0])
+    #else:
+    #    kihon.append(mecab_results[-3].split("\t")[1].split(",")[6])
+    #hinshi.extend(["-".join(mecab_results[0].split("\t")[1].split(",")[0:2]),"-".join(mecab_results[-3].split("\t")[1].split(",")[0:2])])
     #print(kihon,hinshi)
     return kihon,hinshi
 
-def extend_feature_vector_BoW(feature_list,extend_list,vec_type):
+def extend_feature_vector_BoW(feature_dict,extend_list,vec_type,dict_key_label):
     """
     出現頻度を考慮しない単純なBoW(前後n形態素を見るがその位置情報は不保持)
     """
     if vec_type=="kihon":
-        with open("./data/bow/df_list_0.4.txt","r")as f:
-                for line in f.readlines():
-                    word=line.split("\t")[0]
-                    if word in extend_list:
-                        feature_list.append("1.0")
-                    else:
-                        feature_list.append("0.0")
+        with open("./data/bow/df_list_0.3.txt","r")as f:
+            feature_list=[]
+            for line in f.readlines():
+                word=line.split("\t")[0]
+                if word in extend_list:
+                    feature_list.append("1.0")
+                else:
+                    feature_list.append("0.0")
+            feature_dict[dict_key_label]=feature_list
     elif vec_type=="hinshi":
         with open("./data/bow/HINSHI.txt","r")as f:
-                for word in f.readlines():
-                    if word.strip() in extend_list:
-                        feature_list.append("1.0")
-                    else:
-                        feature_list.append("0.0")
+            feature_list=[]
+            for word in f.readlines():
+                if word.strip() in extend_list:
+                    feature_list.append("1.0")
+                else:
+                    feature_list.append("0.0")
+            feature_dict[dict_key_label]=feature_list
 
-
-def extend_feature_vector_posBoW(feature_list,extend_list,vec_type):
-    """
-    出現順序を考慮したBoW(長さはn(前後)*次元数になる)
-    """
-    if vec_type=="kihon":
-        for ex_elem in extend_list:
-            with open("./data/bow/df_list_0.4.txt","r")as f:
-                for line in f.readlines():
-                    word=line.split("\t")[0].strip()
-                    if word==ex_elem:
-                        feature_list.append("1.0")
-                    else:
-                        feature_list.append("0.0")
-    elif vec_type=="hinshi":
-        for ex_elem in extend_list:
-            with open("./data/bow/HINSHI.txt","r")as f:
-                for word in f.readlines():
-                    if word.strip()==ex_elem:
-                        feature_list.append("1.0")
-                    else:
-                        feature_list.append("0.0")
-
-def extend_feature_vector_posW2V(feature_list,extend_list,vec_type):
-    if vec_type=="kihon":
-        for ex_elem in extend_list:
-            if ex_elem in w2vDic:
-                feature_list.extend(w2vDic[ex_elem])
-            else:
-                feature_list.extend([str(0.0) for i in range(200)])   #研究室のw2vが200次元  
-    elif vec_type=="hinshi":
-        for ex_elem in extend_list:
-            with open("./data/bow/HINSHI.txt","r")as f:
-                for word in f.readlines():
-                    if word.strip()==ex_elem:
-                        feature_list.append("1.0")
-                    else:
-                        feature_list.append("0.0")
-                        
-def extend_feature_vector_W2VSum(feature_list,extend_list,vec_type): #位置考慮せずベクトル全加算
-    if vec_type=="kihon":
-        append_vector=[0.0 for i in range(200)]
-        exist_num=0 #素性単語の中で辞書に存在する単語の数
-        for ex_elem in extend_list:
-            if ex_elem in w2vDic:
-                append_vector=[x+float(y) for x,y in zip(append_vector,w2vDic[ex_elem])]
-                exist_num+=1
-        if exist_num>0:
-            append_vector=[str(x/exist_num) for x in append_vector]
-        else:
-            append_vector=["0.0" for i in range(200)]
-        feature_list.extend(append_vector)
-    elif vec_type=="hinshi":
-        for ex_elem in extend_list:
-            with open("./data/bow/HINSHI.txt","r")as f:
-                for word in f.readlines():
-                    if word.strip()==ex_elem:
-                        feature_list.append("1.0")
-                    else:
-                        feature_list.append("0.0")
+def extend_feature_vector_W2VSum(feature_dict,extend_list,dict_key_label): #位置考慮せず単語分散表現平均
+    append_vector=[0.0 for i in range(200)]
+    exist_num=0 #素性単語の中で辞書に存在する単語の数
+    for ex_elem in extend_list:
+        if ex_elem in w2vDic:
+            append_vector=[x+float(y) for x,y in zip(append_vector,w2vDic[ex_elem])]
+            exist_num+=1
+    if exist_num>0:
+        #append_vector=[str(x) for x in append_vector] #全加算
+        append_vector=[str(x/exist_num) for x in append_vector] #平均
+    else:
+        append_vector=["0.0" for i in range(200)]
+    feature_dict[dict_key_label]=append_vector
 
 def getFreqList(term_dic,fulltext):
     freq_list=[len(re.findall(key,fulltext)) for key in term_dic.keys()]
@@ -241,41 +356,37 @@ def calcFreqFeature(freq_list,freq,n):#n:分割数
         pos+=pos_dif
     return ret
 
-def getBehindFrontNMorphenes(mecab_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複合語)のpos
+def getBehindFrontNMorphenes(juman_results,s_pos,e_pos,n): #s_pos,e_posはキーワード(複合語)のpos
     """
     前後n形態素の基本形と品詞をそれぞれリストで返す
     """
-    kihonkei=[]
-    hinshi=[]
-    for i in range (s_pos-n,e_pos+n+1):
-        if i>=s_pos and i<=e_pos:
-            continue
-        if i<0 or i>=len(mecab_results) or mecab_results[i]=="":
-            kihonkei.append("*")
-            hinshi.append("*")
+    kihon_b=[]
+    kihon_f=[]
+    hinshi_b=[]
+    hinshi_f=[]
+    for i in range(s_pos-n,s_pos):
+        #print(i)
+        if i<0 or i>=len(juman_results) or juman_results[i]=="": #文外は＊で埋める
+            kihon_b.append("*")
+            hinshi_b.append("*")
         else:
-            #print("  "+mecab_results[i])
-            if mecab_results[i]=="EOS":
-                kihonkei.append("*")
-                hinshi.append("*")
-            else:
-                tmp_kihon=mecab_results[i].split("\t")[1].split(",")[6]
-                if tmp_kihon=="*":
-                    kihonkei.append(mecab_results[i].split("\t")[0])
-                else:
-                    kihonkei.append(tmp_kihon)
-                #hinshi.append(mecab_results[i].split("\t")[1].split(",")[0])
-                hinshi.append("-".join(mecab_results[i].split("\t")[1].split(",")[0:2]))
-    return kihonkei,hinshi
+            kihon_b.append(juman_results[i][2])
+            hinshi_b.append("-".join(juman_results[i][3:5]))
+    for i in range(e_pos+1,e_pos+n+1):
+        #print(i)
+        if i<0 or i>=len(juman_results) or juman_results[i]=="": #文外は＊で埋める
+            kihon_f.append("*")
+            hinshi_f.append("*")
+        else:
+            kihon_f.append(juman_results[i][2])
+            hinshi_f.append("-".join(juman_results[i][3:5]))
+            
+    return kihon_b,kihon_f,hinshi_b,hinshi_f
 
-def mecab(text):
-    """
-    引数strに対してmecab実行、結果strを返す
-    """
-    #m=MeCab.Tagger("")
-    m=MeCab.Tagger("-d /home/momo/mecab/mecab-ipadic/") #記号がサ変接続になるのを修正した辞書※研究室PC:momo 自宅PD:momoi
-    m.parse("")
-    return m.parse(text)#type:str
+    
+def execJuman(text):
+    juman=pyknp.Jumanpp()
+    return juman.analysis(text) #mrph_listが返される
 
 def removeUnderValueFromDict(target_dict,rmv_value):
     """
@@ -303,16 +414,40 @@ def writeFile(filename,datas):
     with open(filename,"w")as f:
         for data in datas:
             f.write("\t".join(data)+"\n")
-            
-def process(filename,text_list,title,abstract,keywords,fulltext):
+
+def juman2mecab(juman_result):
+    return [[morph.midasi,morph.yomi,morph.genkei,morph.hinsi,morph.bunrui,morph.katuyou1,morph.katuyou2,morph.imis,morph.repname] for morph in juman_result]
+
+
+def isTargetMorphemeUni(midasi,hinsi,bunrui):
+    #a. 1形態素でもキーワード候補になるもの
+    if midasi in [".","．","〜"]:
+        return False
+    if hinsi=="名詞" and bunrui in ["サ変名詞","普通名詞","固有名詞","地名","人名","組織名","形式名詞","副詞的名詞","時相名詞"]:
+        return True
+    if hinsi=="未定義語":
+        return True
+    return False
+
+def isTargetMorphemeNotUni(midasi,hinsi,bunrui,katuyou2):
+    #b. aと連接することでキーワード候補になるもの
+    if midasi in [".","．","〜"]:
+        return False
+    if hinsi in ["接頭辞","副詞"] or(hinsi in ["形容詞","接尾辞"] and katuyou2 in ["*","語幹"]) or (hinsi=="名詞" and bunrui=="数詞") or (midasi in ["・"]):
+        return True
+    return False
+    
+    
+def processJ(filename,text_list,title,abstract,keywords,fulltext,retTermDic=False):
     """
-    メイン処理
+    メイン処理 juman ver
     """
     term_dic={}#キーワードリスト key:キーワード value:出現位置リスト(lenで出現回数も求まる) セクションナンバーと出現位置(形態素番号)と出現位置(単純文字列)のタプル
-    mecab_results=[]
+    juman_results=[]
+    #各文に対して処理
     for sec_i,text in enumerate(text_list):
-        mecab_result=mecab(text)#mecab_resultは1行1形態素情報のstr
-        mecab_results.append(mecab_result)
+        juman_result=juman2mecab(execJuman(text))
+        juman_results.append(juman_result)
         #キーワード抽出
         partof_term="" #複合名詞抽出用tmp
         partof_termex="" #用語的表現抽出用tmp
@@ -325,97 +460,125 @@ def process(filename,text_list,title,abstract,keywords,fulltext):
         tmp_i_term=0
         tmp_i_termex=0
         tmp_tmp_i_termex=0
-        for i,morpheme in enumerate(mecab_result.split("\n")): #複合名詞の抽出と用語的表現の抽出はこのfor文中で別々に
-            if morpheme not in ["EOS",""]:
-                appear,infos=morpheme.split("\t")#出現形と品詞情報
-                if(len(infos.split(","))==9):
-                    hinshi,hinshi_det1,hinshi_det2,hinshi_det3,katsuyo1,katsuyo2,base,read,pron=infos.split(",")
-                else:
-                    hinshi,hinshi_det1,hinshi_det2,hinshi_det3,katsuyo1,katsuyo2,base=infos.split(",")
-                #---用語抽出処理---
-                if((hinshi=="名詞" or appear in ["-","・"]) and appear!="，"):#なぜか","が名詞になる？？？
-                    #複合名詞
-                    if(len(partof_term)==0):
+        containsNorm=False
+        tailIsSahen=False
+        for i,morpheme in enumerate(juman_result):
+            #print(morpheme[0])
+            #キーワード抽出
+            if morpheme[0] not in ["EOS",""]:
+                midasi,yomi,genkei,hinsi,bunrui,katuyou1,katuyou2,imis,repname=morpheme
+                if isTargetMorphemeUni(midasi,hinsi,bunrui):
+                    if len(partof_term)==0:
                         word_head_pos=nowread_head_pos
                         tmp_i_term=i
-                    partof_term+=appear
-                    #用語表現
-                    if(now_pos==0):#空
-                        now_pos=1
-                    if(len(partof_termex)==0):
-                        word_head_posex=nowread_head_pos
-                        tmp_i_termex=i
-                    if(now_pos==2):#の済
-                        now_pos=3
-                    if(now_pos>=2):
-                        if(len(tmp_partof_termex)==0):
-                            tmp_tmp_i_termex=i
-                            tmp_word_head_posex=nowread_head_pos
-                        tmp_partof_termex+=appear
-                    partof_termex+=appear
-                elif((hinshi!="名詞" or appear not in ["-","・"]) and len(partof_term)>0):
-                    #複合名詞
-                    if(partof_term in term_dic):
-                        term_dic[partof_term].append((sec_i,tmp_i_term,word_head_pos))
+                    partof_term+=midasi
+                    containsNorm=True
+                    if bunrui=="サ変名詞":
+                        tailIsSahen=True
                     else:
-                        term_dic[partof_term]=[(sec_i,tmp_i_term,word_head_pos)]
-                    partof_term=""
-                    word_head_pos=0
-                    #用語表現
-                    if appear in ["の","を"] and hinshi=="助詞" and now_pos==1:
-                        partof_termex+="の"
-                        now_pos=2
-                        nowread_head_pos+=1
-                        continue
-                    elif now_pos==3:
-                        if(partof_termex in term_dic):
-                            term_dic[partof_termex].append((sec_i,tmp_i_termex,word_head_posex))
+                        tailIsSahen=False
+                elif isTargetMorphemeNotUni(midasi,hinsi,bunrui,katuyou2):
+                    if len(partof_term)==0:
+                        word_head_pos=nowread_head_pos
+                        tmp_i_term=i
+                    partof_term+=midasi
+                    tailIsSahen=False
+                else: # キーワードを構成し得ない形態素の場合
+                    if len(partof_term)>0 and containsNorm:
+                        if(partof_term in term_dic):
+                            term_dic[partof_term].append((sec_i,tmp_i_term,word_head_pos))
                         else:
-                            term_dic[partof_termex]=[(sec_i,tmp_i_termex,word_head_posex)]
-                        if appear in ["の","を"] and hinshi=="助詞":
-                            partof_termex=tmp_partof_termex+"の"
-                            tmp_partof_termex=""
-                            now_pos=2
-                            word_head_posex=tmp_word_head_posex
-                            tmp_i_termex=tmp_tmp_i_termex
-                        else:
-                            now_pos=0
+                            term_dic[partof_term]=[(sec_i,tmp_i_term,word_head_pos)]
+                        if len(partof_termex)>0 and tailIsSahen: #「○○の」が住んでいて次にサ変名詞で終わるtermが来た場合
+                            tmp_partof_termex=partof_term
+                            tmp_word_head_posex=word_head_pos
+                            tmp_tmp_i_termex=tmp_i_term
+                            partof_termex+=partof_term
+                            if(partof_termex in term_dic):
+                                term_dic[partof_termex].append((sec_i,tmp_i_termex,word_head_posex))
+                            else:
+                                term_dic[partof_termex]=[(sec_i,tmp_i_termex,word_head_posex)]
                             partof_termex=""
-                            tmp_partof_termex=""
-                    else:
-                        partof_termex=""
-                        tmp_partof_termex=""
-                        now_pos=0
-                else:
+                            word_head_posex=0
+                        elif len(partof_termex)>0 and not tailIsSahen: #「○○の」が済んていて次にサ変名詞で終わらないtermが来た場合、それを次の「○○の」候補に
+                            tmp_partof_termex=partof_term
+                            tmp_word_head_posex=word_head_pos
+                            tmp_tmp_i_termex=tmp_i_term
+                        if midasi in ["の","を"] and hinsi=="助詞":
+                            if len(tmp_partof_termex)>0: # この前にも「○○の△△」が来た場合
+                                partof_termex=(tmp_partof_termex+"の")
+                                word_head_posex=tmp_word_head_posex
+                                tmp_i_termex=tmp_tmp_i_termex
+                                tmp_partof_termex=""
+                                tmp_word_head_posex=0
+                                partof_term=""
+                                nowread_head_pos+=len(midasi)
+                                continue
+                            if len(partof_termex)==0: # 初めて「○○の」を作る場合
+                                partof_termex+=(partof_term+"の")
+                                word_head_posex=word_head_pos
+                                tmp_i_termex=tmp_i_term
+                                tailIsSahen=False
+                                partof_term=""
+                                word_head_pos=0
+                                tmp_partof_termex=""
+                                tmp_word_head_posex=0
+                                nowread_head_pos+=len(midasi)
+                                continue
+                                
+                            
                     partof_term=""
                     partof_termex=""
                     tmp_partof_termex=""
                     now_pos=0
                     word_head_pos=0
-                    word_head_posex=0 
+                    word_head_posex=0
                     tmp_word_head_posex=0
-            elif(morpheme==""):
-                if(len(partof_term)>0):
-                    if(partof_term in term_dic):
-                        term_dic[partof_term].append((sec_i,tmp_i_term,word_head_pos))
-                    else:
-                        term_dic[partof_term]=[(sec_i,tmp_i_term,word_head_pos)]
-                if(len(partof_termex)>0 and now_pos==3):
-                    if(partof_termex in term_dic):
-                        term_dic[partof_termex].append((sec_i,tmp_i_termex,word_head_posex))
-                    else:
-                        term_dic[partof_termex]=[(sec_i,tmp_i_termex,word_head_posex)]
-            nowread_head_pos+=len(appear)
-    #print(term_dic.keys())
-    #print(len(term_dic))
-    feature_data=processEachTerm(term_dic,list(filter(lambda x:x not in ["EOS",""],mecab_results)),3,[title,abstract],keywords.split(","),fulltext)
+                    containsNorm=False
+                    tailIsSahen=False
+                if i+1==len(juman_result):
+                    if len(partof_term)>0 and containsNorm:
+                        if(partof_term in term_dic):
+                            term_dic[partof_term].append((sec_i,tmp_i_term,word_head_pos))
+                        else:
+                            term_dic[partof_term]=[(sec_i,tmp_i_term,word_head_pos)]
+                        if len(partof_termex)>0 and tailIsSahen:
+                            tmp=partof_term
+                            partof_termex+=partof_term
+                            if(partof_termex in term_dic):
+                                term_dic[partof_termex].append((sec_i,tmp_i_termex,word_head_posex))
+                            else:
+                                term_dic[partof_termex]=[(sec_i,tmp_i_termex,word_head_posex)]
+            nowread_head_pos+=len(midasi)
+    term_num=0# termの総個数(tf用
+    for value in term_dic.values():
+        term_num+=len(value)
+    if retTermDic:
+        return term_dic
+    #print(term_dic.items())
+    feature_data=processEachTerm(term_num,term_dic,list(filter(lambda x:x not in ["EOS",""],juman_results)),3,[title,abstract],keywords.split(","),fulltext)
+    #print(term_num,len(feature_data),type(feature_data))
+
     #for f in feature_data:
     #   print(f)
-    writeFile(filename[:-4]+"_feature_"+f_type+".txt",feature_data)
+    writeFileJson(filename[:-4]+"_feature.json",feature_data)
+
+    #tfidf(アブストのみ)用
+    #with open(filename[:-4]+"_terms.txt","w")as f:
+    #    for term,poses in term_dic.items():
+    #        f.write(term+"\t"+str(len(poses))+"\n")
+    #-------------------------
+
+
+def writeFileJson(filename,feature_dict_list):
+    #df=pd.io.json.json_normalize(feature_dict_list)
+    #df.to_json(filename,force_ascii=False)
+    with open(filename,"w")as f:
+        json.dump(feature_dict_list,f,ensure_ascii=False)
     
 def split_texts(unit_texts):
     """
-    ピリオドでsplitした方が後々やりやすい？
+    ピリオドでsplitした方が後々やりやすいと思うから
     """
     for attrib,texts in unit_texts.items():
         unit_texts[attrib]=re.split(r"\.|。|．",texts) #。も残したい？(素性になりうるかもなので)
@@ -426,17 +589,19 @@ def get_partof_text_list(texts,join_section_pattern):
     join_section_patternは[a,b,c,d,e,f]の5要素リスト
     a==1->title b==1->abstract c==1->キーワード d==1->序論 e==1->結論 f==1->残り をjoined_textに含む
     """
-    ret_text_list=[]
+    ret_text_list_tmp=[]
     keywords=""
     for attrib,text in texts.items():
         if attrib=="title" and join_section_pattern[0]==1:
-            ret_text_list.append(get_section_text(texts,"title"))
+            ret_text_list_tmp.append(get_section_text(texts,"title"))
         elif attrib=="abstract" and join_section_pattern[1]==1:
-            ret_text_list.append(get_section_text(texts,"abstract"))
+            ret_text_list_tmp.append(get_section_text(texts,"abstract"))
         elif attrib=="keywords" and join_section_pattern[2]==1:
             keywords+=get_section_text(texts,"keywords")
         elif attrib not in ["title","abstract"] and join_section_pattern[2]==1:
-            ret_text_list.append(text)
+            ret_text_list_tmp.append(text)
+    ret_text_list=[text.replace("(","（").replace(")","）") for text in ret_text_list_tmp]
+    #ret_text_list=[text for text in ret_text_list_tmp]
     return ret_text_list,keywords
 
 def join_body_text_all(texts):
@@ -472,8 +637,234 @@ def get_section_text(texts,section_type):
         elif section_type=="conclusion" and attrib in ["おわりに","終わりに","結論","結論と今後の課題","結論および今後の課題","むすび","結び","まとめ","まとめと今後の課題","まとめと今後の方針","まとめ,及び今後の課題","まとめと今後の研究","あとがき"]:
             return text.replace(" ","")
     return ""
-    
 
+
+def replaceDpoint(text):
+    ret_text=""
+    for i,c in enumerate(text):
+        if c=="." and i+1<len(text) and i>0:
+            if text[i-1] in ["0","1","2","3","4","5","6","7","8","9"] and text[i+1] in ["0","1","2","3","4","5","6","7","8","9"]:
+                ret_text+="<dpoint>"
+            else:
+                ret_text+=c
+        else:
+            ret_text+=c
+    return ret_text
+        
+def createRelTrainData(filename,text_list,term_dic,n=3):
+    #for k,v in term_dic.items():
+    #    print(k,v)
+    head_poses=[]#アブスト各文の文頭位置
+    p=0
+    for sentence in replaceDpoint(text_list[1].replace("．",".")).split("."):
+        head_poses.append(p)
+        p+=(len(sentence.replace("<dpoint>","."))+1)
+    #termを出現文によって分離
+    print("process term list")
+    title_terms=[] #タプル(term,pos)のリスト
+    abst_terms={}  #タプル(term,pos)のリスト の辞書
+    for p in head_poses:
+        abst_terms[p]=[] #空のリストで初期化しておく
+    for term,poses in term_dic.items():
+        for pos in poses:
+            if pos[0]==0:
+                title_terms.append((term,pos))
+            else:
+                abst_terms[getPosIndex(pos[2],head_poses)].append((term,pos))
+                #print(term,pos[2],getPosIndex(pos[2],head_poses))
+    terms_list=abst_terms.values()
+    #print(abst_terms.keys())
+    #for k,v in abst_terms.items():
+    #    print("key:",k," value:",v)
+    #print("len(terms_list)= ",len(terms_list))
+    print("process KNP")
+    knp=pyknp.KNP(command='knp',option='-tab -anaphora',jumancommand='jumanpp',jumanpp=True)
+    knp_results=[]
+    for sentence in replaceDpoint(text_list[1].replace("．",".")).split("."):
+        print(sentence+"．")
+        knp_results.append(knp.parse(sentence.replace("<dpoint>",".")+"．"))
+
+    feature_datas=[]
+    done_mrph_num=0
+    done_mrph_num_next=0
+    print("process each term")
+    for i,terms in enumerate(terms_list):
+        #print(i," ",terms)
+        if i>0:
+            done_mrph_num_next+=len(knp_results[i-1].mrph_list())
+        for termL in terms: # L->R
+            #print("same sentence")
+            #print(termL)
+            s_posL=termL[1][1]-done_mrph_num
+            e_posL=termL[1][1]-done_mrph_num
+            tmp_term_len=len(knp_results[i-1].mrph_list()[e_posL].midasi)#e_pos求める
+            while tmp_term_len!=len(termL[0]):
+                #print(e_posL," ",knp_results[i-1].mrph_list()[e_posL+1].midasi)
+                tmp_term_len+=len(knp_results[i-1].mrph_list()[e_posL+1].midasi)
+                e_posL+=1
+            kihonL,hinshiL=getBehindFrontMorphemesJ(knp_results[i-1],s_posL,e_posL,n)
+            #print("start:",termL[1][1]," end:",e_posL)
+            #print(kihonL,hinshiL)
+            for termR in terms:
+                if isSameTerm(termL,termR):
+                    continue
+                print(termL[0],"->",termR[0])
+                s_posR=termR[1][1]-done_mrph_num
+                e_posR=termR[1][1]-done_mrph_num
+                tmp_term_len=len(knp_results[i-1].mrph_list()[e_posR].midasi)#e_pos求める
+                while tmp_term_len!=len(termR[0]):
+                    tmp_term_len+=len(knp_results[i-1].mrph_list()[e_posR+1].midasi)
+                    e_posR+=1
+                #print(termL[0]," ",termR[0]," ",knp_results[i-1].mrph_list()[s_posR].midasi," ",knp_results[i-1].mrph_list()[e_posR].midasi)
+                kihonR,hinshiR=getBehindFrontMorphemesJ(knp_results[i-1],s_posR,e_posR,n)
+                tmpdata=[termL[0],str(termL[1][0])+","+str(termL[1][1])+","+str(termL[1][2]),termR[0],str(termR[1][0])+","+str(termR[1][1])+","+str(termR[1][2])]
+                tmpdata.insert(1,str(5))#素性が始まる場所
+                #tmpdata[5:5]=(hinshiR)
+                #tmpdata[5:5]=(kihonR)
+                #tmpdata[5:5]=(hinshiL)
+                #tmpdata[5:5]=(kihonL)
+                extend_feature_vector_rel(tmpdata,kihonL,hinshiL,f_type)
+                extend_feature_vector_rel(tmpdata,kihonR,hinshiR,f_type)
+                extend_feature_vector_joshi_rel(tmpdata,s_posL,e_posL,knp_results[i-1]) # 前後の助詞　左
+                extend_feature_vector_joshi_rel(tmpdata,s_posR,e_posR,knp_results[i-1])#右
+                #extend_feature_vector_kaku_rel(tmpdata,termL[1][1],e_posL,knp_results[i-1]) # 格の種類　左
+                #extend_feature_vector_kaku_rel(tmpdata,termR[1][1],e_posR,knp_results[i-1])#右
+                #extend_feature_vector_kakarinum_rel(tmpdata,termL[0],termL[1][1],e_posL,termR[0],termR[1][1],e_posR,knp_results[i-1]) # 係り受け数
+                #extend_feature_vector_kakaritype_rel(tmpdata,termR[1][1],e_posR,knp_results[i-1]) # 係り受けのタイプ
+                feature_datas.append(tmpdata)
+            if i+1!=len(terms_list): #次の文
+                #print("next sentence")
+                #print(list(terms_list)[i+1])
+                for termR in list(terms_list)[i+1]:
+                    print(termL[0],"->",termR[0])
+                    s_posR=termR[1][1]-done_mrph_num_next
+                    e_posR=termR[1][1]-done_mrph_num_next
+                    tmp_term_len=len(knp_results[i].mrph_list()[e_posR].midasi)#e_pos求める
+                    while tmp_term_len!=len(termR[0]):
+                        #print(termR[0])
+                        #print(" ",knp_results[i].mrph_list()[e_posR].midasi)
+                        tmp_term_len+=len(knp_results[i].mrph_list()[e_posR+1].midasi)
+                        e_posR+=1
+                    #print(termR[1][1])
+                    #print(termL[0]," ",termR[0]," ",knp_results[i].mrph_list()[s_posR].midasi," ",knp_results[i].mrph_list()[e_posR].midasi)
+                    kihonR,hinshiR=getBehindFrontMorphemesJ(knp_results[i],s_posR,e_posR,n)
+                    tmpdata=[termL[0],str(termL[1][0])+","+str(termL[1][1])+","+str(termL[1][2]),termR[0],str(termR[1][0])+","+str(termR[1][1])+","+str(termR[1][2])]
+                    tmpdata.insert(1,str(5))#素性が始まる場所
+                    #tmpdata[5:5]=(hinshiR)
+                    #tmpdata[5:5]=(kihonR)
+                    #tmpdata[5:5]=(hinshiL)
+                    #tmpdata[5:5]=(kihonL)
+                    extend_feature_vector_rel(tmpdata,kihonL,hinshiL,f_type)
+                    extend_feature_vector_rel(tmpdata,kihonR,hinshiR,f_type)
+                    #print(termR,s_posR,e_posR,i)
+                    extend_feature_vector_joshi_rel(tmpdata,s_posL,e_posL,knp_results[i-1]) # 前後の助詞　左
+                    extend_feature_vector_joshi_rel(tmpdata,s_posR,e_posR,knp_results[i])#右
+                    # 格の種類
+                    # 係り受け数
+                    # 係り受けのタイプ
+                    feature_datas.append(tmpdata)
+        if i>0:
+            done_mrph_num+=len(knp_results[i-1].mrph_list())
+    print("feature done")
+    return feature_datas
+            
+
+def extend_feature_vector_joshi_rel(feature_list,s_pos,e_pos,knp_results): # 前後の助詞の種類
+    exlistL=[]
+    exlistR=[]
+    with open("./data/bow/JOSHI.txt","r")as f:
+        for line in f.readlines():
+            bunrui,midasi=line.split("\t")
+            if s_pos-1>0:
+                #print(" ",knp_results.mrph_list()[s_pos].midasi)
+                if knp_results.mrph_list()[s_pos-1].bunrui==bunrui and knp_results.mrph_list()[s_pos-1].midasi==midasi:
+                    exlistL.append("1.0")
+                else:
+                    exlistL.append("0.0")
+            else:
+                exlistL.append("0.0")
+            if e_pos+1<len(knp_results.mrph_list()):
+                if knp_results.mrph_list()[e_pos+1].bunrui==bunrui and knp_results.mrph_list()[e_pos+1].midasi==midasi:
+                    exlistR.append("1.0")
+                else:
+                    exlistR.append("0.0")
+            else:
+                exlistR.append("0.0")
+    feature_list.extend(exlistL)
+    feature_list.extend(exlistR)
+                
+
+def extend_feature_vector_kaku_rel(feature_list,s_pos,e_pos,knp_results): # 格の種類
+    a=1
+
+def extend_feature_vector_kakarinum_rel(feature_list,termL,s_posL,e_posL,termR,s_posR,e_posR,knp_results): # 係り受け数
+    termL_mrph_id=(knp_results.mrph_list()[s_posL].mrph_id,knp_results.mrph_list()[e_posL].mrph_id)
+    termR_mrph_id=(knp_results.mrph_list()[s_posR].mrph_id,knp_results.mrph_list()[e_posR].mrph_id)
+    termL_bnst_id=(-1,-1)
+    termR_bnst_id=(-1,-1)
+    for bnst in  knp_results.bnst_list():
+        for mrph in bnst.mrph_list():
+            if mrph.id==termL_mrph_id[0]:
+                termL_bnst_id[0]=bnst.bnst_id
+            if mrph.id==termL_mrph_id[1]:
+                termL_bnst_id[1]=bnst.bnst_id
+            if mrph.id==termR_mrph_id[0]:
+                termR_bnst_id[0]=bnst.bnst_id
+            if mrph.id==termR_mrph_id[1]:
+                termR_bnst_id[1]=bnst.bnst_id
+    kakarinum=0        
+
+def extend_feature_vector_kakaritype_rel(feature_list,s_pos,e_pos,knp_results): # 係り受けのタイプ
+    a=1
+                    
+def extend_feature_vector_rel(feature_list,kihon,hinshi,vec_type): # 単語ベクトルの素性
+    if vec_type=="BoW":
+        extend_feature_vector_BoW(feature_list,kihon,"kihon")
+        extend_feature_vector_BoW(feature_list,hinshi,"hinshi")
+    elif vec_type=="W2VSum":
+        extend_feature_vector_W2VSum(feature_list,kihon,"kihon")
+        extend_feature_vector_W2VSum(feature_list,hinshi,"hinshi")
+    elif vec_type=="W2VSumBoW":
+        extend_feature_vector_W2VSumBoW(feature_list,kihon,"kihon")
+        extend_feature_vector_W2VSumBoW(feature_list,hinshi,"hinshi")
+
+def getBehindFrontMorphemesJ(knp_results,s_pos,e_pos,n):
+    kihon_b=[]
+    kihon_f=[]
+    hinshi_b=[]
+    hinshi_f=[]
+    """
+    for i in range(s_pos-n,e_pos+n+1):
+        if i>=s_pos and i<=e_pos:
+            continue
+        if i<0 or i>=len(knp_results.mrph_list()) or knp_results.mrph_list()[i].midasi=="":
+            kihon.append("*")
+            hinshi.append("*")
+        else:
+            kihon.append(knp_results.mrph_list()[i].midasi)
+            hinshi.append(knp_results.mrph_list()[i].hinsi+"-"+knp_results.mrph_list()[i].bunrui)
+    """
+    for i in range(s_pos-n,s_pos):
+        print(i)
+    for i in range(e_pos+1,e_pos+n+1):
+        print(i)
+    sys.exit()
+            
+    return kihon,hinshi
+        
+def isSameTerm(term1,term2):
+    if term1[0]==term2[0] and term1[1]==term2[1]:
+        return True
+    return False
+                    
+                    
+def getPosIndex(pos,head_poses):
+    for i,p in enumerate(head_poses,1):
+        if i==len(head_poses) or pos<p:
+            return p
+    return -1
+        
+        
 def main():
     filename=sys.argv[1]
     if os.path.exists(filename[:-4]+"_feature_"+f_type+".txt"):
@@ -484,7 +875,14 @@ def main():
     process_text_list,keywords=get_partof_text_list(texts,[1,1,1,0,0,0])#[title,abst,keywords,intro,conclusion,etc]
     tmp_fulltext,tmp_kw=get_partof_text_list(texts,[1,1,0,1,1,1])
     fulltext="".join(tmp_fulltext)
-    process(filename,process_text_list,texts["title"],texts["abstract"],keywords,fulltext)
+    processJ(filename,process_text_list,process_text_list[0],process_text_list[1],keywords,fulltext) #通常
+
+    #関係抽出素性用
+    #term_dic=processJ(filename,process_text_list,texts["title"],texts["abstract"],keywords,fulltext,True)
+    #features=createRelTrainData(filename,process_text_list,term_dic)
+    #with open(filename[:-4]+"_feature_rel_"+f_type+".txt","w")as f:
+    #    for fd in features:
+    #        f.write("\t".join(fd)+"\n")
     
 if __name__=="__main__":
     main()

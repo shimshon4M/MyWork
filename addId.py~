@@ -10,8 +10,8 @@ RES=2
 
 files=get_files("./data/xml/")
 
-for i,filename in enumerate(files):
-    print(i,"/",len(files)," ",filename,end="")
+for filename in files:
+    print(filename,end="")
     tree=ET.parse(filename)
     root=tree.getroot()
     texts=removeTags(root) #dict
