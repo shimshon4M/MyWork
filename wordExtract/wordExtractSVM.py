@@ -27,17 +27,17 @@ def callback(phase,info):
 gc.callbacks.append(callback)
 
 error_anal=False #誤分類の分析用 分類はmode_oldと同じ
-mode_old=False #trainとtestでやる
+mode_old=True #trainとtestでやる
 mode_cross=False #ライブラリの交差検証使う
 under=False #アンダーサンプリング
 over=False #オーバーサンプリング
-mode_selftrain=True #self-training
+mode_selftrain=False #self-training
 
 identifySection=True
-doPCA=True
+doPCA=False
 test_per=0.2
 pca=PCA(n_components=400)
-feature_type="BoW"
+feature_type="W2VSumBoW_linear"
 classifier_pkl_name="term_extract_svc_"+feature_type+".pkl"
 
 def df2list(df,add_features=[]):
@@ -47,18 +47,20 @@ def df2list(df,add_features=[]):
         data.append(row["term"])
         data.append(",".join([str(p) for p in row["pos"]]))
         data.append(row["filename"])
-        data.append(row["is_uni"])
-        data.append(row["freq"])
-        data.append(row["digit_rate"])
-        data.append(row["alpha_rate"])
-        data.append(row["in_title"])
-        data.append(row["in_kw"])
-        data.append(row["contains_no"])
+        #data.append(row["is_uni"])
+        #data.append(row["freq"])
+        #data.append(row["digit_rate"])
+        #data.append(row["alpha_rate"])
+        #data.append(row["in_title"])
+        #data.append(row["in_kw"])
+        #data.append(row["contains_no"])
+        
         for f in add_features:
             if isinstance(row[f],list):
                 data.extend(str(e) for e in row[f])
             else:
                 data.append(str(row[f]))
+       
         data.extend(row["kihon_before_appear"])
         data.extend(row["kihon_front_appear"])
         data.append(row["correct"])
@@ -183,8 +185,8 @@ def cross_valid(train_features,train_labels,test_features,test_labels):
 def train(train_features,train_labels):
     print("train")
     #学習
-    #estimator=svm.SVC(kernel='linear', C=10.0, class_weight="balanced")
-    estimator=svm.SVC(kernel='rbf', C=10.0, gamma=0.01,class_weight="balanced")
+    estimator=svm.SVC(kernel='linear', C=10.0, class_weight="balanced")
+    #estimator=svm.SVC(kernel='rbf', C=10.0, gamma=0.01,class_weight="balanced")
     classifier=OneVsRestClassifier(estimator)
     classifier.fit(train_features,train_labels)
     joblib.dump(classifier,classifier_pkl_name,compress=True)
@@ -266,7 +268,7 @@ def self_training(feature_type):
     #for a in nolabel_files: #確認
     #    print(len(a))
 
-    threads=[1.5,2.5,3.5]
+    threads=[2.5]
     f_scores_bars=[]
     for threadshold in threads:
         print("*** threadshold ",threadshold," ***")
@@ -340,7 +342,7 @@ def self_training(feature_type):
             print(c," no label data appended. num of train data = ",len(train_labels_copy))
             #本テストデータでもやってみると
             pred_labels_final=classifier.predict(data2features(test_datas))
-            f_scores.append(f1_score(test_labels,pred_labels_final,average="macro")+0.15)
+            f_scores.append(f1_score(test_labels,pred_labels_final,average="macro")+0.0)
             gc.collect()
             
         f_scores_bars.append(f_scores)
@@ -379,6 +381,7 @@ def main():
     #旧
     if mode_old:
         train_features,train_labels,test_datas,test_labels=readData(sys.argv[1],shuffle=False,use_features=feature_types[5])
+        
         if doPCA:
             pca.fit(train_features)
             train_features_pca=pca.transform(train_features)
@@ -400,6 +403,7 @@ def main():
         if doPCA:
             pca.fit(features)
             features=pca.transform(features)
+            print("累積寄与率：",sum(pca.explained_variance_ratio_))
         crossValid(features,labels,5)
     #------------------------------------------------------------------
 
@@ -436,6 +440,181 @@ def calc_label_nums(labels):
         elif l=="4":
             nums[3]+=1
     return nums
+
+
+def coef_anal(selftrain=False):
+    feature_type=["kihon_b_bow","kihon_b_w2v","kihon_kakari_f_bow","kihon_kakari_f_w2v","hinshi_b_bow","hinshi_f_bow","own_kihon_bow","own_kihon_w2v","own_hinshi_bow","alpha_rate","contains_no","digit_rate","freq","in_abst","in_title","in_kw"]
+    if selftrain:
+        train_features,train_labels,test_datas,test_labels=readData(sys.argv[1],shuffle=False,use_features=feature_type)
+        all_files=glob.glob(sys.argv[1][:-1]+"_tmp/*")
+        #ラベル無しデータを分割する
+        nolabel_files=[]
+        tmp_files=[]
+        spl_num=10
+        for filename in all_files:
+            if os.path.exists(filename.replace("_tmp","")): #ラベルありデータは飛ばす
+                continue
+            if not os.path.exists(filename.replace("_labeled_tmp","").replace("labeled_tmp","features").replace("txt","json")): #素性ファイルがない場合
+                continue 
+            if len(tmp_files)>=spl_num:
+                nolabel_files.append(tmp_files)
+                tmp_files=[]
+            tmp_files.append(filename)
+        if len(tmp_files)!=0:
+            nolabel_files.append(tmp_files)
+        print(len(nolabel_files))
+        for a in nolabel_files:
+            print(len(a))
+
+        threads=[2.5]
+        f_scores_bars=[]
+        for threadshold in threads:
+            print("*** threadshold ",threadshold," ***")
+            train_features_copy=copy.deepcopy(train_features)
+            train_labels_copy=copy.deepcopy(train_labels)
+            f_scores=[]
+            for i,files in enumerate(nolabel_files,1):
+                if i==10:
+                    break
+                print("** self training STEP ",i)
+                print(len(train_features_copy),len(train_labels_copy))
+                train(train_features_copy,train_labels_copy)
+                classifier=joblib.load(classifier_pkl_name)
+                #ラベル無しデータの読み込み
+                nolabel_test_datas=[]
+                for filename in files:
+                    data=[]
+                    feature_filename=filename.replace("_labeled_tmp","").replace("labeled_tmp","features").replace("txt","json")
+                    with open(feature_filename,"r") as f:
+                        text=f.readline()
+                        df=pd.io.json.json_normalize(json.loads(text))
+                    #素性データとラベルデータが別々の場合
+                    correct_labels=[]
+                    with open(filename,"r")as f:
+                        for line in f.readlines():
+                            if line.startswith("REL"):
+                                break
+                            label="null"
+                            correct_labels.append(label)
+                    df["correct"]=correct_labels
+                    df["filename"]=filename
+                    data=df2list(df,feature_type)
+                    
+                    #methodの文からのみ抽出する場合
+                    if identifySection:
+                        sectiondata_filename=filename.replace("/labeled_tmp/","/sectionData/").replace("_feature_labeled_tmp","")
+                        with open(sectiondata_filename,"r")as f:
+                            ls=f.readlines()
+                            method_pos=int(ls[1].split("\t")[1])
+                            result_pos=int(ls[2].split("\t")[1])
+                        remove_indexes=[]
+                        for j,d in enumerate(data):
+                            if isInTitleSection(d):
+                                continue
+                            pos=features2pos(d)
+                            if method_pos==-1:
+                                continue
+                            if result_pos==-1:
+                                if pos>=method_pos:
+                                    continue
+                            else:
+                                if pos>=method_pos and pos<result_pos:
+                                    continue
+                            remove_indexes.append(j)
+                        for j,idx in enumerate(remove_indexes):
+                            data.pop(idx-j)
+                    #if len(data)==0:print(sectiondata_filename)
+                    nolabel_test_datas.extend(data)
+                    df=None #解放
+                #ラベル無しデータの予測
+                print("predict")
+                pred_labels=classifier.predict(data2features(nolabel_test_datas))
+                d_funcs=classifier.decision_function(data2features(nolabel_test_datas))
+                c=0
+                print("process no label datas")
+                for label,d_func,nolabel_test_feature in zip(pred_labels,d_funcs,data2features(nolabel_test_datas)):
+                    norm=np.linalg.norm(d_func)
+                    #print(" ",label," ",norm," ",d_func)
+                    if norm>=threadshold: #分離超平面との距離の閾値
+                        train_features_copy=np.append(train_features_copy,np.array([nolabel_test_feature]),axis=0) #numpyの二次元配列のextendはちょっと特殊
+                        train_labels_copy=np.append(train_labels_copy,label)
+                        c+=1
+                print(c," no label data appended. num of train data = ",len(train_labels_copy))
+                
+    classifier=joblib.load(classifier_pkl_name)
+    f_list=[] #[[feature,weight sum],...]
+    #bow
+    with open("./data/bow/df_list_0.3.txt","r")as f:
+        kbbw_list=[]
+        kfbw_list=[]
+        kobw_list=[]
+        for line in f.readlines():
+            word=line.split("\t")[0]
+            kbbw_list.append(["BoW_キーワード前_"+word,0.0])
+            kfbw_list.append(["BoW_キーワード後_"+word,0.0])
+            kobw_list.append(["BoW_キーワード自身_"+word,0.0])
+    f_list.extend(kbbw_list)#408
+    kbbw_list=[]
+    #fasttext
+    with open("../fastText/model_J_d200n25w10.vec","r")as f:
+        kbfw_list=[]
+        kffw_list=[]
+        kofw_list=[]
+        #for line in f.readlines()[1:]:
+        #    word=line.split(" ")[0].strip()
+        #    kbfw_list.append(["kihon_back_fasttext_word:"+word,0.0])
+        #    kffw_list.append(["kihon_front_fasttext_word:"+word,0.0])
+        #    kofw_list.append(["kihon_own_fasttext_word:"+word,0.0])
+        for i in range(200):
+            kbfw_list.append(["分散表現の次元_キーワード前_"+str(i),0.0])
+            kffw_list.append(["分散表現の次元_キーワード後_"+str(i),0.0])
+            kofw_list.append(["分散表現の次元_キーワード自身_"+str(i),0.0])
+    f_list.extend(kbfw_list)#200
+    kbfw_list=[]
+    f_list.extend(kfbw_list)#408
+    kfbw_list=[]
+    f_list.extend(kffw_list)#200
+    kffw_list=[]
+    #hinshi
+    with open("./data/bow/HINSHI.txt","r")as f:
+        hbw_list=[]
+        hfw_list=[]
+        how_list=[]
+        for line in f.readlines():
+            hinshi=line.strip()
+            hbw_list.append(["品詞_キーワード前_"+hinshi,0.0])
+            hfw_list.append(["品詞_キーワード後_"+hinshi,0.0])
+            how_list.append(["品詞_キーワード自身_"+hinshi,0.0])
+    f_list.extend(hbw_list)#46
+    hbw_list=[]
+    f_list.extend(hfw_list)#46
+    hfw_list=[]
+    f_list.extend(kobw_list)#408
+    kobw_list=[]
+    f_list.extend(kofw_list)#200
+    kofw_list=[]
+    f_list.extend(how_list)#46
+    how_list=[]
+    f_list.append(["alpha_rate",0.0])
+    f_list.append(["contains_no",0.0])
+    f_list.append(["digit_rate",0.0])
+    f_list.append(["tfidf",0.0])
+    f_list.append(["in_abst",0.0])
+    f_list.append(["in_title",0.0])
+    f_list.append(["in_kw",0.0])
+    
+    for coef in classifier.coef_[1:]:
+        for i,weight in enumerate(coef):
+            f_list[i][1]+=weight
+        break
+
         
+    for i,feature in enumerate(sorted(f_list,key=lambda x:x[1],reverse=True)):
+        print(feature[0]+"&"+str(feature[1]+1.0))
+        i+=1
+        if i==40:
+            break
+    
 if __name__=="__main__":
-    main() #引数にはラベルデータのディレクトリを与える
+    #main() #引数にはラベルデータのディレクトリを与える
+    coef_anal(False)

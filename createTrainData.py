@@ -446,6 +446,7 @@ def processJ(filename,text_list,title,abstract,keywords,fulltext,retTermDic=Fals
     juman_results=[]
     #各文に対して処理
     for sec_i,text in enumerate(text_list):
+        #print(text)
         juman_result=juman2mecab(execJuman(text))
         juman_results.append(juman_result)
         #キーワード抽出
@@ -570,11 +571,7 @@ def processJ(filename,text_list,title,abstract,keywords,fulltext,retTermDic=Fals
     #-------------------------
 
 
-def writeFileJson(filename,feature_dict_list):
-    #df=pd.io.json.json_normalize(feature_dict_list)
-    #df.to_json(filename,force_ascii=False)
-    with open(filename,"w")as f:
-        json.dump(feature_dict_list,f,ensure_ascii=False)
+
     
 def split_texts(unit_texts):
     """
@@ -652,8 +649,13 @@ def replaceDpoint(text):
     return ret_text
         
 def createRelTrainData(filename,text_list,term_dic,n=3):
-    #for k,v in term_dic.items():
-    #    print(k,v)
+    juman_results=[]
+    #各文に対して処理
+    for sec_i,text in enumerate(text_list):
+        #print(text)
+        juman_result=juman2mecab(execJuman(text))
+        juman_results.append(juman_result)
+    mecab_result_list=list(filter(lambda x:x not in ["EOS",""],juman_results))
     head_poses=[]#アブスト各文の文頭位置
     p=0
     for sentence in replaceDpoint(text_list[1].replace("．",".")).split("."):
@@ -679,30 +681,64 @@ def createRelTrainData(filename,text_list,term_dic,n=3):
     #print("len(terms_list)= ",len(terms_list))
     print("process KNP")
     knp=pyknp.KNP(command='knp',option='-tab -anaphora',jumancommand='jumanpp',jumanpp=True)
-    knp_results=[]
-    for sentence in replaceDpoint(text_list[1].replace("．",".")).split("."):
-        print(sentence+"．")
-        knp_results.append(knp.parse(sentence.replace("<dpoint>",".")+"．"))
-
+    knp_results=[[],[]] #list of title,list of abst
+    knp_results[0].append(knp.parse(text_list[0]))
+    for sentence in re.split(r"\.|。",replaceDpoint(text_list[1].replace("．","."))):
+    #for sentence in replaceDpoint(titleabst_str[1].replace("．",".")).split("."):
+        #print(sentence.replace("<dpoint>","."))
+        knp_results[1].append(knp.parse(sentence.replace("<dpoint>",".")+"．"))
+        #print(sentence.replace("<dpoint>",".")+"．")
+    head_morph_ids=[0]#abst各文の先頭の形態素番号を保持
+    #print(re.split(r"\.|。",replaceDpoint(titleabst_str[1].replace("．",".")).replace("<dpoint>",".")))
+    #sys.exit()
+    now=0
+    for rslt in knp_results[1]:
+        now=now+len(rslt.mrph_list())
+        head_morph_ids.append(now)
+        #print(len(rslt.mrph_list()))
+        #for m in rslt.mrph_list():
+        #    print(m.midasi+" ",end="")
+        #print()
+    head_morph_ids.pop()
     feature_datas=[]
     done_mrph_num=0
     done_mrph_num_next=0
     print("process each term")
     for i,terms in enumerate(terms_list):
+        print(terms)
         #print(i," ",terms)
         if i>0:
-            done_mrph_num_next+=len(knp_results[i-1].mrph_list())
+            done_mrph_num_next+=len(knp_results[1][i-1].mrph_list())
         for termL in terms: # L->R
             #print("same sentence")
             #print(termL)
             s_posL=termL[1][1]-done_mrph_num
             e_posL=termL[1][1]-done_mrph_num
-            tmp_term_len=len(knp_results[i-1].mrph_list()[e_posL].midasi)#e_pos求める
+            sec_numL=termL[1][0]
+            #単語が含まれているknp解析結果を取得
+            if sec_numL==0:
+                knprslt=knp_results[0][0]
+                s_idL=termL[1][1]
+            else:
+                #print(term,e_pos,":")
+                for h_i,head in enumerate(head_morph_ids):
+                    if e_posL<head:
+                        #print(e_pos,head)
+                        knprslt=knp_results[1][h_i-1]
+                        h=head_morph_ids[h_i-1]
+                        break
+                s_idL=e_posL-h#その文での形態素id
+                #print(term,knprslt.mrph_list()[s_id].midasi,s_id,h)
+                
+            e_idL=s_idL
+            tmp_term_len=len(mecab_result_list[sec_numL][e_posL][0])#e_pos求める
             while tmp_term_len!=len(termL[0]):
                 #print(e_posL," ",knp_results[i-1].mrph_list()[e_posL+1].midasi)
-                tmp_term_len+=len(knp_results[i-1].mrph_list()[e_posL+1].midasi)
+                tmp_term_len+=len(mecab_result_list[sec_numL][e_posL+1][0])
                 e_posL+=1
-            kihonL,hinshiL=getBehindFrontMorphemesJ(knp_results[i-1],s_posL,e_posL,n)
+                e_idL+=1
+            kihonL_b,kihonL_f,hinshiL_b,hinshiL_f=getBehindFrontNMorphenesByKNP(knprslt,s_idL,e_idL,n) #この辺途中
+            kihon_kakariL_f,hinshi_kakariL_f=getBehindFrontNMorphenesKakariByKNP(knprslt,s_idL,e_idL,n)
             #print("start:",termL[1][1]," end:",e_posL)
             #print(kihonL,hinshiL)
             for termR in terms:
@@ -711,22 +747,46 @@ def createRelTrainData(filename,text_list,term_dic,n=3):
                 print(termL[0],"->",termR[0])
                 s_posR=termR[1][1]-done_mrph_num
                 e_posR=termR[1][1]-done_mrph_num
-                tmp_term_len=len(knp_results[i-1].mrph_list()[e_posR].midasi)#e_pos求める
+                sec_numR=termR[1][0]
+                #単語が含まれているknp解析結果を取得
+                if sec_numR==0:
+                    knprslt=knp_results[0][0]
+                    s_idR=termR[1][1]
+                else:
+                    #print(term,e_pos,":")
+                    for h_i,head in enumerate(head_morph_ids):
+                        if e_posR<head:
+                            #print(e_pos,head)
+                            knprslt=knp_results[1][h_i-1]
+                            h=head_morph_ids[h_i-1]
+                            break
+                    s_idR=e_posR-h#その文での形態素id
+                    #print(term,knprslt.mrph_list()[s_id].midasi,s_id,h)
+                e_idR=s_idR
+                tmp_term_len=len(mecab_result_list[sec_numR][e_posR][0])#e_pos求める
                 while tmp_term_len!=len(termR[0]):
-                    tmp_term_len+=len(knp_results[i-1].mrph_list()[e_posR+1].midasi)
+                    tmp_term_len+=len(mecab_result_list[sec_numR][e_posR+1][0])
                     e_posR+=1
-                #print(termL[0]," ",termR[0]," ",knp_results[i-1].mrph_list()[s_posR].midasi," ",knp_results[i-1].mrph_list()[e_posR].midasi)
-                kihonR,hinshiR=getBehindFrontMorphemesJ(knp_results[i-1],s_posR,e_posR,n)
-                tmpdata=[termL[0],str(termL[1][0])+","+str(termL[1][1])+","+str(termL[1][2]),termR[0],str(termR[1][0])+","+str(termR[1][1])+","+str(termR[1][2])]
-                tmpdata.insert(1,str(5))#素性が始まる場所
-                #tmpdata[5:5]=(hinshiR)
-                #tmpdata[5:5]=(kihonR)
-                #tmpdata[5:5]=(hinshiL)
-                #tmpdata[5:5]=(kihonL)
-                extend_feature_vector_rel(tmpdata,kihonL,hinshiL,f_type)
-                extend_feature_vector_rel(tmpdata,kihonR,hinshiR,f_type)
-                extend_feature_vector_joshi_rel(tmpdata,s_posL,e_posL,knp_results[i-1]) # 前後の助詞　左
-                extend_feature_vector_joshi_rel(tmpdata,s_posR,e_posR,knp_results[i-1])#右
+                    e_idR+=1
+                #print(termL[0]," ",termR[0]," ",knpresult.mrph_list()[s_posR].midasi," ",knp_results[i-1].mrph_list()[e_posR].midasi)
+                kihonR_b,kihonR_f,hinshiR_b,hinshiR_f=getBehindFrontNMorphenesByKNP(knprslt,s_idR,e_idR,n) #この辺途中
+                kihon_kakariR_f,hinshi_kakariR_f=getBehindFrontNMorphenesKakariByKNP(knprslt,s_idR,e_idR,n)
+                tmpdata={"termL":termL[0],"termR":termR[0],"termLpos":str(termL[1][0])+","+str(termL[1][1])+","+str(termL[1][2]),"termRpos":str(termR[1][0])+","+str(termR[1][1])+","+str(termR[1][2])}
+                """
+                tmpdata["kihonL_before_appear"]=(kihonL_b)
+                tmpdata["kihonL_front_appear"]=(kihonL_f)
+                tmpdata["hinshiL_before_appear"]=(hinshiL_b)
+                tmpdata["hinshiL_front_appear"]=(hinshiL_f)
+                tmpdata["kihonL_kakari_front_appear"]=(kihon_kakariL_f)
+                tmpdata["hinshiL_kakari_front_appear"]=(hinshi_kakariL_f)
+                tmpdata["kihonR_before_appear"]=(kihonR_b)
+                tmpdata["kihonR_front_appear"]=(kihonR_f)
+                tmpdata["hinshiR_before_appear"]=(hinshiR_b)
+                tmpdata["hinshiR_front_appear"]=(hinshiR_f)
+                tmpdata["kihonR_kakari_front_appear"]=(kihon_kakariR_f)
+                tmpdata["hinshiR_kakari_front_appear"]=(hinshi_kakariR_f)
+                """
+                #extend_feature_vector_rel(tmpdata,termL[0],kihonL_b,kihonL_f,hinshiL_b,hinshiL_f,kihon_kakariL_f,hinshi_kakariL_f,termR[0],kihonR_b,kihonR_f,hinshiR_b,hinshiR_f,kihon_kakariR_f,hinshi_kakariR_f) #この辺途中
                 #extend_feature_vector_kaku_rel(tmpdata,termL[1][1],e_posL,knp_results[i-1]) # 格の種類　左
                 #extend_feature_vector_kaku_rel(tmpdata,termR[1][1],e_posR,knp_results[i-1])#右
                 #extend_feature_vector_kakarinum_rel(tmpdata,termL[0],termL[1][1],e_posL,termR[0],termR[1][1],e_posR,knp_results[i-1]) # 係り受け数
@@ -739,33 +799,62 @@ def createRelTrainData(filename,text_list,term_dic,n=3):
                     print(termL[0],"->",termR[0])
                     s_posR=termR[1][1]-done_mrph_num_next
                     e_posR=termR[1][1]-done_mrph_num_next
-                    tmp_term_len=len(knp_results[i].mrph_list()[e_posR].midasi)#e_pos求める
+                    if isSameTerm(termL,termR):
+                        continue
+                    print(termL[0],"->",termR[0])
+                    s_posR=termR[1][1]-done_mrph_num
+                    e_posR=termR[1][1]-done_mrph_num
+                    sec_numR=termR[1][0]
+                    #単語が含まれているknp解析結果を取得
+                    if sec_numR==0:
+                        knprslt=knp_results[0][0]
+                        s_idR=termR[1][1]
+                    else:
+                        #print(term,e_pos,":")
+                        for h_i,head in enumerate(head_morph_ids):
+                            if e_posR<head:
+                                #print(e_pos,head)
+                                knprslt=knp_results[1][h_i-1]
+                                h=head_morph_ids[h_i-1]
+                                break
+                        s_idR=e_posR-h#その文での形態素id
+                        #print(term,knprslt.mrph_list()[s_id].midasi,s_id,h)
+                    e_idR=s_idR
+                    tmp_term_len=len(mecab_result_list[sec_numR][e_posR][0])#e_pos求める
                     while tmp_term_len!=len(termR[0]):
                         #print(termR[0])
                         #print(" ",knp_results[i].mrph_list()[e_posR].midasi)
-                        tmp_term_len+=len(knp_results[i].mrph_list()[e_posR+1].midasi)
+                        tmp_term_len+=len(mecab_result_list[sec_numR][e_posR+1][0])
                         e_posR+=1
+                        e_idR+=1
                     #print(termR[1][1])
-                    #print(termL[0]," ",termR[0]," ",knp_results[i].mrph_list()[s_posR].midasi," ",knp_results[i].mrph_list()[e_posR].midasi)
-                    kihonR,hinshiR=getBehindFrontMorphemesJ(knp_results[i],s_posR,e_posR,n)
-                    tmpdata=[termL[0],str(termL[1][0])+","+str(termL[1][1])+","+str(termL[1][2]),termR[0],str(termR[1][0])+","+str(termR[1][1])+","+str(termR[1][2])]
-                    tmpdata.insert(1,str(5))#素性が始まる場所
-                    #tmpdata[5:5]=(hinshiR)
-                    #tmpdata[5:5]=(kihonR)
-                    #tmpdata[5:5]=(hinshiL)
-                    #tmpdata[5:5]=(kihonL)
-                    extend_feature_vector_rel(tmpdata,kihonL,hinshiL,f_type)
-                    extend_feature_vector_rel(tmpdata,kihonR,hinshiR,f_type)
-                    #print(termR,s_posR,e_posR,i)
-                    extend_feature_vector_joshi_rel(tmpdata,s_posL,e_posL,knp_results[i-1]) # 前後の助詞　左
-                    extend_feature_vector_joshi_rel(tmpdata,s_posR,e_posR,knp_results[i])#右
+                    #print(termL[0]," ",termR[0]," ",knpresult.mrph_list()[s_posR].midasi," ",knp_results[i].mrph_list()[e_posR].midasi)
+                    kihonR_b,kihonR_f,hinshiR_b,hinshiR_f=getBehindFrontNMorphenesByKNP(knprslt,s_idR,e_idR,n) #この辺途中
+                    kihon_kakariR_f,hinshi_kakariR_f=getBehindFrontNMorphenesKakariByKNP(knprslt,s_idR,e_idR,n)
+                    tmpdata={"termL":termL[0],"termR":termR[0],"termLpos":str(termL[1][0])+","+str(termL[1][1])+","+str(termL[1][2]),"termRpos":str(termR[1][0])+","+str(termR[1][1])+","+str(termR[1][2])}
+                    """
+                    tmpdata["kihonL_before_appear"]=(kihonL_b)
+                    tmpdata["kihonL_front_appear"]=(kihonL_f)
+                    tmpdata["hinshiL_before_appear"]=(hinshiL_b)
+                    tmpdata["hinshiL_front_appear"]=(hinshiL_f)
+                    tmpdata["kihonL_kakari_front_appear"]=(kihon_kakariL_f)
+                    tmpdata["hinshiL_kakari_front_appear"]=(hinshi_kakariL_f)
+                    tmpdata["kihonR_before_appear"]=(kihonR_b)
+                    tmpdata["kihonR_front_appear"]=(kihonR_f)
+                    tmpdata["hinshiR_before_appear"]=(hinshiR_b)
+                    tmpdata["hinshiR_front_appear"]=(hinshiR_f)
+                    tmpdata["kihonR_kakari_front_appear"]=(kihon_kakariR_f)
+                    tmpdata["hinshiR_kakari_front_appear"]=(hinshi_kakariR_f)
+                    """
+                    #extend_feature_vector_rel(tmpdata,termL[0],kihonL_b,kihonL_f,hinshiL_b,hinshiL_f,kihon_kakariL_f,hinshi_kakariL_f,termR[0],kihonR_b,kihonR_f,hinshiR_b,hinshiR_f,kihon_kakariR_f,hinshi_kakariR_f) #この辺途中
+                    #extend_feature_vector_joshi_rel(tmpdata,s_posL,e_posL,knp_results[i-1]) # 前後の助詞　左
+                    #extend_feature_vector_joshi_rel(tmpdata,s_posR,e_posR,knp_results[i])#右
                     # 格の種類
                     # 係り受け数
                     # 係り受けのタイプ
                     feature_datas.append(tmpdata)
         if i>0:
-            done_mrph_num+=len(knp_results[i-1].mrph_list())
-    print("feature done")
+            done_mrph_num+=len(knp_results[1][i-1].mrph_list())
     return feature_datas
             
 
@@ -817,16 +906,36 @@ def extend_feature_vector_kakarinum_rel(feature_list,termL,s_posL,e_posL,termR,s
 def extend_feature_vector_kakaritype_rel(feature_list,s_pos,e_pos,knp_results): # 係り受けのタイプ
     a=1
                     
-def extend_feature_vector_rel(feature_list,kihon,hinshi,vec_type): # 単語ベクトルの素性
-    if vec_type=="BoW":
-        extend_feature_vector_BoW(feature_list,kihon,"kihon")
-        extend_feature_vector_BoW(feature_list,hinshi,"hinshi")
-    elif vec_type=="W2VSum":
-        extend_feature_vector_W2VSum(feature_list,kihon,"kihon")
-        extend_feature_vector_W2VSum(feature_list,hinshi,"hinshi")
-    elif vec_type=="W2VSumBoW":
-        extend_feature_vector_W2VSumBoW(feature_list,kihon,"kihon")
-        extend_feature_vector_W2VSumBoW(feature_list,hinshi,"hinshi")
+def extend_feature_vector_rel(feature_dict,termL,kihonL_b,kihonL_f,hinshiL_b,hinshiL_f,kihon_kakariL_f,hinshi_kakariL_f,termR,kihonR_b,kihonR_f,hinshiR_b,hinshiR_f,kihon_kakariR_f,hinshi_kakariR_f): # 単語ベクトルの素性
+    components_kihonL,components_hinshiL=get_term_components(termL)
+    components_kihonR,components_hinshiR=get_term_components(termR)
+    #General
+    extend_feature_vector_BoW(feature_dict,components_hinshiL,"hinshi","own_hinshiL_bow")#自身
+    extend_feature_vector_BoW(feature_dict,hinshiL_b,"hinshi","hinshiL_b_bow")#周辺の品詞b
+    extend_feature_vector_BoW(feature_dict,hinshiL_f,"hinshi","hinshiL_f_bow")#周辺の品詞f
+    extend_feature_vector_BoW(feature_dict,hinshi_kakariL_f,"hinshi","hinshi_kakariR_f_bow")#周辺の品詞f_kakari
+    extend_feature_vector_BoW(feature_dict,components_hinshiR,"hinshi","own_hinshiR_bow")#自身
+    extend_feature_vector_BoW(feature_dict,hinshiR_b,"hinshi","hinshiR_b_bow")#周辺の品詞b
+    extend_feature_vector_BoW(feature_dict,hinshiR_f,"hinshi","hinshiR_f_bow")#周辺の品詞f
+    extend_feature_vector_BoW(feature_dict,hinshi_kakariR_f,"hinshi","hinshi_kakariR_f_bow")#周辺の品詞f_kakari
+    #BOW
+    extend_feature_vector_BoW(feature_dict,components_kihonL,"kihon","own_kihonL_bow")#自身
+    extend_feature_vector_BoW(feature_dict,kihonL_b,"kihon","kihonL_b_bow")#周辺の基本形before
+    extend_feature_vector_BoW(feature_dict,kihonL_f,"kihon","kihonL_f_bow")#周辺の基本形front
+    extend_feature_vector_BoW(feature_dict,kihon_kakariL_f,"kihon","kihon_kakariL_f_bow")#周辺の基本形front_kakari
+    extend_feature_vector_BoW(feature_dict,components_kihonR,"kihon","own_kihonR_bow")#自身
+    extend_feature_vector_BoW(feature_dict,kihonR_b,"kihon","kihonR_b_bow")#周辺の基本形before
+    extend_feature_vector_BoW(feature_dict,kihonR_f,"kihon","kihonR_f_bow")#周辺の基本形front
+    extend_feature_vector_BoW(feature_dict,kihon_kakariR_f,"kihon","kihon_kakariR_f_bow")#周辺の基本形front_kakari
+    #W2V
+    extend_feature_vector_W2VSum(feature_dict,components_kihonL,"own_kihonL_w2v")#自身
+    extend_feature_vector_W2VSum(feature_dict,kihonL_b,"kihonL_b_w2v")#周辺の基本形
+    extend_feature_vector_W2VSum(feature_dict,kihonL_f,"kihonL_f_w2v")#周辺の品詞
+    extend_feature_vector_W2VSum(feature_dict,kihon_kakariL_f,"kihon_kakariL_f_w2v")#周辺の品詞_kakari
+    extend_feature_vector_W2VSum(feature_dict,components_kihonR,"own_kihonR_w2v")#自身
+    extend_feature_vector_W2VSum(feature_dict,kihonR_b,"kihonR_b_w2v")#周辺の基本形
+    extend_feature_vector_W2VSum(feature_dict,kihonR_f,"kihonR_f_w2v")#周辺の品詞
+    extend_feature_vector_W2VSum(feature_dict,kihon_kakariR_f,"kihon_kakariR_f_w2v")#周辺の品詞_kakari
 
 def getBehindFrontMorphemesJ(knp_results,s_pos,e_pos,n):
     kihon_b=[]
@@ -864,6 +973,12 @@ def getPosIndex(pos,head_poses):
             return p
     return -1
         
+
+def writeFileJson(filename,feature_dict_list):
+    #df=pd.io.json.json_normalize(feature_dict_list)
+    #df.to_json(filename,force_ascii=False)
+    with open(filename,"w")as f:
+        json.dump(feature_dict_list,f,ensure_ascii=False)
         
 def main():
     filename=sys.argv[1]
@@ -875,14 +990,12 @@ def main():
     process_text_list,keywords=get_partof_text_list(texts,[1,1,1,0,0,0])#[title,abst,keywords,intro,conclusion,etc]
     tmp_fulltext,tmp_kw=get_partof_text_list(texts,[1,1,0,1,1,1])
     fulltext="".join(tmp_fulltext)
-    processJ(filename,process_text_list,process_text_list[0],process_text_list[1],keywords,fulltext) #通常
+    #processJ(filename,process_text_list,process_text_list[0],process_text_list[1],keywords,fulltext) #通常
 
     #関係抽出素性用
-    #term_dic=processJ(filename,process_text_list,texts["title"],texts["abstract"],keywords,fulltext,True)
-    #features=createRelTrainData(filename,process_text_list,term_dic)
-    #with open(filename[:-4]+"_feature_rel_"+f_type+".txt","w")as f:
-    #    for fd in features:
-    #        f.write("\t".join(fd)+"\n")
+    term_dic=processJ(filename,process_text_list,texts["title"],texts["abstract"],keywords,fulltext,True)
+    features=createRelTrainData(filename,process_text_list,term_dic)
+    writeFileJson(filename[:-4]+"_feature_rel.json",features)
     
 if __name__=="__main__":
     main()
