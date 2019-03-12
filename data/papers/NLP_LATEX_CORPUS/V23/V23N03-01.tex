@@ -1,0 +1,852 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{amsmath}
+\usepackage{biodateX}
+\usepackage[multi]{otf}
+\usepackage{array}
+
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+
+
+
+\Volume{23}
+\Number{3}
+\Month{June}
+\Year{2016}
+
+\received{2015}{5}{6}
+\revised{2015}{8}{10}
+\rerevisedX{October 21, 2015; January 15, 2016}
+\accepted{2016}{2}{11}
+
+\setcounter{page}{235}
+
+\etitle{Chinese Word Segmentation and Unknown Word Extraction by Mining Maximized Substring}
+\eauthor{Mo Shen\affiref{Author_1} \and Daisuke Kawahara\affiref{Author_1} \and Sadao Kurohashi\affiref{Author_1}}
+\eabstract{
+	Chinese word segmentation is an initial and important step in Chinese language processing. Recent advances in machine learning techniques have boosted the performance of Chinese word segmentation systems, yet the identification of out-of-vocabulary words is still a major problem in this field of study. Recent research has attempted to address this problem by exploiting characteristics of frequent substrings in unlabeled data. We propose a simple yet effective approach for extracting a specific type of frequent substrings, called maximized substrings, which provide good estimations of unknown word boundaries. In the task of Chinese word segmentation, we use these substrings which are extracted from large scale unlabeled data to improve the segmentation accuracy. The effectiveness of this approach is demonstrated through experiments using various data sets from different domains. In the task of unknown word extraction, we apply post-processing techniques that effectively reduce the noise in the extracted substrings. We demonstrate the effectiveness and efficiency of our approach by comparing the results with a widely applied Chinese word recognition method in a previous study.
+}
+\ekeywords{Chinese Word Segmentation, Unknown Word Extraction, Word Recognition, Morphology}
+
+\headauthor{Shen, Kawahara, Kurohashi}
+\headtitle{Chinese Word Segmentation and Unknown Word Extraction}
+
+\affilabel{Author_1}{}{Graduate School of Informatics, Kyoto University}
+
+
+\begin{document}
+\nocite{*}
+
+
+\maketitle
+
+\section{Introduction}
+
+Chinese sentences are written without explicit word boundaries, which makes Chinese word segmentation (CWS) an initial and important step in Chinese language processing. Recent advances in machine learning techniques have boosted the performance of CWS systems. However, previous studies have shown that with a comprehensive lexicon, even a simple maximum matching segmentation algorithm can yield an F-score as high as 0.99 (Sproat and Emerson 2003)\nocite{sproat2003first}. This suggests that the lack of knowledge of vocabulary presents the biggest challenge in Chinese word segmentation. It is impossible, however, to collect a complete list of Chinese words. The Chinese language is continually and rapidly evolving, particularly with the rapid growth of the internet. Therefore, it is necessary to develop techniques that automatically develop vocabulary lists from large-scale web texts instead of relying on supervised CWS systems. 
+
+Recent research has attempted to exploit characteristics of frequent substrings in unlabeled data. Statistical criteria that measure the likelihood of a substring being a word have been proposed in previous studies of unsupervised segmentation, such as ``accessor variety'' \cite{feng2004accessor}, a criterion measuring the likelihood of a substring being a word by counting distinct surrounding characters. In \cite{jin2006unsupervised} the researchers proposed ``branching entropy'', a similar criterion based on the assumption that the uncertainty of surrounding characters of a substring peaks at the word boundaries. In \cite{ye2013unknown}, the likelihood of an character n-gram being a meaningful Chinese word is measured by ``overlap variety'', a criteria which considers the goodness of the candidate together with the goodness of the strings overlapping the candidate. The authors have also adopted a word refinement module to filter out known words during the post-processing. 
+
+The authors of \cite{zhao2007incorporating} incorporated accessor variety and another type of criteria, called ``co-occurrence sub-sequence'', with a supervised segmentation system and conducted comprehensive experiments to investigate their impacts. There are several restrictions in using the co-occurrence sub-sequence criteria: it requires post-processing to remove overlapping instances; sub-sequences are retrievable only from different sentences; and the retrieval is performed only on training and testing data. In \cite{sun2011enhancing}, the authors proposed a semi-supervised segmentation system enhanced with multiple statistical criteria; Large-scale unlabeled data were used in their experiments. \citeA{jiang2010term} used term contributed boundary information extracted from unlabeled text as features in semi-supervised learning to improve character-based Chinese word segmentation.
+
+Li and Sun presented a model to learn the features of word delimiters from punctuation marks in \cite{li2009punctuation}. Wang et al. proposed a semi-supervised word segmentation method that took advantages from auto-analyzed data \cite{wang2011improving}.
+
+Nakagawa showed the advantage of the hybrid model combining both character-level information and word-level information in Chinese and Japanese word segmentation \cite{nakagawa2004chinese}. In \cite{nakagawa2007hybrid} and \cite{kruengkrai2009error,kruengkrai2009joint} the researchers presented word-character hybrid models for joint word segmentation and POS tagging, and achieved the state-of-the-art accuracy on Chinese and Japanese datasets.
+
+Another related research area is unknown Chinese word extraction. Previous studies have explored statistical criteria for measuring the likelihood of a substring being a word \cite{feng2004accessor}, methods that combine morphological rules with statistical information \cite{chen2002unknown,ma2003bottom}, character-based role tagging \cite{zhang2002automatic}, and generating words from an initial segmentation \cite{guodong2005chunking,ling2003chinese,goh2005training}. Recent advances have also verified the ability to process large-scale web texts \cite{zhang2011extract}.
+
+In this paper, we propose a novel method that extracts substrings as reliable word boundary indicators. This method takes linear time in the average case, which is usually a requirement for processing raw text of very large size, such as web pages on the internet.
+
+To illustrate the idea, we first consider the following example taken from a scientific article:
+
+
+``使一致\UTFC{8BA4}定界限数的期望\UTFC{503C}近似于一致正\UTFC{786E}界限数的期望\UTFC{503C}，求得一致\UTFC{8BA4}定界限的期望\UTFC{503C}/\UTFC{8BA4}定界限数的\UTFC{503C}。''
+
+\begin{table}[b]
+\hangcaption{A particular type of substrings with multiple occurrences in the Chinese sentence: ``使一致\UTFC{8BA4}定界限数的期望\UTFC{503C}近似于一致正\UTFC{786E}界限数的期望\UTFC{503C}，求得一致\UTFC{8BA4}定界限的期望\UTFC{503C}/\UTFC{8BA4}定界限数的\UTFC{503C}。''}
+\input{01table01.txt}
+\end{table}
+
+
+Without any knowledge of the Chinese language one may still notice that some substrings like ``一致'' and ``的期望\UTFC{503C}'', occur multiple times in the sentence and are likely to be valid words or chains of words. Consider a particular type of frequent substrings (the formal definition can be found in Section 2.1), in the sense that all its occurrences have surrounding characters which are distinct from each other from both left and right-hand sides (Table 1). We can observe that the boundaries of such substrings can be used as cues for word segmentation. We then segment the sentence by simply matching the substrings in Table 1 in the sentence; each time there is an occurrence of a substring, we split the sentence at the boundaries of the detected occurrence. The resulted segmentation is as follows:
+
+
+``使$\vert$一致$\vert$\UTFC{8BA4}定$\vert$界限$\vert$数$\vert$的$\vert$期望$\vert$\UTFC{503C}$\vert$近似于$\vert$一致$\vert$正\UTFC{786E}$\vert$界限数$\vert$的期望$\vert$\UTFC{503C}$\vert$，求得$\vert$一致$\vert$\UTFC{8BA4}定界限$\vert$的期望$\vert$\UTFC{503C}$\vert$/$\vert$\UTFC{8BA4}定界限数的$\vert$\UTFC{503C}$\vert$。''
+
+
+Compared with the gold-standard segmentation, this segmentation has a precision of 100\% and a recall of 73\% with regard to boundary estimation. This is high when we consider that the method does not use a trained segmenter or annotated data. While we have obtained this result on a selected instance, it still suggests that unlabeled data has the potential to enhance the performance of supervised segmentation systems by tracking consistency among substrings.
+
+There are some key properties of the substrings listed in Table 1: The substrings are frequent, in the sense that they appear multiple times in a relatively small window of text; Also, any substring in the list does not have a superstring that has the same frequency. These properties are studied in previous research. For example, \cite{nagao1994new} described these kind of substrings as ``longest compound word'' and successfully extracted words and phrases based on their properties from large scale Japanese text data. \cite{lin2001extracting} described these substrings as ``reduced N-gram'' and proposed a two-stage algorithm for extracting frequent substrings from a corpus and removing internal substrings of the same frequency; the second step is called statistical substring reduction (SSR), which can be done in linear time by recent advance in its studies \cite{lu2004statistical}. 
+
+We exploit these substrings in two ways. First, similar to \cite{jiang2010term}, we incorporate the substrings as features in a semi-supervised CWS system. In this case the unlabeled data can be either test data only, or a large-scale external corpus. Second, we also refine the extracted substrings into a list of unknown Chinese words as a language resource, which can be easily used by other language processing applications. We will formally define this particular type of substring, referred to as a ``maximized substring'', in a later section.
+
+The remainder of this paper is organized as follows. Section 2 defines maximized substrings, and proposes an algorithm for extracting these substrings from unlabeled data. Section 3 describes our baseline segmentation system and introduces the maximized substring features. Section 4 describes our post-processing techniques for reducing the redundancy and noise in unknown word extraction. Section 5 presents the experimental results. Section 6 discusses the relation and difference between our proposed method and previous work. The last section summarizes this paper.
+
+We summarize the main contributions of this work as follows. 
+\begin{itemize}
+\item The frequent substring mining algorithm that we propose is the first algorithm that is able to extract maximized substrings in one scan. These substrings can be reliably used to estimate word boundaries. The algorithm is efficient for processing very large scale text, and its underlying data structure makes it suitable for incorporating with caching methods to further increase the quality of the output.
+\item We incorporate the extracted list of maximized substrings with a baseline Chinese word segmentation system and demonstrate its performance in relation to previous studies. We show that our method outperforms other state-of-the-art systems. 
+\item We apply post-processing strategies on the extracted list of maximized substrings to extract unknown words. Our evaluation shows that the accuracy of our method outperforms a previous study \cite{feng2004accessor}.
+\end{itemize}
+
+
+\section{Maximized Substring Extraction}
+
+\subsection{Maximized Substring: Definition}
+
+Frequent substrings in unlabeled data can be used as clues for identifying word boundaries, as we have illustrated in Section 1. Nevertheless, some substrings, although frequent, are not useful to the system. In the example in Section 1, the substring ``致認定界'' occurs the same amount of times as the substring ``一致認定界限''. However, only the latter is a valid identifier for word delimiters. The former substring is ``internal'': it is overlapped by other substrings and can be further extended by its surrounding characters, without reducing its frequency. What we are interested in are non-overlapping substrings, meaning that in each side of these substrings, the surrounding characters are all different from each other. We use the term maximized substring to describe these substrings.
+
+Formally, we define a maximized substring as follows: 
+
+{\it Definition 2.1 (Maximised substring)}. Given a document $D$ that is a collection of sentences, denote a length $\mathit{n}$ substring which starts with character $\mathit{c_{t}}$ by $\mathit{s_{t}}=[\mathit{c_{t}}\mathit{c_{t+1}}\ldots\mathit{c_{t+n-1}}]$, where $\mathit{c_{t}}$ is the character at $t$-th position in $D$. $\mathit{s_{t}}$ is called a maximized substring if:
+\begin{enumerate}
+\item It has a set of distinct occurrences, $M$, with at least two elements\footnote{It should be noted that, in order to extract a substring, the size of $M$ is not necessarily identical to its total count in the document.}:
+
+$M=\{\mathit{s_{t_1}},\mathit{s_{t_2}},\ldots,\mathit{s_{t_k}}\}, k>1, \mathit{t_1},\mathit{t_2},\ldots,\mathit{t_k}$ are distinct from each other s.t. $\mathit{s_{t_1}}=\mathit{s_{t_2}}=\ldots=\mathit{s_{t_k}}$; and
+\item $\mathit{c_{t_i-1}}\neq\mathit{c_{t_j-1}}$ and $\mathit{c_{t_i+n}}\neq\mathit{c_{t_j+n}}, \forall \mathit{i},\mathit{j}=1,2,\ldots,k, \mathit{i}\neq\mathit{j}$.
+\end{enumerate}
+
+The substrings listed in Table 1 are therefore maximized substrings, given that $D$ is the example sentence. Note that these are not all maximized substrings extractable from the example sentence, but are the result of the extraction algorithm that we will describe in the next section. 
+
+
+\subsection{Maximized Substring Extraction: Algorithm and Data Structure}
+
+The problem of mining frequent substrings in a document has been extensively researched. Data structures and substring mining strategies, such as suffix trees \cite{nelson1996fast}, suffix arrays \cite{yamamoto2001using,fischer2005fast}, and Apriori property \cite{agrawal1994fast}, have been used in existing algorithms. The Apriori property states that a string of length $k+1$ is frequent only if its substring of length $k$ is frequent, which can reduce the size of enumerable substring candidates. In this section, we propose a novel algorithm for fast maximized substring mining with a simple hash table implementation.
+
+The data structure we used in this algorithm is illustrated in Figure 1. It supports fast prefix searching for storing and extracting maximized substrings, with each entry associated to a list of occurrences that refer to the original positions in the document. Fast prefix matching is a particular advantage of a trie, which is a type of prefix tree; however we choose a simple hash table structure in our implementation, which is mainly due to the frequent deletion operations required in the so-called ``short-term store'' technique, which we will describe in next section. A hash table data structure is efficient for the deletion operation in the sense that the average case complexity is $O(1)$, and it also has less computational overhead compared to a trie, since less data structure manipulation is needed after a deletion is made.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-3ia1f1.eps}
+\end{center}
+\hangcaption{Data structure for maximized substring mining. Hash is a hash table which stores the detected maximized substrings, where each maximized substring $s$ is a key that is associated with a list of its occurrences $occurList(s)$. $occurList(s)$ also stores the original positions of all the occurrences of $s$ in the document. (a) shows a certain state of the data structure, and (b) the state after a maximized substring ``ABCCFA'' is inserted with the context being ``ABCCFAT…'' in the document.}
+\end{figure}
+
+The hash table stores the detected maximized substrings, where each maximized substring s is a key that is associated with a list of its occurrences. The occurrence list also stores the original positions of all the occurrences of a maximized substring in the document with the surrounding context being visible, so that new (longer) maximized substrings can be found by extension. 
+
+\begin{algorithm}[t]
+\input{01algo01.txt}
+\caption{\label{alg:seeifrelin} Maximized Substring Extraction}
+\end{algorithm}
+
+We sketch the process of maximized substring extraction in Algorithm 1. The data structure described above is corresponding to $H$ in the algorithm. From the beginning of the document $D$, we scan each position and register maximized substrings into the data structure $H$. If an incoming substring already exists in $H$, we look up its occurrence list to check if its succeeding characters can extend the substring. As the current occurrence list is a set of maximized substrings, there will be only two possible outcomes. Either exactly one element in the occurrence list is found to have a longer common prefix with the incoming substring, in which case we create a new occurrence list consisting of the two longer substrings. Alternatively, the prefix remains the same and we add the incoming substring to the occurrence list. In both cases, the scanning skips the rest of the positions inside the newly added occurrence (line 25 and 28). This ensures that the algorithm will not extract any ``internal'' substrings.
+
+The average case complexity of Algorithm 1 is $O(n)$, assuming the number of occurrences of each maximized substring is less than a constant $C$, such that $C \ll n$. The worst case complexity is $O(n^2)$, which happens when the document consists of a sequence of extractable occurrences of the same maximized substring $s$, e.g., $D=[x_1 s x_2 s \ldots x_N s]$, where $x_1,x_2, \ldots ,x_N$ are distinct from each other. This is because of the block starts from line 18 in Algorithm 1 which requires a comparison operation for each occurrence, and in this example the number of occurrences of $s$ is $n/2$. The ``while loop'' starts from line 20 however does not increase the complexity, since the searching always skip those characters that have already been checked in this loop and starts at the next unchecked position (line 25). However, the worst case can rarely happen when processing real world text, since the largest number of occurrences of any maximized substring is much smaller than $n/2$. The cost for computing the frequencies for all substrings is at least $O(n^2)$ for a na\"{\i}ve algorithm. In \citeA{yamamoto2001using} an efficient method is proposed for computing the term frequency and document frequency based on suffix array, which cost $O(n\log n)$ time to construct. The efficiency of suffix array construction has been further improved to $O(n)$ \cite{karkkainen2003simple,karkkainen2006linear,ko2003space,kim2003linear,nong2011two}, which facilitated later studies which exploit substring frequencies in information retrieval \cite{ngefficient,grossi2005compressed}. In our algorithm, though it is possible to use a suffix array-based implementation for achieving better space efficiency, we choose to use a hash table structure, which can be easily extended with a technique to reduce the noises in the extracted set of frequent substrings. We will describe this technique in detail in Section 2.3. 
+
+It can be demonstrated that a substring  with  characters extracted by this algorithm with more than one occurrence is a maximized substring:
+
+{\it Proof}.
+\begin{enumerate}
+\item $s$ has more than one occurrence, which form a set $M$:
+
+$M=\{\mathit{s_{t_1}},\mathit{s_{t_2}},\ldots,\mathit{s_{t_k}}\}, k>1, \mathit{t_1},\mathit{t_2},\ldots,\mathit{t_k}$ are distinct from each other s.t. $\mathit{s_{t_1}}=\mathit{s_{t_2}}=\ldots=\mathit{s_{t_k}}$. 
+
+\item Assume there exist two elements,  $\mathit{s_a}$ and $\mathit{s_b}$ $(a<b)$, s.t. 
+$\mathit{c_{a+n}} = \mathit{c_{b+n}}$ or $\mathit{c_{a-1}} = \mathit{c_{b-1}}$.
+ 
+\begin{enumerate}
+\item If $\mathit{c_{a+n}} = \mathit{c_{b+n}}$,  in line 20 of Algorithm 1 the character $\mathit{c_{b+n}}$ will be appended to 
+$\mathit{s_b}$, s.t. a string $\mathit{s_{b'}}=[\mathit{c_{b}}\mathit{c_{b+1}}\ldots\mathit{c_{b+n+t}}]$ $(t \geq 0)$ will be extracted and added into the hash table, in which case $\mathit{s_b}$ will not be extracted since it is a substring of 
+$\mathit{s_{b'}}$ starting from the same position in the document.
+
+\item If $\mathit{c_{a-1}} = \mathit{c_{b-1}}$, let $u$ be the largest positive integer s.t. 
+$\mathit{c_{a-i}} = \mathit{c_{b-i}}$ $\forall i=1,2,\ldots,u$. 
+Since $\mathit{c_{a-u-1}} \neq \mathit{c_{b-u-1}}$, Algorithm 1 visited position  $b-u$ and string $\mathit{s_{b"}}=[\mathit{c_{b-u}}\mathit{c_{b-u+1}}\ldots\mathit{c_{b+n+t-1}}]$ will be extracted in line 22, in which case $\mathit{s_{b}}$ will not be extracted since it is a substring of $\mathit{s_{b"}}$.
+\end{enumerate}
+By contradiction, there exists no pair of elements $\mathit{s_{a}}$ and $\mathit{s_{b}}$ ($a<b$) s.t. 
+$\mathit{c_{a+n}}=\mathit{c_{b+n}}$ and $\mathit{c_{a-1}}=\mathit{c_{b-1}}$, 
+therefore $\mathit{c_{t_i-1}}\neq\mathit{c_{t_j-1}}$ and $\mathit{c_{t_i+n}}\neq\mathit{c_{t_j+n}}, \forall \mathit{i},\mathit{j}=1,2,\ldots,k, \mathit{i}\neq\mathit{j}$.
+\end{enumerate}
+
+By {\it Definition 2.1}, $s$ is a maximized substring
+
+However, the algorithm does not generally guarantee to extract all maximized substrings from unlabeled data. Namely, in the example sentence we have shown in Section 1 (``使一致\UTFC{8BA4}定界限数的期望\UTFC{503C}近似于一致正\UTFC{786E}界限数的期望\UTFC{503C}，求得一致\UTFC{8BA4}定界限的期望\UTFC{503C}/\UTFC{8BA4}定界限数的\UTFC{503C}。''), \mbox{``界}限'' is a maximized substring according to the definition (with the occurrences being ``正\UTFC{786E}界限数'' and ``\UTFC{8BA4}定界限的''), but it is not extractable by Algorithm 1. This happens because after the algorithm extracted ``一致\UTFC{8BA4}定界限'', the new position for the next look-up becomes the end of this substring, and the second valid occurrence of ``界限'' is automatically omitted. We consider this as a necessary compromise in order to keep the efficiency of one-time scanning. To further investigate this issue, we have extracted all maximized substrings from the dev set of Chinese Treebank 7 (CTB7) which has 10,136 sentences. We used the following method in order to extract all maximized strings from a doc: first, we modified Algorithm 1 to force it to look-up from all possible positions regardless of whether a maximized string is found, which can be done by simply replacing line 28 (``$i \gets i+|s|$'') with ``$i \gets i+1$''. Then, from the occurrence list of an extracted substring, we remove all the sets of occurrences if they can be extended from the left-hand side from their original positions in the document while still being equal to each other. Finally, we remove all the extracted substrings if their occurrence list has either zero or one instance left.
+
+We compared the result with the maximized substrings extracted by Algorithm 1 from the same dataset. With Algorithm 1, we are able to extract 99.62\% of the maximized substrings. This small difference suggests that the disadvantage of Algorithm 1 of incomplete extraction can be easily overcome by adding more raw sentences. 
+
+In addition, we have observed in preliminary experiments that extracting all maximized substrings is not only unnecessary, but can introduce harmful noise. In the next section, we will discuss our solution to this problem.
+
+
+\subsection{Short-Term Store}
+
+Maximized substrings can provide good estimations of word boundaries, but noise can be introduced during the extraction process in Algorithm 1. 
+
+To address this problem, we take advantage of a linguistic phenomenon. It has been observed that a word occurring in the recent past has a much higher probability to occur again soon, when compared with its overall frequency (Kuhn and De Mori 1990). It follows that, for speech recognition, we can then use a window of recent history to adjust the static overall language mode.
+
+This observation is applicable to the task of maximized substring extraction in the following way. Suppose a substring is registered into the data structure. If the substring is in fact a word, it is much more likely to reoccur in the next 50 to 100 sentences than in the remainder of the corpus (especially when it is a technical term or a named entity). Otherwise, the substring represents noise, and it should have a more sparse distribution in the corpus.
+
+This motivated us to introduce a functionality into the process of maximized substring extraction, called ``short-term store'' (STS). The STS is an analogy to the cache component in speech recognition as well as the human phonological working memory in language acquisition. It restricts the length of the visible context when extracting the next occurrence of a registered substring, making it proportional to the current number of occurrences of the substring. For a registered substring, the extraction algorithm scans a certain number of sentences after the latest occurrence of the substring, where the number of sentences $D(s)$ is determined as follows:
+\[
+D(s)=
+\begin{cases}
+\lambda \cdot count(s), & \text{if}\ count(s) < \theta\\
+\infty, & \text{otherwise}
+\end{cases}
+\]
+where $count(s)$ is the current number of occurrences of $s$ in the data structure. The parameter $\lambda$ contributes a fixed-length distance to the visible context. The parameter $\theta$ works as a threshold of reliability. If we can observe $s$ at least 
+$\theta$ times in a short period, we can treat $s$ as a word, or a sequence of words, with a high level of confidence, in which case 
+$D(s)=\infty$ means that $s$ is no longer subject to periodical decaying and will stay in the data structure statically.
+
+During the scanning of the $D(s)$ sentences, if a new occurrence of s is found, it is added into the data structure and $D(s)$ is recalculated immediately, starting a new scanning period. If no new occurrences are found, we remove the earliest occurrence of $s$ from the data structure and then re-calculate $D(s)$. Note that although we have described the short-term store functionality as if each substring in the data structure is scanned separately, in practice we only need to make minor changes in Algorithm 1: each time an occurrence of a maximized substring is found, we associate a ``time stamp'' which is the order of the current sentence in the document with it. Then we perform the following two simple steps when the algorithm attempts to add this occurrence into the data structure:
+
+\begin{itemize}
+\item {\it Step 1}. If the occurrence list is empty, add the new occurrence into the list; otherwise the difference between time stamps of it and the most recent occurrence is calculated.
+\item {\it Step 2}. If the difference is smaller than $D(s)$, add the new occurrence into the list; otherwise the occurrence lists pop out the most recent occurrence and go back to Step 1.
+\end{itemize}
+
+By making this modification to Algorithm 1, we can obtain the effects of STS without increasing the complexity.
+Introducing STS into the extraction process results in a substantial improvement to the quality of extracted substrings. It is also important that STS greatly improves the processing efficiency for large scale unlabeled data by keeping the size of the data structure relatively small. This is because a substring entry will decay from the data structure if it has not been refreshed in a short period.
+
+
+\section{Chinese Word Segmentation}
+
+\subsection{Baseline Segmentation System}
+
+We have used a word-character hybrid model as our baseline Chinese word segmentation system \cite{nakagawa2007hybrid,kruengkrai2009error,kruengkrai2009joint}. This hybrid model constructs a lattice that consists of word-level and character-level nodes from a given input sentence. Word-level nodes correspond to words found in the system's lexicon, which has been compiled from training data. Character-level nodes have special tags called position-of-character (POC) that indicate the word-internal position \cite{asahara2003corpus,nakagawa2004chinese}. We have adopted the 6-tag tagset, which \cite{zhao2006effective} reported to be optimal. This tagset is illustrated in Table 2.
+
+\begin{table}[b]
+\caption{Word representation with a 6-tag tagset: $S,B,B_2,B_3,M,E$}
+\input{01table02.txt}
+\end{table}
+
+Previous studies have shown that jointly processing word segmentation and part-of-speech tagging is preferable to separate processing, which can propagate errors (Nakagawa and Uchimoto 2007; Kruengkrai et al. 2009a). If the training data was annotated by part-of-speech tags, we have combined them with both word-level and character-level nodes.
+
+Figure 2 shows an example of a lattice for the Chinese sentence: ``陳\UTFC{5FB7}銘答記者問'' (Chen Deming answers to journalists' questions). The correct path is marked with bold lines. The upper part of the lattice (word-level nodes) represents known words from the system's lexicon, and the lower part of the lattice (character-level nodes) represents unknown words. A sequence of character-level nodes are considered as an unknown word if and only if the sequence of position-of-character tags forms one of the cases listed in Table 2. This table also illustrates the permitted transitions between adjacent character-level nodes. We have used a dynamic programming algorithm to search for the best path in the lattice.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-3ia1f2.eps}
+\end{center}
+\hangcaption{A Word-character hybrid lattice of a Chinese sentence. Correct path is represented by bold lines.}
+\end{figure}
+
+Note that there are some character-level nodes that are not reachable. For instance, the first character of the sentence combined with a POC tag ``$B_2$'', or the last character of the sentence combined with a POC tag ``$M$''. We have omitted unreachable nodes from the lattice.
+
+We apply the feature templates described in Table 3. Note that if the part-of-speech tags are not available, we omit those templates involving POS tags.
+
+\begin{table}[t]
+\hangcaption{Feature templates. The ``Condition'' column describes when to apply the templates: $W_{-1}$ and $W_0$ denote the previous and the current word-level node; $C_{-1}$ and $C_0$ denote the previous and the current character-level node; $N_{-1}$ and $N_0$ denote the previous and the current node of any types. $begin(\cdot)$ and $end(\cdot)$ denote the first and last character in a word-level node, respectively. Word-level nodes represent known words that can be found in the system's lexicon. $p_i,w_i,l_i$ denote the POS, surface form, and length of the node at position $i$, respectively.}
+\input{01table03.txt}
+\end{table}
+
+
+\subsection{Maximized Substring Features}
+
+We have incorporated the list of extracted maximized substrings into the baseline system by using a technique which discriminatively learns their features. For every word-level and character-level node in the lattice, the method checks the maximized substring list for entries that satisfy the following two conditions: 
+
+\begin{enumerate}
+\item The node matches the maximized substring at the beginning, the end, or both boundaries.
+\item The length of the node is shorter than or equal to that of the entry. 
+\end{enumerate}
+
+For example, consider the lattice in Figure 2 with a maximized substring ``陳\UTFC{5FB7}銘''. All of the character-level nodes of ``陳'' and ``銘'' are encoded with maximized substring features. A segmenter will only obtain information on those possible word boundaries that are identified by maximized substrings. The maximized substrings are not directly treated as single words, because a maximized substring can sometimes be a compound word or phrase.
+
+For each match with a maximized substring entry, the technique encodes the following features on a node.
+
+{\bf Basic}: A binary feature that indicates whether the node matches at the beginning or end of the maximized substring. It is encoded both individually and as a combination with each other feature types.
+
+{\bf Lexicon}: There is a particular kind of noise in the extracted list of maximized substrings, namely, those like the substring ``中美經'', which has resulted from the two phrases ``中美經濟'' (China and U.S. economy) and ``中美經貿'' (China and U.S. economic and trade). This happens when the boundary of a maximized substring is a shared boundary character of multiple other words. In this example, the last character ``經'' of the maximized substring is the character at the beginning of ``經濟'' (economy) and ``經貿'' (economic and trade). This kind of noise can be identified by checking the context of maximized substrings in system's lexicon.
+
+
+For a node that matches the maximized substring, we check the context of the maximized substring in the input sentence and compares it with the system's lexicon. If any item in the lexicon is found that forms a positional relation with the maximized substring entry (as listed in Table 4) then the corresponding features are encoded on the node. 
+
+\begin{table}[b]
+\caption{Lexicon features}
+\input{01table04.txt}
+\end{table}
+
+It should be noted that, the positional relations listed in Table 4 is in fact a subset of the thirteen interval relations defined in \cite{allen1983maintaining}; the omitted relations are: ``equal'', ``before'', ``before-inverse'', ``during'' and ``during-inverse''. ``equal'' means that the maximized substring matches a lexicon entry, in which case it becomes redundant; and in all the other omitted relations, the maximized substring and the lexicon entry do not have either shared or adjacent characters on their boundaries, which would give us little clue to indicate the reliability of a extracted  maximized substring.
+
+{\bf Lexicon Composition}: When a maximized substring is a match to more than one item in the lexicon, a combination of multiple lexicon features is more informative than individual features. We encode the combinations of lexicon features listed as in Table 5.
+
+\begin{table}[t]
+\caption{Lexicon composition features}
+\input{01table05.txt}
+\end{table}
+
+{\bf Frequency}: We sort the list of maximized substrings by their frequencies. If a maximized substring is among the 10\% most frequent it is classed as ``highly frequent'', if it is among the top 30\% it is ``normal'', and all other cases are ``infrequent''.
+
+The extracted maximized substrings cannot be directly treated as words, for two reasons: first, many of the extracted substrings are chains of words, including compounds and short phrases; while this is fine in the task of word segmentation as long as they still correctly identify word boundaries, it is necessary to break them into atoms for word extraction. Second, random noise that violates word boundaries can be introduced during the extraction process. In this section, we introduce two post-processing strategies for unknown word extraction that are effective in filtering out redundant compound words, phrases, and substrings that violate word boundaries.
+
+
+\section{Unknown Word Extraction}
+
+The extracted maximized substrings cannot be directly treated as words, for two reasons: first, many of the extracted substrings are chains of words, including compounds and short phrases; while this is fine in the task of word segmentation as long as they still correctly identify word boundaries, it is necessary to break them into atoms for word extraction. Second, random noise that violates word boundaries can be introduced during the extraction process. In this section, we introduce two post-processing strategies for unknown word extraction that are effective in filtering out redundant compound words, phrases, and substrings that violate word boundaries.
+
+
+\subsection{Redundancy Reduction}
+
+The extracted list of maximized substrings contains not only single words but also compound words and phrases, which are detrimental when extracting unknown words. With the help of a lexicon, we have applied a simple remedy by discarding all those extracted substrings that contain multiple non-overlapping multi-character words.
+
+
+\subsection{Lexicon-based Voting}
+
+The errors described in Section 3.2 are another influence of the performance of maximized substrings in unknown word extraction. We need to filter out these errors before evaluation, unlike the case of word segmentation where we can encode lexicon-based features in the context of test sentences. If there is any word found in the lexicon that forms the positional relation L3, L4, L5, or L6 (Table 4) with an occurrence of a maximized substring, a vote is cast to discard the maximized substring. We remove the maximized substring from the extracted list if at least 50\% of the occurrences vote for discarding. 
+
+
+\section{Evaluation}
+
+\subsection{Experiments on Chinese Word Segmentation}
+
+\subsubsection{Setting}
+
+To evaluate our approach, we have conducted Chinese word segmentation experiments on several datasets. The first experiment is conducted on Chinese Treebank 5 (CTB5) and Chinese Treebank 7 (CTB7), which are two widely used datasets for word segmentation evaluation. The statistics of CTB5 and CTB7 are shown in Table 6: we have adopted the same setting of data division as \cite{wang2011improving}: the training set, dev set and test set; the OOV rate is defined as the percentage of tokens in the datasets that are not found in the corresponding training set.
+
+\begin{table}[b]
+\caption{Statistics of CTB5 and CTB7}
+\input{01table07.txt}
+\end{table}
+
+The second experiment is conducted on the second international Chinese word segmentation bakeoff (SIGHAN Bakeoff-2005) (Emerson 2005), which has four independent subsets: the Academia Sinica Corpus (AS), the Microsoft Research Corpus (MSR), the Hong Kong City University Corpus (CityU) and the Peking University Corpus (PKU). Since POS tags are not available in this dataset, we have omitted all templates that include them. 
+
+We have used two different types of unlabeled data. One is the test set itself, which means there is no external resource included in the system. Another is the Chinese Gigaword Second Edition (LDC2007T03), a large-scale dataset, this dataset is a collection of news articles from 1991 to 2004 published by Central News Agency (Taiwan), Xinhua News Agency and Lianhe Zaobao Newspaper. It includes both simplified Chinese characters and traditional Chinese characters, with a total amount of over 1.2 billion. In order to make fair comparison with the previous work, we have adopted the same setting as (Wang et al. 2011) in the experiments conducted on CTB5 and CTB7: we only used the XIN\textunderscore CMN portion of the Chinese Gigaword, and we excluded the news articles published between 1994 and 1998 which overlap with CTB data. The resulted unlabeled data has approximately 204 million words. 
+
+Table 7 shows some of the extracted maximized substrings from the Chinese Gigaword. We have chosen these instances to demonstrate the approximate distribution of different types of maximized substrings in the entire extracted list. As we can see from the table, many of these maximized substrings are named entities, including names of persons such as ``黄玉斌'', ``\UTFC{8BD7}琳通公主'' and ``小阪善太郎'', organizations such as ``温布\UTFC{5C14}登\UTFC{4FF1}\UTFC{4E50}部'', ``内蒙古自治区政\UTFC{534F}'' and ``\UTFC{8D1D}\UTFC{7EB3}通\UTFC{8F66}\UTFC{961F}'', and locations such as ``丁村文化\UTFC{9057}址'', ``克拉\UTFC{739B}依油田'', and ``普\UTFC{6D4E}禅院''. Some of them are technical terms, such as ``骨\UTFC{8D28}疏松症'' and ``\UTFC{9897}粒体病毒''. These strings are commonly accepted words in Chinese. Other instances in this table are compound nouns such as ``\UTFC{9ED1}海\UTFC{8230}\UTFC{961F}\UTFC{95EE}\UTFC{9898}'', and verb phrases such as ``加快教育改革''. Although these strings are not single words, they still correctly identify word boundaries and are thus helpful in the task of word segmentation.
+
+\begin{table}[b]
+\caption{Examples of extracted maximized substrings from Chinese Gigaword}
+\input{01table06.txt}
+\end{table}
+
+We have trained all models using the averaged perceptron algorithm (Collins 2002), which we selected because of its efficiency and stability. To learn the characteristics of unknown words, we built the system's lexicon using only the words in the training data with a frequency higher than a threshold . This threshold was tuned using the development data. In order to use the maximized substring features, we have used training data as unlabeled data for supervised models, and used both the training data and Chinese Gigaword for semi-supervised learning models.
+
+We have applied the same parameters for all models, which are tuned on the CTB7 dev set: $\lambda=50$ and $\theta=3$. 
+
+We have used precision, recall and the F-score to measure the performance of segmentation systems. Precision $p$ is defined as the percentage of words that are segmented correctly, and recall $r$ is the percentage of words in the gold-standard data that are recognized in the output. The balanced F-score is defined as $F=\frac{2pr}{p+r}$.
+
+We have also evaluated statistical significance of the results we obtained. We use McNemar's test with Yates correction with correction factor 0.5 to compare the correctness (correct vs. incorrect) between the output of proposed systems against the output of baselines.
+
+
+
+\subsubsection{Experimental results on in-domain data}
+
+\begin{table}[b]
+\caption{Evaluation results on CTB5 and CTB7}
+\input{01table08.txt}
+\end{table}
+
+We have compared the performance between the baseline system and our approach. The results are shown in Table 8. Each row in this table shows the performance of the corresponding system. ``Baseline'' refers to our baseline hybrid word segmentation and POS-tagging system. ``MaxSub-Test'' refers to the method that uses only the test set as unlabeled data; ``MaxSub-L'' refers to the method that uses only the large-scale unlabeled data (Chinese Gigaword); ``MaxSub-U'' refers to the method that uses both. It should be noted that, though the test set is being used as unlabeled data during the evaluation in systems ``MaxSub-Test'' and ``MaxSub-U'', it is not being used in any way during the training stage; we are applying such a setting due to the fact that, in a real world application, it is sometimes the case that the data to be segmented (which is equivalent to the test set) exists as a batch of sentences instead of a stream. We therefore want to make full use of the test set to see whether, by including it as a source for substring extraction, it can improve the segmentation accuracy over the baseline. In our evaluation, we have focused on the segmentation performance of our systems.
+
+The results show that, using the test data as an additional source of information, ``MaxSub-Test'' outperforms the baseline method by 0.07 and 0.11 points in F-score on CTB5 and CTB7 test set, respectively. This result indicates that our method of using maximized substrings can enhance the segmentation performance even with a purely supervised approach. By adding the maximized substrings extracted from large scale unlabeled data, ``MaxSub-L'' increased the improvements to 0.21 and 0.28 points in F-score, and ``MaxSub-U'' further increased the improvements to 0.30 and 0.36 points in F-score. Furthermore, we have observed that ``MaxSub-Test'' increased the recall of OOV words by 1.19 and 1.50 on CTB5 and CTB7 test set, respectively. These numbers are further increased to 5.91 and 5.45 by ``MaxSub-L'', and 6.58 and 5.88 by ``MaxSub-U''. These results show that systems enhanced with maximized substrings are much more effective in handling OOV words compared to the baseline. Since the OOV rate in the test set of CTB5 and CTB7 are both less than 6\%, it is likely that the improvement can be higher in a dataset with larger percentage of OOV words; this assumption is verified in our experiment in Section 5.1.4. 
+
+We have compared our approach with previous work in Table 9. Two methods from (Kruengkrai et al. 2009a; 2009b) are referred to as ``Kruengkrai 09a'' and ``Kruengkrai 09b'', and are taken directly from the report of (Wang et al. 2011); ``Wang 11'' refers to the semi-supervised system in (Wang et al. 2011); ``Zeng 13'' refers to the semi-supervised system in (Zeng, Wong, Chao, and Trancoso 2013). 
+
+\begin{table}[b]
+\caption{F-measure on CTB5 and CTB7 test sets compared with previous work}
+\input{01table09.txt}
+\end{table}
+
+We have observed that our system ``MaxSub-U'' achieves the better accuracy compared to ``Kruengkrai 09a'', ``Kruengkrai 09b'' and ``Wang 11''. Our proposed method however does not show better accuracy compared to ``Zeng 13''. ``Zeng 13'' processes raw sentences with the mixture of a character-based model and a word-based model; The two models are trained on labeled data, and then further updated using unlabeled examples, where the segmentation agreements are used as constraints to bias the models. On the other hand, our method and the one of ``Wang 11'' both collect substrings from unlabeled data which have high statistical likelihood to be words, and the information of these substrings can be used as feature and incorporated into character-based, word-based, or hybrid word segmentation models. 
+
+\begin{table}[b]
+\caption{F-measure on SIGHAN Bakeoff-2005 test set compared with previous work}
+\input{01table10.txt}
+\end{table}
+
+The results for the SIGHAN Bakeoff-2005 dataset are shown in Table 10. The first three rows (``Tseng 05'', ``Asahara 05'' and ``Chen 05'') show the results of systems that have reached the highest score on at least one corpus (Tseng, Chang, Andrew, Jurafsky, and Manning 2005; Asahara, Fukuoka, Azuma, Goh, Watanabe, Matsumoto, and Tsuzuki 2005; Chen, Kikui, and Sumita 2005). ``Best closed'' summarizes the best official results on all four corpora. ``Zhao 07'' and ``Zhang 06'' represent the supervised segmentation systems in (Zhao and Kit 2007; Zhang, Zhou, Zhang, and Sun 2006). ``Baseline'', ``Maxsub-Test'' and ``MaxSub-U'' refer to the same systems as in Table 8. For the unlabeled data, we have used the test sets of corresponding corpora for ``MaxSub-Test'', and the Chinese Gigaword for ``MaxSub-U''. Other parameters were left unchanged. The results do not indicate that our approach performs better than other systems. However, the joint model we used in this paper relies heavily on part-of-speech annotation in the training data; Since part-of-speech information is unavailable in the SIGHAN Bakeoff-2005 dataset, the advantages of our joint model is largely compromised. We therefore mainly focus on comparing the performance of the systems before and after adding maximized substring features. When compared with the baseline, our approach has yielded consistent improvements across the four corpora, and on the PKU corpus we have performed better than previous work. 
+
+
+\subsubsection{Impacts of semi-supervised learning features and short-term store}
+
+In Table 11, we show the effects of the different maximized substring feature types proposed in this paper. We activated different combinations of feature types in turn and trained separate models. We also investigated the impact of the short-term store by training models without this feature. The rows of this table represent models and corresponding F-score, trained and tested on CTB5 and CTB7 with different configurations. The row ``Baseline'' is baseline system as in Table 8. ``+Basic\&Freq'' represents the system ``MaxSub-U'' with only basic and frequency features activated, and STS turned off. The row ``+All'' represents a system activating all maximized substring features but still without STS. The last row ``+All+STS'' is identical to the system ``Maxsub-U''. It is clear that lexicon-based features are effective in discriminating unreliable maximized substring from reliable ones, and the short-term store improves the segmentation performance by filtering out noises during the extraction of maximized substrings. The combination of these two techniques yields an improvement of 0.22 point in F-score, and thus are essential when using maximized substrings.
+
+\begin{table}[b]
+\vspace*{-0.75\Cvs}
+\caption{Influence of activated feature types and short-term store on CTB5 and CTB7 test data}
+\input{01table11.txt}
+\end{table}
+
+Moreover, to further investigate the effect of short-term store, we have compared ``+All+STS'' with another system, ``+All+Naive'', where we replaced short-term store with a naive strategy to limit the context of maximized substring extraction: We split the unlabeled data into small chunks of 50 sentences and extracted maximized substrings from each chunk; then we combined all extracted maximized substrings into a single list and merged their occurrence lists. The result shows that short-term store outperforms this simple strategy on both CTB5 and CTB7 test sets. By comparing the maximized substring lists extracted with these two strategies, we found that the simple strategy left out many good word candidates which are infrequent. We think that this is a result of the fixed length chunking of the unlabeled data, as the occurrences of an infrequent maximized substring can be distributed across two or more adjacent chunks and therefore be dropped by the extraction algorithm. On the other hand, short-term store can adjust the context length of maximized substring extraction based on extracted occurrences, which avoided this problem.
+
+
+\subsubsection{Experimental results on out-of-domain data}
+
+To demonstrate the effectiveness of our method on out-of-domain text, we have conducted an experiment on a test set that was drawn from a corpus of scientific articles. This test set contains 510 sentences that have been manually segmented by a native Chinese speaker. We used the test set as the unlabeled data. 
+
+\begin{table}[t]
+\caption{F-measure on out-of-domain data}
+\input{01table12.txt}
+\end{table}
+
+As the results show (Table 12), the system ``MaxSub-Test'' exceeded the baseline method by 0.51 in F-score, and the improvement is statistically significant ($p<0.01$ in McNemar's test vs. Baseline). Considering that the amount of unlabeled data is relatively small, it is likely that acquiring large-scale unlabeled data in the same domain will further benefit the accuracy.
+
+
+\subsection{Experimental Results on Unknown Word Extraction}
+
+\subsubsection{Setting}
+
+We have also conducted unknown word extraction experiments. It is difficult to directly evaluate the precision and recall of a list of extracted unknown words, since there is no complete list of unknown words to be compared with. Previous studies have adopted evaluation methods based on hand annotation \cite{feng2004accessor,zhang2011extract}. We instead used the word list of CTB7 as gold-standard data for evaluation. We used the entire CTB7 dataset as an input text for maximized substring extraction, which has 51,447 sentences. We used the same lexicon that has been used in previous studies \cite{feng2004accessor,zhang2011extract}, which has 119,803 Chinese words of two to seven characters\footnote{http://www.mandarintools.com/segmenter.html}. With the words in the lexicon being known, there are 11,722 unknown words remaining in the word list of CTB7. The result is compared with the reduced N-gram method (Lin and Yu 2001) as well as the accessor variety method \cite{feng2004accessor}, which is one of the most widely applied Chinese word recognition method (Zhao and Kit 2007; Zhao and Kit 2008; Sun and Xu 2011). 
+
+
+\subsubsection{Performance comparison}
+
+In Figure 3 we show the performance of three maximized substring-based systems: ``MaxSub'' represents the maximized substring extraction method described in Section 2.2, ``MaxSub+LV'' represents the previous system plus the post-processing technique of lexicon-based voting, and ``MaxSub+LV+STS'' represents the second system, which uses the short-term store. The parameters of the short-term store are  and , which are the optimum combination for this dataset. We have applied the redundancy reduction method described in Section 3.1 to all three systems. The number of substrings have been reduced by 22.0\% for ``MaxSub'' after applying the redundancy reduction method, and by 39.1\% and 28.3\% respectively for ``MaxSub+LV'' and ``MaxSub+LV+STS'' after applying both the redundancy reduction and lexicon-based voting method. 
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-3ia1f3.eps}
+\end{center}
+\hangcaption{Precision-Recall curves of maximized substring extraction and the accessor variety method on CTB7.}
+\end{figure}
+
+We have also implemented the methods of reduced N-gram (Lin and Yu 2001) and accessor variety \cite{feng2004accessor} for comparison. The reduced N-gram method and the accessor variety method are represented as ``Reduced N-gram'' and ``AV'' respectively; ``AV+LV'' represents the method of ``AV'' plus the lexicon-based voting technique, where 14.9\% of the substrings are removed compared to ``AV''. We have calculated the reduced N-gram and accessor variety for substrings of two to seven characters; for the accessor variety methods, we have also applied the adhesive judge rules \cite{feng2004accessor} to reduce errors.
+
+The plot points in Figure 3 are obtained by varing the threshold of minimum frequency of substrings that we treat as words, i.e., we only regard an extracted substring as a word candidate if and only if its frequency is no less than the threshold. This threshold varies from 2 to 8 for ``MaxSub'', ``MaxSub+LV'', and ``MaxSub+LV+STS'', and from 2 to 9 for ``Reduced N-gram'', ``AV'', and ``AV+LV''. The result shows that our method outperforms the methods of reduced N-gram and accessor variety, and both the short-term store and the lexicon-based voting techniques can largely contribute to the overall performance of unknown word extraction. 
+
+It should be noticed that the precision and recall of these systems are generally lower than those reported by \cite{feng2004accessor}, which is due to two reasons. We have considered only out-of-vocabulary words in the evaluation, while Feng et al.\ consider both known words and unknown words. Also, a major drawback of our automatic evaluation method is that, although commonly acceptable as single words by native Chinese speakers, named entities and compound nouns are often regarded as multiple words in the gold-standard data. So the precision and recall values tend to be much lower than in the case of human evaluation. 
+
+
+\subsubsection{Efficiency}
+
+To demonstrate the efficiency of our approach for processing large-scale data, in Figure 4 we have compared the processing time of our system (``MaxSub+STS'', no post-processing) against the method of accessor variety. We have used the first four million sentences of as the Xinhua Newswire section in Chinese Gigaword Second Edition. The results show that up to 12 times the processing time can be required for this dataset. In addition, our method shows a quasi-linear time complexity while the time taken for the accessor variety method is $O(n^2)$.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-3ia1f4.eps}
+\end{center}
+\hangcaption{Processing time comparison between maximized substring extraction and the accessor variety method on a large-scale text.}
+\end{figure}
+
+
+\subsubsection{Error analysis}
+
+In the extracted list of maximized substrings, we regard instances representing single words, compound words and phrases as meaningful strings, as they correctly identify word boundaries. Instances which violate word boundaries are regarded as errors. During the analysis of the output of maximized substring extraction, we found that the majority of errors involves person's name. A typical instance is the string ``舍\UTFC{7EF4}奇'' (\v{s}evi\'{c}), which is a commonly used suffix in the transliteration of person's names like ``米洛舍\UTFC{7EF4}奇'' (Milo\v{s}evi\'{c}) and ``伊比舍\UTFC{7EF4}奇'' (Ibi\v{s}evi\'{c}). Since instances of transliteration are relatively rare in a Chinese lexicon, it leaves no trace for lexicon-based voting or features to reject this kind of instances. 
+
+In fact, this kind of errors happens not only in the transliteration of foreign person's names. For instance, a maximized substring ``\UTFC{8BB0}者\UTFC{9A6C}'' (the journalist Ma) is extracted in our experiment from the context ``\UTFC{8BB0}者\UTFC{9A6C}\UTFC{7EF4}坤'' (the journalist Ma Weikun) and ``\UTFC{8BB0}者\UTFC{9A6C}建国'' (the journalist Ma Jianguo). Unlike in western languages, it is not common to split the surname and the given name in person's names in Chinese, in which case the character ``\UTFC{9A6C}'' (Ma) violates word boundaries in person's name ``\UTFC{9A6C}\UTFC{7EF4}坤'' (Ma Weikun) and ``\UTFC{9A6C}建国'' (Ma Jianguo). Like the case in transliteration, lexicon-based techniques are not helpful in rejecting this instance. More unfortunately, the given name ``建国'' in ``\UTFC{8BB0}者\UTFC{9A6C}建国'' (the journalist Ma Jianguo) also means ``founding of a nation'' and is therefore regarded as a lexicon entry, so it actually ``supported'' the right boundary identified by the instance ``\UTFC{8BB0}者\UTFC{9A6C}'' by applying lexicon-based techniques. This problem is not rare in our experiment, since given names in Chinese are often meaningful strings registered in a lexicon. Many instances of this error pattern is however a result of word segmentation standard adopted in CTB. For example, the same maximized substring ``\UTFC{8BB0}者\UTFC{9A6C}'' (the journalist Ma) would not be considered as violating word boundaries if the gold-standard word segmentation follows the standard in the PKU corpus, as it treats Chinese family names and given names as separate words.
+
+Another type of errors we observed in the CTB5 and CTB7 word segmentation experiments is that, although a maximized substring correctly identified the boundaries of a phrase, the segmenter still made incorrect segmentation decisions regarding word boundaries inside that phrase. This could happen when an extracted maximized substring corresponds to a phrase in the gold-standard dataset, while the system has no knowledge regarding the internal word boundaries of that phrase from either the lexicon or extracted maximized substrings. For example, ``麦格\UTFC{8D5B}\UTFC{8D5B}\UTFC{5956}'' (Magsaysay Prize) is a maximized substring extracted from CTB5 test set, while the OOV person's name ``麦格\UTFC{8D5B}\UTFC{8D5B}'' (Magsaysay) is not included in the list of maximized substrings. The best model in our experiments segmented this phrase as ``麦格\UTFC{8D5B}\UTFC{8D5B}\UTFC{5956}'' which is incorrect. We think this problem can be largely relieved by adding word formation knowledge in Chinese, e.g., a person's name and the word for ``prize'' can form a phrase, into the model as features; it is however outside the scope of this paper to discuss the methods of obtaining such knowledge.
+
+
+\section{Comparison to Related Work}
+
+The idea of using frequent strings collected from text in word segmentation and recognition have been long employed by previous works.
+Nagao and Mori (1994) proposed a method for collecting character N-grams from large scale texts. They investigated the characteristics of the resulted frequent strings, and demonstrated that it is possible to automatically recognize compounds, set phrases and idiomatic phrases in Japanese by merging adjacent frequent strings. Lin and Yu (2001) proposed a method which extracts unknown words from a corpus based on string frequency. They showed that by discounting a string's frequency from its superstrings (``reduced N-gram''), the resulted set of frequent strings can be used as reliable indicators of word boundaries. This type of frequent strings has also been exploited by Zhao and Kit (2007) for enhancing Chinese word segmentation, and Sung et al. (2008) for calculating more reliable term frequencies.
+
+Another line of research studied the properties of frequent substrings from the information theory aspect. \citeA{feng2004accessor} proposed the accessor variety-based method, a widely applied method in Chinese word segmentation and word recognition (Sun and Xu 2011; Yang et al. 2011; Zhao and Kit 2007; Zhao and Kit 2008), which is another view of measuring the likelihood of a string being a Chinese word. The accessor variety of a string s is defined as
+\[
+ AV(s)=\min\{L_{av}(s),R_{av}(s)\}
+\]
+where $L_{av}(s)$ and $R_{av}(s)$ are the number of distinct surrounding characters of $s$ from its left and right-hand side, respectively. Accessor variety is closely related to the concept of branching entropy (Jin and Tanaka-Ishii, 2006) and can be seen as the continuous version of it. 
+
+Though accessor variety is a good indicator of word candidates in unknown word extraction, the candidates extracted with a high threshold of accessor variety can still sometimes be meaningless strings. For example, consider the string ``常\UTFC{8C08}'' which is not generally considered as a word or phrase in contemporary Chinese language. It is a suffix of the Chinese idiom ``老生常\UTFC{8C08}'' (cliche), so the value $R_{av}$(常\UTFC{8C08}) should be high in a Chinese corpus which contains this idiom. On the other hand, $L_{av}$(常\UTFC{8C08}) should also be high if the same corpus contains the phrase ``常\UTFC{8C08}起'' (often talk about). By the definition, we can draw the conclusion that $AV$(常\UTFC{8C08}) is high in this corpus and therefore should be a word, which is incorrect. This problem can happen because in the definition of accessor variety, the numbers of distinct surrounding characters of a string are counted from its left and right-hand side independently. On the other hand, this problem is avoided in maximized substring extraction, since all occurrences of a maximized substring must have distinct surrounding characters from both left and right-hand sides at the same time according to the definition.
+
+Maximized substring extraction does not require the extra step of statistical substring reduction (SSR), which makes the implementation simple. Unlike the above methods where it is necessary to collect statistics from all possible strings in a corpus that takes quadratic time (or quasilinear time if implemented with suffix arrays), maximized substring extraction only scans the corpus once which is a linear time algorithm in average case. The efficiency advantage of maximized substring extraction is demonstrated in Section 5.2.3.
+
+Another advantage of maximized substring extraction is its ability to utilize the short-term store technique, which enhances the performance of unknown word extraction and Chinese word segmentation. The effect of short-term store is demonstrated in Section 5.1.3. and 5.2.2.
+
+
+\section{Conclusion}
+
+We propose a simple yet effective approach for extracting maximized substrings from unlabeled data. These are a particular type of substrings that provide good estimations of unknown word boundaries. We have evaluated our approach in two tasks. In the task of Chinese word segmentation, the extracted maximized substrings are incorporated with a supervised segmentation system through discriminative learning. We have demonstrated the effectiveness of our approach through experiments in both in-domain and out-of-domain data and have achieved improvements over the baseline systems across all datasets. In the task of Chinese unknown word extraction, our approach has also been demonstrated to outperform the previous work of accessor variety in both the accuracy and efficiency.
+
+
+\acknowledgment
+The authors would like to thank the reviewers as well as the editors who have given us valuable suggestions and pointed out insufficiencies in this paper. Their insights have greatly helped to improve this work.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Agrawal \BBA\ Srikant}{Agrawal \BBA\
+  Srikant}{1994}]{agrawal1994fast}
+Agrawal, R.\BBACOMMA\ \BBA\ Srikant, R. \BBOP 1994\BBCP.
+\newblock \BBOQ Fast Algorithms for Mining Association Rules.\BBCQ\
+\newblock In {\Bem Proceedings of 20th International Conference on Very Large
+  Data Bases, VLDB}, \lowercase{\BVOL}\ 1215, \mbox{\BPGS\ 487--499}.
+
+\bibitem[\protect\BCAY{Allen}{Allen}{1983}]{allen1983maintaining}
+Allen, J.~F. \BBOP 1983\BBCP.
+\newblock \BBOQ Maintaining Knowledge about Temporal Intervals.\BBCQ\
+\newblock {\Bem Communications of the ACM}, {\Bbf 26}  (11), \mbox{\BPGS\
+  832--843}.
+
+\bibitem[\protect\BCAY{Asahara}{Asahara}{2003}]{asahara2003corpus}
+Asahara, M. \BBOP 2003\BBCP.
+\newblock {\Bem Corpus-based Japanese Morphological Analysis}.
+\newblock Ph.D.\ thesis, Citeseer.
+
+\bibitem[\protect\BCAY{Asahara, Fukuoka, Azuma, Goh, Watanabe, Matsumoto, \BBA\
+  Tsuzuki}{Asahara et~al.}{2005}]{asahara2005combination}
+Asahara, M., Fukuoka, K., Azuma, A., Goh, C.-L., Watanabe, Y., Matsumoto, Y.,
+  \BBA\ Tsuzuki, T. \BBOP 2005\BBCP.
+\newblock \BBOQ Combination of Machine Learning Methods for Optimum Chinese
+  Word Segmentation.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th SIGHAN Workshop on Chinese Language
+  Processing}, \mbox{\BPGS\ 134--137}.
+
+\bibitem[\protect\BCAY{Chen, Zhou, Zhang, \BBA\ Sun}{Chen
+  et~al.}{2005}]{chen2005unigram}
+Chen, A., Zhou, Y., Zhang, A., \BBA\ Sun, G. \BBOP 2005\BBCP.
+\newblock \BBOQ Unigram Language Model for Chinese Word Segmentation.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th SIGHAN Workshop on Chinese Language
+  Processing}, \mbox{\BPGS\ 138--141}. Association for Computational
+  Linguistics Jeju Island, Korea.
+
+\bibitem[\protect\BCAY{Chen \BBA\ Ma}{Chen \BBA\ Ma}{2002}]{chen2002unknown}
+Chen, K.-J.\BBACOMMA\ \BBA\ Ma, W.-Y. \BBOP 2002\BBCP.
+\newblock \BBOQ Unknown Word Extraction for Chinese Documents.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th International Conference on
+  Computational linguistics-Volume 1}, \mbox{\BPGS\ 1--7}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{2002}]{collins2002discriminative}
+Collins, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Discriminative Training Methods for Hidden Markov Models:
+  Theory and Experiments with Perceptron Algorithms.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL-02 Conference on Empirical Methods in
+  Natural Language Processing-Volume 10}, \mbox{\BPGS\ 1--8}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Emerson}{Emerson}{2005}]{emerson2005second}
+Emerson, T. \BBOP 2005\BBCP.
+\newblock \BBOQ The Second International Chinese Word Segmentation
+  Bakeoff.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th SIGHAN workshop on Chinese language
+  Processing}, \lowercase{\BVOL}\ 133.
+
+\bibitem[\protect\BCAY{Feng, Chen, Deng, \BBA\ Zheng}{Feng
+  et~al.}{2004}]{feng2004accessor}
+Feng, H., Chen, K., Deng, X., \BBA\ Zheng, W. \BBOP 2004\BBCP.
+\newblock \BBOQ Accessor Variety Criteria for Chinese Word Extraction.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 30}  (1), \mbox{\BPGS\
+  75--93}.
+
+\bibitem[\protect\BCAY{Fischer, Heun, \BBA\ Kramer}{Fischer
+  et~al.}{2005}]{fischer2005fast}
+Fischer, J., Heun, V., \BBA\ Kramer, S. \BBOP 2005\BBCP.
+\newblock \BBOQ Fast Frequent String Mining using Suffix Arrays.\BBCQ\
+\newblock In {\Bem null}, \mbox{\BPGS\ 609--612}. IEEE.
+
+\bibitem[\protect\BCAY{Goh, Asahara, \BBA\ Matsumoto}{Goh
+  et~al.}{2005}]{goh2005training}
+Goh, C.-L., Asahara, M., \BBA\ Matsumoto, Y. \BBOP 2005\BBCP.
+\newblock \BBOQ Training Multi-classifiers for Chinese Unknown Word
+  Detection.\BBCQ\
+\newblock {\Bem Journal of Chinese Language and Computing}, {\Bbf 15}  (1),
+  \mbox{\BPGS\ 1--12}.
+
+\bibitem[\protect\BCAY{Grossi \BBA\ Vitter}{Grossi \BBA\
+  Vitter}{2005}]{grossi2005compressed}
+Grossi, R.\BBACOMMA\ \BBA\ Vitter, J.~S. \BBOP 2005\BBCP.
+\newblock \BBOQ Compressed Suffix Arrays and Suffix Trees with Applications to
+  Text Indexing and String Matching.\BBCQ\
+\newblock {\Bem SIAM Journal on Computing}, {\Bbf 35}  (2), \mbox{\BPGS\
+  378--407}.
+
+\bibitem[\protect\BCAY{GuoDong}{GuoDong}{2005}]{guodong2005chunking}
+GuoDong, Z. \BBOP 2005\BBCP.
+\newblock \BBOQ A Chunking Strategy towards Unknown Word Detection in Chinese
+  Word Segmentation.\BBCQ\
+\newblock In {\Bem Natural Language Processing---IJCNLP 2005}, \mbox{\BPGS\
+  530--541}. Springer.
+
+\bibitem[\protect\BCAY{Jiang, Liu, Sung, \BBA\ Hsu}{Jiang
+  et~al.}{2010}]{jiang2010term}
+Jiang, M. T.-J., Liu, S.-H., Sung, C.-L., \BBA\ Hsu, W.-L. \BBOP 2010\BBCP.
+\newblock \BBOQ Term Contributed Boundary Feature using Conditional Random
+  Fields for Chinese Word Segmentation Task.\BBCQ\
+\newblock In {\Bem ROCLING}, \mbox{\BPGS\ 143--156}.
+
+\bibitem[\protect\BCAY{Jin \BBA\ Tanaka-Ishii}{Jin \BBA\
+  Tanaka-Ishii}{2006}]{jin2006unsupervised}
+Jin, Z.\BBACOMMA\ \BBA\ Tanaka-Ishii, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Unsupervised Segmentation of Chinese Text by Use of Branching
+  Entropy.\BBCQ\
+\newblock In {\Bem Proceedings of the COLING/ACL on Main Conference Poster
+  Sessions}, \mbox{\BPGS\ 428--435}. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{K{\"a}rkk{\"a}inen \BBA\ Sanders}{K{\"a}rkk{\"a}inen
+  \BBA\ Sanders}{2003}]{karkkainen2003simple}
+K{\"a}rkk{\"a}inen, J.\BBACOMMA\ \BBA\ Sanders, P. \BBOP 2003\BBCP.
+\newblock \BBOQ Simple Linear Work Suffix Array Construction.\BBCQ\
+\newblock In {\Bem Automata, Languages and Programming}, \mbox{\BPGS\
+  943--955}. Springer.
+
+\bibitem[\protect\BCAY{K{\"a}rkk{\"a}inen, Sanders, \BBA\
+  Burkhardt}{K{\"a}rkk{\"a}inen et~al.}{2006}]{karkkainen2006linear}
+K{\"a}rkk{\"a}inen, J., Sanders, P., \BBA\ Burkhardt, S. \BBOP 2006\BBCP.
+\newblock \BBOQ Linear Work Suffix Array Construction.\BBCQ\
+\newblock {\Bem Journal of the ACM (JACM)}, {\Bbf 53}  (6), \mbox{\BPGS\
+  918--936}.
+
+\bibitem[\protect\BCAY{Kim, Sim, Park, \BBA\ Park}{Kim
+  et~al.}{2003}]{kim2003linear}
+Kim, D.~K., Sim, J.~S., Park, H., \BBA\ Park, K. \BBOP 2003\BBCP.
+\newblock \BBOQ Linear-time Construction of Suffix Arrays.\BBCQ\
+\newblock In {\Bem Combinatorial Pattern Matching}, \mbox{\BPGS\ 186--199}.
+  Springer.
+
+\bibitem[\protect\BCAY{Ko \BBA\ Aluru}{Ko \BBA\ Aluru}{2003}]{ko2003space}
+Ko, P.\BBACOMMA\ \BBA\ Aluru, S. \BBOP 2003\BBCP.
+\newblock \BBOQ Space Efficient Linear Time Construction of Suffix
+  Arrays.\BBCQ\
+\newblock In {\Bem Combinatorial Pattern Matching}, \mbox{\BPGS\ 200--210}.
+  Springer.
+
+\bibitem[\protect\BCAY{Kruengkrai, Uchimoto, Kazama, Wang, Torisawa, \BBA\
+  Isahara}{Kruengkrai et~al.}{2009a}]{kruengkrai2009error}
+Kruengkrai, C., Uchimoto, K., Kazama, J., Wang, Y., Torisawa, K., \BBA\
+  Isahara, H. \BBOP 2009a\BBCP.
+\newblock \BBOQ An Error-driven Word-character Hybrid Model for Joint Chinese
+  Word Segmentation and POS Tagging.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP: Volume 1-Volume 1}, \mbox{\BPGS\ 513--521}.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Kruengkrai, Uchimoto, Kazama, Yiou, Torisawa, \BBA\
+  Isahara}{Kruengkrai et~al.}{2009b}]{kruengkrai2009joint}
+Kruengkrai, C., Uchimoto, K., Kazama, J., Yiou, W., Torisawa, K., \BBA\
+  Isahara, H. \BBOP 2009b\BBCP.
+\newblock \BBOQ Joint Chinese Word Segmentation and POS Tagging using an
+  Error-driven Word-character Hybrid Model.\BBCQ\
+\newblock {\Bem IEICE Transactions on Information and Systems}, {\Bbf 92}
+  (12), \mbox{\BPGS\ 2298--2305}.
+
+\bibitem[\protect\BCAY{Kuhn \BBA\ De~Mori}{Kuhn \BBA\
+  De~Mori}{1990}]{kuhn1990cache}
+Kuhn, R.\BBACOMMA\ \BBA\ De~Mori, R. \BBOP 1990\BBCP.
+\newblock \BBOQ A Cache-based Natural Language Model for Speech
+  Recognition.\BBCQ\
+\newblock {\Bem Pattern Analysis and Machine Intelligence, IEEE Transactions
+  on}, {\Bbf 12}  (6), \mbox{\BPGS\ 570--583}.
+
+\bibitem[\protect\BCAY{Li \BBA\ Sun}{Li \BBA\ Sun}{2009}]{li2009punctuation}
+Li, Z.\BBACOMMA\ \BBA\ Sun, M. \BBOP 2009\BBCP.
+\newblock \BBOQ Punctuation as Implicit Annotations for Chinese Word
+  Segmentation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 35}  (4), \mbox{\BPGS\
+  505--512}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Yu}{Lin \BBA\ Yu}{2001}]{lin2001extracting}
+Lin, Y.-J.\BBACOMMA\ \BBA\ Yu, M.-S. \BBOP 2001\BBCP.
+\newblock \BBOQ Extracting Chinese Frequent Strings Without Dictionary From a
+  Chinese corpus, its Applications.\BBCQ\
+\newblock {\Bem Journal of Information Science and Engineering}, {\Bbf 17}
+  (5), \mbox{\BPGS\ 805--824}.
+
+\bibitem[\protect\BCAY{Ling, Asahara, \BBA\ Matsumoto}{Ling
+  et~al.}{2003}]{ling2003chinese}
+Ling, G.~C., Asahara, M., \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ Chinese Unknown Word Identification using Character-based
+  Tagging and Chunking.\BBCQ\
+\newblock In {\Bem Proceedings of the 41st Annual Meeting on Association for
+  Computational Linguistics-Volume 2}, \mbox{\BPGS\ 197--200}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{L{\"u}, Zhang, \BBA\ Hu}{L{\"u}
+  et~al.}{2004}]{lu2004statistical}
+L{\"u}, X., Zhang, L., \BBA\ Hu, J. \BBOP 2004\BBCP.
+\newblock \BBOQ Statistical Substring Reduction in Linear Time.\BBCQ\
+\newblock In {\Bem Natural Language Processing--IJCNLP 2004}, \mbox{\BPGS\
+  320--327}. Springer.
+
+\bibitem[\protect\BCAY{Ma \BBA\ Chen}{Ma \BBA\ Chen}{2003}]{ma2003bottom}
+Ma, W.-Y.\BBACOMMA\ \BBA\ Chen, K.-J. \BBOP 2003\BBCP.
+\newblock \BBOQ A Bottom-up Merging Algorithm for Chinese Unknown Word
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd SIGHAN workshop on Chinese language
+  processing-Volume 17}, \mbox{\BPGS\ 31--38}. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Nagao \BBA\ Mori}{Nagao \BBA\ Mori}{1994}]{nagao1994new}
+Nagao, M.\BBACOMMA\ \BBA\ Mori, S. \BBOP 1994\BBCP.
+\newblock \BBOQ A New Method of N-gram Statistics for Large Number of N and
+  Automatic Extraction of Words and Phrases from Large Text Data of
+  Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the 15th conference on Computational
+  linguistics-Volume 1}, \mbox{\BPGS\ 611--615}. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Nakagawa}{Nakagawa}{2004}]{nakagawa2004chinese}
+Nakagawa, T. \BBOP 2004\BBCP.
+\newblock \BBOQ Chinese and Japanese Word segmentation using Word-level and
+  Character-Level Information.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th international conference on
+  Computational Linguistics}, \mbox{\BPG\ 466}. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Nakagawa \BBA\ Uchimoto}{Nakagawa \BBA\
+  Uchimoto}{2007}]{nakagawa2007hybrid}
+Nakagawa, T.\BBACOMMA\ \BBA\ Uchimoto, K. \BBOP 2007\BBCP.
+\newblock \BBOQ A Hybrid Approach to Word Segmentation and Pos Tagging.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the ACL on
+  Interactive Poster and Demonstration Sessions}, \mbox{\BPGS\ 217--220}.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Nelson}{Nelson}{1996}]{nelson1996fast}
+Nelson, M. \BBOP 1996\BBCP.
+\newblock \BBOQ Fast String Searching with Suffix Trees.\BBCQ\
+\newblock In {\Bem Dr. Dobb's Journal}, \mbox{\BPGS\ 115--119}.
+
+\bibitem[\protect\BCAY{Nong, Zhang, \BBA\ Chan}{Nong
+  et~al.}{2011}]{nong2011two}
+Nong, G., Zhang, S., \BBA\ Chan, W.~H. \BBOP 2011\BBCP.
+\newblock \BBOQ Two Efficient Algorithms for Linear Time Suffix Array
+  Construction.\BBCQ\
+\newblock {\Bem Computers, IEEE Transactions on}, {\Bbf 60}  (10), \mbox{\BPGS\
+  1471--1484}.
+
+\bibitem[\protect\BCAY{Sproat \BBA\ Emerson}{Sproat \BBA\
+  Emerson}{2003}]{sproat2003first}
+Sproat, R.\BBACOMMA\ \BBA\ Emerson, T. \BBOP 2003\BBCP.
+\newblock \BBOQ The First International Chinese Word Segmentation
+  Bakeoff.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd SIGHAN Workshop on Chinese Language
+  Processing-Volume 17}, \mbox{\BPGS\ 133--143}. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Sun \BBA\ Xu}{Sun \BBA\ Xu}{2011}]{sun2011enhancing}
+Sun, W.\BBACOMMA\ \BBA\ Xu, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Enhancing Chinese Word Segmentation using Unlabeled Data.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 970--979}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Tseng, Chang, Andrew, Jurafsky, \BBA\ Manning}{Tseng
+  et~al.}{2005}]{tseng2005conditional}
+Tseng, H., Chang, P., Andrew, G., Jurafsky, D., \BBA\ Manning, C. \BBOP
+  2005\BBCP.
+\newblock \BBOQ A Conditional Random Field Word Segmenter for Sighan Bakeoff
+  2005.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th SIGHAN Workshop on Chinese Language
+  Processing}, \lowercase{\BVOL}\ 171.
+
+\bibitem[\protect\BCAY{Wang, Kazama, Tsuruoka, Tsuruoka, Chen, Zhang, \BBA\
+  Torisawa}{Wang et~al.}{2011}]{wang2011improving}
+Wang, Y., Kazama, J., Tsuruoka, Y., Tsuruoka, Y., Chen, W., Zhang, Y., \BBA\
+  Torisawa, K. \BBOP 2011\BBCP.
+\newblock \BBOQ Improving Chinese Word Segmentation and POS Tagging with
+  Semi-supervised Methods Using Large Auto-Analyzed Data.\BBCQ\
+\newblock In {\Bem IJCNLP}, \mbox{\BPGS\ 309--317}.
+
+\bibitem[\protect\BCAY{Wu, Ng~Hong, \BBA\ Ruibin}{Wu
+  et~al.}{2003}]{ngefficient}
+Wu, H.-J.~P., Ng~Hong, I., \BBA\ Ruibin, G. \BBOP 2003\BBCP.
+\newblock \BBOQ Efficient Methods for Multigram Compound Discovery.\BBCQ\
+\newblock In {\Bem Proceedings of the 17th Pacific Asia Conference},
+  \mbox{\BPGS\ 257--268}.
+
+\bibitem[\protect\BCAY{Yamamoto \BBA\ Church}{Yamamoto \BBA\
+  Church}{2001}]{yamamoto2001using}
+Yamamoto, M.\BBACOMMA\ \BBA\ Church, K.~W. \BBOP 2001\BBCP.
+\newblock \BBOQ Using Suffix Arrays to Compute Term Frequency and Document
+  Frequency for All Substrings in a Corpus.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 27}  (1), \mbox{\BPGS\
+  1--30}.
+
+\bibitem[\protect\BCAY{Yang, Jiang, Kuo, Tsai, \BBA\ Hsu}{Yang
+  et~al.}{2011}]{yang2011unsupervised}
+Yang, T.-h., Jiang, T.-J., Kuo, C.-h., Tsai, R. T.-h., \BBA\ Hsu, W.-l. \BBOP
+  2011\BBCP.
+\newblock \BBOQ Unsupervised Overlapping Feature Selection for Conditional
+  Random Fields Learning in Chinese Word Segmentation.\BBCQ\
+\newblock In {\Bem Proceedings of the 23rd Conference on Computational
+  Linguistics and Speech Processing}, \mbox{\BPGS\ 109--122}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Ye, Wu, Li, Chow, Hui, \BBA\ Yiu}{Ye
+  et~al.}{2013}]{ye2013unknown}
+Ye, Y., Wu, Q., Li, Y., Chow, K., Hui, L.~C., \BBA\ Yiu, S.-M. \BBOP 2013\BBCP.
+\newblock \BBOQ Unknown Chinese word extraction based on variety of overlapping
+  strings.\BBCQ\
+\newblock {\Bem Information Processing \& Management}, {\Bbf 49}  (2),
+  \mbox{\BPGS\ 497--512}.
+
+\bibitem[\protect\BCAY{Zeng, Wong, Chao, \BBA\ Trancoso}{Zeng
+  et~al.}{2013}]{zeng2013co}
+Zeng, X., Wong, D.~F., Chao, L.~S., \BBA\ Trancoso, I. \BBOP 2013\BBCP.
+\newblock \BBOQ Co-regularizing Character-based and Word-based Models for
+  Semi-supervised Chinese Word Segmentation.\BBCQ\
+\newblock In {\Bem ACL (2)}, \mbox{\BPGS\ 171--176}.
+
+\bibitem[\protect\BCAY{Zhang, Wang, Xue, \BBA\ Sun}{Zhang
+  et~al.}{2011}]{zhang2011extract}
+Zhang, K., Wang, R., Xue, P., \BBA\ Sun, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Extract Chinese Unknown Words from a Large-scale Corpus Using
+  Morphological and Distributional Evidences.\BBCQ\
+\newblock In {\Bem IJCNLP}, \mbox{\BPGS\ 837--845}. Citeseer.
+
+\bibitem[\protect\BCAY{Zhang, Liu, Zhang, \BBA\ Cheng}{Zhang
+  et~al.}{2002}]{zhang2002automatic}
+Zhang, K., Liu, Q., Zhang, H., \BBA\ Cheng, X.-Q. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic Recognition of Chinese Unknown Words Based on Roles
+  Tagging.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st SIGHAN Workshop on Chinese Language
+  Processing-Volume 18}, \mbox{\BPGS\ 1--7}. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Zhang, Kikui, \BBA\ Sumita}{Zhang
+  et~al.}{2006}]{zhang2006subword}
+Zhang, R., Kikui, G., \BBA\ Sumita, E. \BBOP 2006\BBCP.
+\newblock \BBOQ Subword-based Tagging for Confidence-Dependent Chinese Word
+  Segmentation.\BBCQ\
+\newblock In {\Bem Proceedings of the COLING/ACL on Main Conference Poster
+  Sessions}, \mbox{\BPGS\ 961--968}. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Zhao, Huang, Li, \BBA\ Lu}{Zhao
+  et~al.}{2006}]{zhao2006effective}
+Zhao, H., Huang, C.-N., Li, M., \BBA\ Lu, B.-L. \BBOP 2006\BBCP.
+\newblock \BBOQ Effective Tag Set Selection in Chinese Word Segmentation via
+  Conditional Random Field Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of PACLIC}, \lowercase{\BVOL}~20, \mbox{\BPGS\
+  87--94}. Citeseer.
+
+\bibitem[\protect\BCAY{Zhao \BBA\ Kit}{Zhao \BBA\
+  Kit}{2007}]{zhao2007incorporating}
+Zhao, H.\BBACOMMA\ \BBA\ Kit, C. \BBOP 2007\BBCP.
+\newblock \BBOQ Incorporating Global Information into Supervised Learning for
+  Chinese Word Segmentation.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th Conference of the Pacific
+  Association for Computational Linguistics}, \mbox{\BPGS\ 66--74}. Citeseer.
+
+\bibitem[\protect\BCAY{Zhao \BBA\ Kit}{Zhao \BBA\
+  Kit}{2008}]{zhao2008exploiting}
+Zhao, H.\BBACOMMA\ \BBA\ Kit, C. \BBOP 2008\BBCP.
+\newblock \BBOQ Exploiting Unlabeled Text with Different Unsupervised
+  Segmentation Criteria for Chinese Word Segmentation.\BBCQ\
+\newblock {\Bem Research in Computing Science}, {\Bbf 33}, \mbox{\BPGS\
+  93--104}.
+
+\end{thebibliography}
+
+
+\vspace{-0.5\Cvs}
+\begin{biography}
+
+\bioauthor[:]{Mo Shen}{
+   Mo Shen received his B.S. degree in Mathematics from Hong Kong Baptist University, Hong Kong, China, in 2010. He received the M.S. and Ph.D. degree in Informatics from Kyoto University, Kyoto, Japan, in 2012 and 2016. His current research interests include syntactic parsing, Chinese morphological analysis, and cognitive modeling of language.
+ }
+
+\bioauthor[:]{Daisuke Kawahara}{
+   Daisuke Kawahara received his B.S. and M.S. in Electronic Science and
+   Engineering from Kyoto University in 1997 and 1999, respectively. He
+   obtained his Ph.D. in Informatics from Kyoto University in 2005. He is
+   currently an associate professor at the Graduate School of Informatics
+   at Kyoto University. His research interests center on natural language
+   processing, particularly knowledge acquisition and text understanding.
+ }
+
+\bioauthor[:]{Sadao Kurohashi}{
+   Sadao Kurohashi received the B.S., M.S., and Ph.D. in Electrical
+   Engineering from Kyoto University in 1989, 1991 and 1994,
+   respectively. He has been a visiting researcher of IRCS, University
+   of Pennsylvania in 1994. He is currently a professor of the Graduate
+   School of Informatics at Kyoto University. His research interests
+   include natural language processing, knowledge
+   acquisition/representation, and information retrieval. He received
+   the 10th anniversary best paper award from journal of natural language
+   processing in 2004, 2009 Funai IT promotion award, and 2009 IBM
+   faculty award.
+ }
+
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

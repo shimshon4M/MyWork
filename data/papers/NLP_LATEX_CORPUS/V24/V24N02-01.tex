@@ -1,0 +1,689 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{hangcaption_jnlp}
+\usepackage{array}
+
+
+
+\Volume{24}
+\Number{2}
+\Month{March}
+\Year{2017}
+
+\received{2016}{3}{11}
+\revised{2016}{7}{24}
+\rerevised{2016}{10}{27}
+\accepted{2016}{12}{14}
+
+\setcounter{page}{187}
+
+\jtitle{文脈限定 Skip-gram による同義語獲得}
+\jauthor{城光　英彰\affiref{Author_1} \and 松田　源立\affiref{Author_2} \and 山口　和紀\affiref{Author_2}}
+
+\jabstract{
+本論文では，分布仮説に基づく同義語獲得を行う際に，周辺単語の様々な属性情報を活用するために，文脈限定 Skip-gram モデルを提案する．既存の Skip-gram モデルでは，学習対象となる単語の周辺単語（文脈）を利用して，単語ベクトルを学習する．一方，提案する文脈限定 Skip-gram モデルでは，周辺単語を，特定の品詞を持つものや特定の位置に存在するものに限定し，各限定条件に対して単語ベクトルを学習する．したがって，各単語は，様々な限定条件を反映した複数の単語ベクトルを所持する．提案手法では，これら複数種類の単語ベクトル間のコサイン類似度をそれぞれ計算し，それらを，線形サポートベクトルマシンと同義対データを用いた教師あり学習により合成することで，同義語判別器を構成する．提案手法は単純なモデルの線形和として構成されるため，解釈可能性が高い．そのため，周辺単語の様々な単語属性が同義語獲得に与える影響の分析が可能である．また，限定条件の変更も容易であり，拡張可能性も高い．実際のコーパスを用いた実験の結果，多数の文脈限定 Skip-gram モデルの組合せを利用することで，単純な Skip-gram モデルに比べて同義語獲得の精度を上げられることがわかった．また，様々な単語属性に関する重みを調査した結果，日本語の言語特性を適切に抽出できていることもわかった．
+}
+\jkeywords{同義語獲得，Skip-gram モデル，サポートベクトルマシン}
+
+\etitle{Automatic Synonym Acquisition Using a Context-Restricted Skip-gram Model}
+\eauthor{Hideaki Joko\affiref{Author_1} \and Yoshitatsu Matsuda\affiref{Author_2} \and Kazunori Yamaguchi\affiref{Author_2}} 
+\eabstract{
+This research proposes a context-restricted Skip-gram model for acquiring synonyms by employing various properties of the context words. The original Skip-gram model learned the word vector of each target word by utilizing all the context words around it. In contrast, the proposed context-restricted Skip-gram model learns multiple word vector types of each target word by limiting the context words to those pertaining to specific parts of speech or those present at specific relative positions. The proposed method calculates the cosine similarities on multiple word vector types and combines these similarities using linear support vector machines. The proposed method has high interpretability because it is a weighted linear summation of simple models. The interpretability of the proposed method enables us to investigate the degree of influence for acquiring synonyms from various properties of the context words. Moreover, the proposed method has high extendability because the conditions of context restriction can be easily changed and added. Experimental results using actual Japanese corpora showed that the proposed method aggregating multiple context-restricted models achieved a higher performance than the previous single Skip-gram model. In addition, the estimated weights of various properties of the context words could appropriately elucidate some grammatical characteristics of the Japanese language.
+}
+\ekeywords{Synonym Acquisition, Skip-gram Model, Support Vector Machine}
+
+\headauthor{城光，松田，山口}
+\headtitle{文脈限定 Skip-gram による同義語獲得}
+
+\affilabel{Author_1}{三菱電機株式会社情報技術総合研究所}{Mitsubishi Electric Co., Information Technology R\&D Center}
+\affilabel{Author_2}{東京大学総合文化研究科}{Graduate School of Arts and Sciences, the University of Tokyo}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{序論}
+\label{sec:introduction}
+
+自然言語処理において高度な意味処理を実現する上で，同義語の自動獲得は重要な課題である\cite{inui}．
+例えば，近年の検索エンジンのクエリ拡張においては同義語辞書が用いられている\cite{utsumi}が，新出単語に対し全て人手で同義語辞書を整備することは現実的ではない．同義語の獲得には様々な手法が提案されている．例えば笠原ら\cite{kato}は国語辞典を用いて，見出し語に対して語義文により単語のベクトルを作成した後，シソーラスにより次元圧縮を行う方法で同義語の獲得を行った．
+また，渡部ら (渡部, Bollegala, 松尾, 石塚 2008) は，\nocite{watanabe}
+検索エンジンを用いて，同義対を共に含むようなパターンを抽出し，得られたパターンから同義語の候補を得るという手法で同義語の抽出を行い，係り受け解析を行わずとも既存手法と同様の性能が得られることを示した．一方，これらの研究とは異なり「同じ文脈に現れる単語は類似した意味を持つ」という分布仮説(distributional hypothesis) \cite{harris}に基づいたアプローチも存在する．実際に文脈情報が同義語獲得に有用であるとの報告\cite{hagiwara}もあり，加えてその他の手法と組み合わせて使用することが可能であるという利点もある．そこで，本研究では文脈情報を用いたアプローチを検討する．
+
+文脈情報の獲得にも手法が多数存在するが，近年では，分布仮説に基づきニューラルネットワーク的な手法を用いて単語の``意味''を表すベクトル（単語ベクトル）を求めるSkip-gramモデル\cite{mikolov1}が注目されている．Skip-gramモデルで得られた単語ベクトルを利用すると
+コサイン類似度により単語の意味の類似度が計算できることが知られており，その性能は既存手法より良いという報告
+\cite{roy}
+もある．
+しかし，Skip-gramモデルでは周辺単語の品詞や語順を無視したものを文脈情報として用いており，有用な情報を無視している可能性がある．実際に既存のSkip-gramモデルでは同義語獲得に失敗する例として，「カタカナ語」と「和語」からなる同義語対の場合，コサイン類似度が低くなることなどが知られており\cite{joko}，改善が望まれる．
+
+そこで，本研究では， Skip-gramを拡張し，周辺単語の品詞情報や語順情報を取り込み可能なモデル（文脈限定Skip-gram）を提案する．
+文脈限定Skip-gramでは，既存のSkip-gramと違い，周辺の単語のうち，ある条件を満たすもの（特定の単語分類属性（品詞等）や特定の相対位置）のみを文脈として利用し，単語ベクトルを学習する．
+たとえば，「カタカナ語」あるいは「カタカナ語」ではないもの（これを「非カタカナ語」と呼ぶ）のみに周辺単語を限定することによって，
+周辺の「カタカナ語」あるいは「非カタカナ語」との関係を強く反映した単語ベクトルを学習することができる．
+そして，そのような様々な限定条件ごとに単語ベクトル及びコサイン類似度を計算し，
+それらを線形サポートベクトルマシン(SVM)と同義対データを用いた教師あり学習による合成することで，
+同義語獲得を行った．
+その結果，
+日本語の言語特性を適切に抽出して
+利用できていることがわかった．
+たとえば，
+同義語の獲得精度が一番高かったモデルにおいては，
+「非カタカナ語」および「直後の単語」などの特定の限定条件から得られた
+コサイン類似度への重みが大きいことがわかった．また，
+これらの限定条件への重みを大きくすることは，
+既存のSkip-gramモデルでは獲得が難しかった
+「カタカナ語」と「和語」からなる同義対の獲得の精度へ
+大きな影響をあたえることもわかった．
+
+本論文の構成は以下のとおりである．
+第\ref{sec:related-work}節では，関連研究について述べる．
+第\ref{sec:method}節では，提案手法について述べる．
+\ref{subsec:method:skipgram}節では，既存のSkip-gramモデルについて概説し，
+\ref{subsec:method:limited-skipgram}節では，提案する文脈限定Skip-gramモデルについて説明する．
+第\ref{sec: data-and-preexperiment}節では，使用データと予備実験について述べる．
+\ref{subsec:ex:data}節では実験に使用したコーパス及び同義語対／非同義語対の教師データ作成方法について，
+\ref{preliminary-experiment}節ではSkip-gramにおける設定とSVMの素性作成方法に関する予備実験について述べる．
+第\ref{sec:experiment}節では提案手法による結果を示し，有効性を議論する．
+最後に第\ref{sec:conclusion}節において結論を述べる．
+
+
+\section{関連研究}
+\label{sec:related-work}
+
+同義語の自動推定には様々な手法が存在する．笠原ら\citeyear{kato}は，第\ref{sec:introduction}節に述べたように，国語辞典の語義文と大規模なシソーラスを用いて単語ベクトルを作成し，同義語の獲得を行った．また，渡部ら\citeyear{watanabe}は，検索エンジンを用いて同義対(X,Y)を共に含むようなパターンを抽出した後に，得られたパターンから同義対の候補を抽出し順位付けを行うことで，同義対（と関連語）を獲得し，係り受け解析を行わずとも既存手法と同様の性能が得られることを示した．
+これらの手法では，同義語の推定に，何らかの単語の素性を使用している．
+例えば，笠原ら\citeyear{kato}はVSM（ベクトル空間モデル）を使用しており，渡部ら\citeyear{watanabe}は同義対を共に含むようなパターンを使用している．
+笠原ら\citeyear{kato}のような文章中の単語の出現頻度のみを用いたVSMは，語の位置関係を無視し（必然的に，周辺文脈を無視し）ているが，特異値分解やシソーラスなどによる次元圧縮手法が適用可能であり，スパースネスなどの問題を緩和できるという利点を持つ．また，渡部ら\citeyear{watanabe}の手法は，パターンを事前に獲得しておくことで新出の同義語を新たに学習すること無く獲得できるという利点がある．
+これらの素性による同義語獲得は一定の成果を上げているものの，精度の面においてはまだ課題が残る．
+
+一方，第\ref{sec:introduction}節において述べたように，文脈情報からニューラルネットワーク的な手法を用いて単語の``意味''を表すベクトル（単語ベクトル）を求める手法が，その高い意味獲得精度から注目されている\cite{roy}．
+文脈情報から単語ベクトルを獲得する研究には
+様々なものがある．
+周辺単語の相対位置や語順に着目したものとしてはLing et al. \cite{ling}のものや，Trask et al. \cite{trask}のものが挙げられる．
+Ling et al. \citeyear{ling}は周辺単語の相対位置を考慮した重み付けを行うことで，
+Trask et al. \citeyear{trask}は単語の語順や文字列を利用したSkip-gramモデルを作成することで，文法構造をより反映する単語ベクトルが学習できることを示した．
+また，\citeA{ariga}は周辺単語から中心単語の言い換え表現を予測するタスクにおいて，周辺単語の語順を考慮して単語ベクトルを学習することで，精度が向上することを報告した．
+一方，周辺単語だけでなく，他の事前情報を加えた研究も存在する．例えば，
+\citeA{levy}は係り受け構造を考慮して，単語ベクトルの学習をし，意味の類似度判定テストでSkip-gramモデルより高い精度を報告した．
+\citeA{bian}は辞書などの意味情報を加えることで，\citeA{yu}は辞書情報とコーパスから単語ベクトルを同時に学習することで，意味の類似度判定テストの精度が高まることを示した．
+
+これらの研究は，周辺文脈に出現する単語の種類だけでなく，語順や係り受け構造などの条件を加え，その上で単語ベクトルを「同時に」学習することで単語ベクトルの質を高める研究である．
+このようなモデルそのものに様々な要因をまとめて組み込んで新たなモデルを構築する研究に対して，本研究では単語ベクトルを限定条件ごとに「個別に」学習し，その後，同義語を教師あり学習により
+獲得するアプローチを試みる．具体的には，第\ref{sec:introduction}節に述べたように様々な限定条件ごとの単語ベクトルを学習し，それらを線形SVMにて合成することで同義語の獲得を行う．
+提案手法では，線形SVMを用いた重み付けの際に，教師例として同義対を用いることから，
+「同義語の獲得」において重要なものの重みを学習する．
+そのため，線形SVMで学習された重みを見ることで，
+周辺単語が「同義語の獲得」に与える影響を知ることができる．
+このように，提案手法には高い解釈可能性がある．
+また，Skip-gramのモデル自体は変更せず，
+文脈限定関数で学習データを変更するだけで，
+利用する単語属性の追加や変更が可能であるという高い拡張可能性もある．
+これらの解釈可能性と拡張可能性の二点が，既存手法に対する提案手法の大きな優位点である．
+
+
+\section{提案手法}
+\label{sec:method}
+
+\subsection{既存のSkip-gramモデル}
+\label{subsec:method:skipgram}
+
+ここではSkip-gramモデル\cite{mikolov1}について概説する．
+Skip-gramモデルは，ニューラルネットワーク的な手法を用いて，コーパスの文脈
+情報から，各単語の単語ベクトルを学習する手法の一種である．Skip-gramモデル
+では，ある単語$w_t$が文章内の位置$t$に存在した場合，その周辺単語
+$w_{t+j}(j\neq 0)$の発生確率$p(w_{t+j}|w_t)$を以下の式で与える．
+\begin{equation}
+  p(w_{t+j}|w_t) \propto e^{v'(w_{t+j})^T v(w_t)}
+\end{equation}
+ここで，ニューラルネットワークモデル的に言えば，$v(w)$はある入力単語（中心
+単語）$w$に依存した入力用ベクトル，$v'(w)$はある周辺単語$w$の出力確率を計
+算するための出力用ベクトルである．$v$および$v'$の次元は事前に与えられる．
+出力確率は，入力用ベクトルと出力用ベクトルの内積に依存し，内積が大きい程
+確率は高くなる．本論文では，わかりやすさのため，$v(w)$を単語$w$の単語ベク
+トル，$v'(w)$を文脈ベクトルと呼ぶことにする，なお，確率分布は$1$に正規化
+されるので，語彙に含まれるすべての単語$w$での正規化により，$p(w_{t+j}
+|w_t)$は以下で与えられる．
+\begin{equation}
+  p(w_{t+j}|w_t )=\frac{ e^{v'(w_{t+j})^T v(w_t)} }{ \sum_w
+  e^{v'(w)^T v(w_t)} }
+\end{equation}
+さらに$p(w_{t+j}|w_t)$から，あるコーパスが与えられたときの尤度関数$\ell$を以
+下の式(\ref{eq:likelihood})で定義する．
+\begin{equation}
+  \ell=\sum_{t=1}^T \sum_{-c\leq j\leq c, j\neq 0} \log p(w_{t+j}|w_t) 
+\label{eq:likelihood}
+\end{equation}
+ここで$T$はコーパスのサイズ，$c$は文脈窓サイズであり，
+$1 \leq c \leq K$の範囲で一様分布でランダムに決定される．
+$K$は事前に与えられる最大文脈窓サイズである．実際のコーパスを利用して，$\ell$を最
+大化する単語ベクトル$v(w)$および文脈ベクトル$v'(w)$を求めることが，
+Skip-gramモデルにおける学習である．
+なお，
+本来のモデルは以上の通りであるが，尤度関数$\ell$をこのままの形で最大化す
+ることは，
+計算量等の問題で困難であるため，実際にはいくつかの近似が用いられる．
+例えば，
+\cite{mikolov1}では，階層的softmaxモデル近似が利用されているが，本論文では
+説明を省略する．
+
+
+
+\subsection{文脈限定Skip-gramモデル}
+\label{subsec:method:limited-skipgram}
+
+既存のSkip-gramモデルでは，周辺単語として，文脈窓の中に存在するすべての単語を利
+用している．そのため，周辺単語の種類，語順等の情報を利用することはできな
+い．本研究では，文脈として利用される単語を限定することで，Skip-gramを改良
+する．
+なお，単語ベクトルの推定に文脈での語順を考慮した既存研究としては
+第\ref{sec:related-work}節に述べた有賀ら\cite{ariga}のものがあるが，
+本研究は，文脈間の依存関係を考慮していないという点において有賀らの研究とは異なる．
+
+文脈限定Skip-gramモデルでは，式\ref{eq:likelihood}の目的尤度関数$\ell$が以下
+のように変更される．
+\begin{equation}
+  \ell=\sum_{t=1}^T \sum_{-c\leq j\leq c, j\neq 0} \log p(w_{t+j}|w_t) 
+\phi(w_{t+j},j)
+\label{eq:limited-likelihood}
+\end{equation}
+ここで，文脈限定関数$\phi(w_{t+j},j)$は，周辺単語$w_{t+j}$および相
+対位置$j$がある条件を満たす時のみ1となり，それ以外は0となる関数である．
+詳細は省略するが，式\ref{eq:limited-likelihood}は既存のSkip-gramと同様の
+方法で最大化することが可能である．
+なお，$w_{t+j}$と$j$に関係なく常に1となる文脈限定関数
+（$\phi_{\rm{ALL}}$と呼ぶ）においては，式
+\ref{eq:limited-likelihood}は式\ref{eq:likelihood}と同一である．
+さて，本研究では，基本的な
+文脈限定関数$\phi(w_{t+j},j)$として，周辺単語の品詞，種
+類に依存した$\phi_{\rm{POS}}^{p}\left(w_{t+j}\right)$，
+周辺単語の左右に依存した$\phi_{\rm{LR}}^{p}\left(j\right)$，
+周辺単語の相対距離に依存した$\phi_{\rm{WO}}^{p}\left(j\right)$
+の3種類を用いる（これらの文脈限定関数をPOS, LR, WOと参照する）．
+さらに，それらの組み合わせとして「POS-LR」「POS-WO」も利用する．
+
+$\phi_{\rm{POS}}^{p}\left(w\right)$は，単語$w$が品詞等のある分類属性を持つ
+時のみ1となる文脈限定関数である．本論文では，
+「副詞，助詞，動詞，名詞，固有名詞，形容詞，接頭詞，数，記号，カタカナ，
+非カタカナ」の計11個を分類属性として利用する．従って，
+$\phi_{\rm{POS}}^{1}\left(w\right),\ldots,\phi_{\rm{POS}}^{11}\left(w\right)$
+の11種類が存在する．
+$\phi_{\rm{LR}}^{p}\left(j\right)$は，$j$が正の時のみ1となる関数もしくは
+$j$が負の時のみ1となる関数である．
+具体的には$j$が正の時のみ1となる関数$\phi_{\rm{LR}}^{0}\left(j\right)$
+と，$j$が負の時のみ1となる関数$\phi_{\rm{LR}}^{1}\left(j\right)$の二つが存在する．
+これらは，周辺単語が右側にある場合と左側にある場合に対応している．
+$\phi_{\rm{WO}}^{p}\left(j\right)$は，$\phi_{\rm{LR}}^{p}\left(j\right)$
+のある種の拡張であり，$j=p$の時のみ1となる関数である．
+本論文では，前後10単語を対象とすることとした．したがって，
+，$p=-10,\ldots,-1,1,\ldots,10$として与えられ，
+文脈窓の特定の相対位置にある時のみに限定する20種類の関数となる．
+さらに，組み合わせにより，
+$\phi_{\rm{POS-LR}}^{pq}\left(w,j\right)
+=\phi_{\rm{POS}}^{p}\left(w\right)\phi_{\rm{LR}}^{q}\left(j\right)$および
+$\phi_{\rm{POS-WO}}^{pq}\left(w,j\right)
+=\phi_{\rm{POS}}^{p}\left(w\right)\phi_{\rm{WO}}^{q}\left(j\right)$として
+新たな文脈限定関数を構成可能である．
+表\ref{tb:context_size}に構成可能な文脈限定関数の個数一覧を示す．
+一つの文脈限定関数に関して一つのSkip-gramモデルが学習されるので，
+最大で，276個のモデルが利用可能である．
+なお，相対位置を全て区別するWO，POS-WOに関しては，元のSkip-gramと異なり，文脈窓サイズ$c$は
+常に最大値$K$をとるものとした．
+
+\begin{table}[b]
+\caption{文脈限定関数の個数一覧}
+\label{tb:context_size}
+\input{01table01.txt}
+\end{table}
+
+実際の同義語獲得を行う際には，学習された各Skip-gramモデルにおいて
+単語間のコサイン類似度を計算する（コサイン類似度を用いる理由は\ref{sec:pre-combine}節において後述する）．
+本研究では，
+各モデルでの類似度を素性とみなし，
+教師データに基づいて，線形SVMで各々の素性に対する重みを学習することにより，
+判定関数を構築する．
+そのため，提案手法は教師なし学習のSkip-gramを教師あり学習により拡張しているといえる．
+更に，素性の重みについては線形SVMの値を利用するが，閾値についてはF値を最大化をするようなものを推定することで（F値最大化），さらなる最適化を行った．また，SVM使用の際には加算平均が0, 分散が1となるように各素性の正規化処理を行った．
+
+
+\section{使用データと予備実験}
+\label{sec: data-and-preexperiment}
+
+\subsection{使用データ}
+\label{subsec:ex:data}
+
+単語ベクトル作成において用いたコーパスとして，日本語Wikipediaデータ
+\footnote{http://dumps.wikimedia.org/jawiki/，2015年6月5日取得} (2~Gbytes)を
+MeCab\footnote{http://taku910.github.io/mecab/}により
+mecab-ipadic-neologd辞書
+\footnote{https://github.com/neologd/mecab-ipadic-neologd，2015年12月9日取得}を
+用いて基本形出力でわかち書きと品詞付与を行った後に，出現回数が
+100回未満の低頻度語を除いたものを使用した．
+最終的に，Skip-gramモデルで
+単語ベクトルが獲得された単語は
+104,630種類となった．ただし，同じ単語であっても品詞が異なるものは区別して扱った．
+Skip-gramモデル
+\footnote{https://code.google.com/p/word2vec/ にてGoogleが公開している実装を使用した．}では，階層的softmaxモデルを用いて学習を行った．
+
+文脈限定Skip-gramの計算時間については，各々の文脈モデルは独立に学習していることから，計算時間はALL（既存Skip-gram）とモデル数を乗算した値で見積もることができる．
+実際には学習する回数が文脈限定により減少することから，
+各文脈限定モデルでは基本的にALLより学習時間が短くなり，計算時間は見積もりより短くなる．
+実際に全ての文脈限定 Skip-gram ($\mathrm{N}=300$)の学習に要したトータルの計算時間は，CPUとしてAMD 1.4~GHzを用いて20スレッドの並列処理を行った場合，60時間程度であった．
+なお，ALL ($\mathrm{N}=300$)の学習時間は2~時間程度である．
+また，一旦単語ベクトルの獲得を行えば，線形SVMの学習や個々の判定には長い時間は要さない．
+
+同義対の正例として，WordNet同義対データベース
+\footnote{http://nlpwww.nict.go.jp/wn-ja/jpn/downloads.html にてNICTが提供する，WordNet \cite{wordnet}を元に人手で作成された同義対データベースである．}に含まれる同義対を利用した．
+発生頻度が極端に低くSkip-gramで単語ベクトルの獲得できなかった単語を除き，
+最終的に5,848対を正例として用いた．
+負例（非同義対）としては，まず，単語ベクトルが獲得可能であった
+単語（\textless/s\textgreater は除く）の中から，ランダムに
+作成した17,544対（正例の3倍）を利用した．
+更に，正例に含まれる単語群をランダムに組み合せることで作
+成した5,848対（正例と同数）を，負例として追加した．
+この負例の追加により，正例に含まれる特定の単語の出現のみによって
+同義対と誤判定してしまう問題を緩和した．
+SVMのパッケージとしてはWeka(SMO)とSVMlightを用いた．
+
+
+\subsection{予備実験}
+\label{preliminary-experiment}
+
+\subsubsection{文脈窓$K$と次元$N$の与える影響}
+\label{sec:pre-kn}
+
+提案手法に関する実験を行う前に，既存Skip-gram (ALL)における適切な文脈窓$K$と単語ベクトルの次元$N$を調べる目的で，$K$と$N$の違いによる同義語獲得性能の比較を行った．
+調査対象とした$K$は，1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 50の13種類，$N$は100, 200, 300, 500, 1,000, 1,500, 2,000, 2,500, 3,000の9種類である．$K$を変更させた際は$N=300$に，$N$を変更させた際は$K=5$に固定した．また，同義語獲得においてはALLで獲得されたコサイン類似度を素性とし，F値が最大となるような閾値を調べ，その時のF値を結果として記した．実験結果を図\ref{fig:SGwindim}に示す．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-2ia1f1.eps}
+\end{center}
+\caption{文脈窓のサイズ$K$と次元$N$による同義語獲得におけるF値の変化}
+\label{fig:SGwindim}
+\label{fig:img}
+\end{figure}
+
+実験結果からF-Measureは$K$が$2〜7$の時に高くなり，8以降は減少傾向にあることが分かった．また，$K=2$の時にF値が最大となったが，$2〜7$の間でのF値には大きな差がない．そこで，Skip-gramの結果が初期値に依存することを考え，\ref{sec:experiment}節の評価実験では，ALLを用いる際は$2〜7$の中間付近である$K=5$を用いることにした．
+
+単語ベクトルの次元$N$においては，100次元から500次元までは次元が高くなるにつれ，急激にF値が高くなるが，以降は伸びが緩やかとなり，1,500次元から3,000次元にかけてF値は下がる事がわかる．上記の結果から，1,000次元〜1,500次元が最適な次元数であることが分かった．そこで，\ref{sec:experiment}節の評価実験においては，計算時間を考慮しALLについては1,000次元としたものを用いる．
+
+
+\subsubsection{ベクトル結合方法の比較}
+\label{sec:pre-combine}
+
+第\ref{sec:introduction}節に述べたようにコサイン類似度に単語の意味の近さが表れるという報告があるが，本章では実際にコサイン類似度が線形SVMの素性の作成方法として妥当であることを同義語獲得性能の比較によって示す．
+単語ベクトルの結合方法には様々考えられる．例えば，\cite{oyama}では，異表記されている同一著者の判定問題において，著者の論文タイトルや共著者情報などから作成された単語のベクトルをSVMで判定している．Oyama et al. \cite{oyama}の研究では素性の作成方法だけでなく，カーネルの変更によっても性能が高まることが示されている．
+そこで，予備実験では比較対象として単語ベクトルの要素をSVMの素性とし，同義語獲得を行った．
+具体的には，単語ベクトルの各々の要素を結合するもの(Combine)と乗算するもの(Multiplication)をSVMの素性とした．
+例えば，着目している単語対の単語ベクトルを$(a_1, a_2, a_3, ... , a_N)$，$(b_1, b_2, b_3, ... ,b_N)$とすると，
+これらの単語ベクトルのCombineにより作成されたSVMの素性は$(a_1, a_2, a_3, ... , a_N, b_1, b_2, b_3, ... ,b_N)$の$2N$次元となり，Multiplicationにより作成されたSVMの素性は$(a_1 \times b_1, a_2 \times b_2, a_3 \times b_3, ... , a_N \times b_N)$の$N$次元となる．
+
+
+SVMのカーネルにおいては線形カーネルの他に多項式カーネル\footnote{二次の多項式カーネルを用いた．}とRBFカーネル\footnote{$\gamma = 0.01$とした．}を用いた．また，閾値の学習は\ref{subsec:method:limited-skipgram}節に述べたようにF値最大化を用いて行った．
+使用した組み合わせは以下の6つである．
+
+\begin{itemize}
+\item Combine + 線形カーネル
+\item Combine + 多項式カーネル（二次）
+\item Combine + RBFカーネル
+\item Multiplication + 線形カーネル
+\item Multiplication + 多項式カーネル（二次）
+\item Multiplication + RBFカーネル
+\end{itemize}
+また，単語ベクトル$v$（および文脈ベクトル$v'$）の次元は計算時間の関係から300とし，$K=5$とした．
+
+線形SVMを用いた同義語獲得に関しては，教師例のデータ量が29,240対（\ref{sec:pre-kn}節）と少なくオーバーフィットの可能性が考えられる．
+そのため，線形SVMによる同義語獲得の際には，5分割交差検定により，精度，再現率，F値を評価した．
+交差検定の分割はそれぞれの結果について同じであり，結果の比較が可能である．
+
+結果を表\ref{tb:SVMfeature}に示す．比較対象として，一番下の行に実験1の結果\ref{fig:SGwindim}における$K=5 (N=300)$の結果を記した．
+``Combine + 線形カーネル'', ``Combine + RBFカーネル'', ``Multiplication + RBFカーネル'' においては正例（同義対）と負例（非同義対）を分離可能な超平面が作成できず，SVMが全てのデータを負例として識別するように学習したため，精度もF値も計算不能であった．
+F値が計算可能であった ``Combine + 多項式''，``Multiplication + 線形''，``Multiplication + 多項式'' に関しても，コサイン類似度のF値を大幅に下回った．以上の結果から本論文においては素性の作成方法としてコサイン類似度を用いて分析を行うこととする．
+
+\begin{table}[t]
+\caption{SVMにおける素性作成方法や使用カーネルと同義語獲得精度の関係}
+\label{tb:SVMfeature}
+\input{01table02.txt}
+\end{table}
+
+
+\section{実験結果}
+\label{sec:experiment}
+
+ここでは，提案手法（文脈限定Skip-gram）による同義語獲得
+の性能の評価実験を行った．学習時における
+最大文脈窓サイズ$K$に関しては，文脈限定の無い既存Skip-gram (ALL)については\ref{sec:pre-kn}節に述べたように
+$K=5$とし，他のモデルに関しては学習対象になる周辺単語の数が減少することを考慮に入れ$K=10$とした．
+単語ベクトルの次元数$N$も\ref{sec:pre-kn}節に述べたようにALLのみ$N=1,000$とし，その他のモデルに関しては計算時間を考慮し$N=300$とした．
+ある文脈限定関数について一つの素性が対応する．
+本研究では，表\ref{tb:context_size}の文脈限定関数の組み合わせ
+により素性群を作成した．なお，すべての素性群は必ずALLを含むものとした．
+
+与えられた素性群について線形SVMで重みを学習した．
+\ref{sec:pre-combine}節と同様の理由で，線形SVMによる同義語獲得においては5分割交差検定により，精度，再現率，F値を評価した．交差検定の分割も，\ref{sec:pre-combine}節と同様にそれぞれの結果について同じである．
+
+\begin{table}[b]
+\caption{文脈限定 Skip-gram による同義語獲得精度の評価} 
+\label{tb:proposed-result}
+\input{01table03.txt}
+\end{table}
+
+提案手法を用いた同義語獲得の結果を表\ref{tb:proposed-result}に示す．
+最初の5行は，ALLと一つのタイプの文脈限定関数群を組み合せた結果である
+\footnote{その他，別途モデル群にALLを含まない組合せも試したが，わずかに性能が上がる場合もあったものの，大幅な向上は見られなかったため，結果の表示は省略する．}．
+その次の行は，ALLと複数タイプの組み合わせ$2^5$の$32$通りの中で，F値が最も高くなった結果を表示している．ただし，十分に素性を含んでいるものに関してはF値の差がそれほど見られなかった．
+最後の行に，既存のSkip-gramモデルとの比較として，ALLのみを用いた結果を示した．
+表\ref{tb:proposed-result}において，
+ALLと一つのタイプのみの文脈限定関数を組み合わせた場合でも，
+「ALL + WO」「ALL + POS-LR」「ALL + POS-WO」で既存手法のF値を上回ることが示されている．
+これは，同義語獲得において，周辺単語の相対的な位置およびその品詞などの分類属性が，
+重要な情報であるということを示している．
+また，提案手法におけるF値最大となる組み合わせは，
+「ALL + POS-LR + POS-WO 」であり，
+F値は0.792となった．これは既存手法の最大F値である0.712より高い．
+
+次に，本手法の解釈可能性の高さを実証するために，
+提案手法においてF値が最大であった「ALL + POS-LR + POS-WO」の組み合わせ（以後，「MAX」と参照）の線形SVMの重みについてのグラフを図\ref{fig:WOMAX-weight}から図\ref{fig:append-POS-LR}に示す．
+重みの値が大きければ同義対の判定に正の影響を，値が小さければ負の影響を与え，0であれば影響を及ぼさない．R1, L1などは中心単語から見た時の相対的位置が「右 1つ目」，「左1つ目」であることを示している．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-2ia1f2.eps}
+\end{center}
+\hangcaption{MAXにおける相対的位置ごとの重みの合計：各相対位置について，POS-WOにおける重みを，すべてのPOS分類属性に関して合計した値を示した．}
+\label{fig:WOMAX-weight}
+\end{figure}
+
+まず，図\ref{fig:WOMAX-weight}と図\ref{fig:POSMAX-weight}の考察を行う．
+図\ref{fig:WOMAX-weight}を見ると，中心単語の直後の単語が同義語獲得に大きな影響を及ぼしていることが分かる．また，影響の大きさは中心単語から離れれば離れるほど減っていくこともわかる．
+また，図\ref{fig:POSMAX-weight}からは，非カタカナ語の重みが他の分類属性と比較した時に一番大きいことが分かる．これは\ref{sec:introduction}節で述べたように非カタカナ語に注目することが重要であることを示している．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-2ia1f3.eps}
+\end{center}
+\hangcaption{MAXにおける分類属性ごとの重みの合計：各POS分類属性について，POS-WOとPOS-LRにおける重みを，全ての相対位置(L, R, L1--L10, R1--R10)に関して合計した値を示した．}
+\label{fig:POSMAX-weight}
+\end{figure}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-2ia1f4.eps}
+\end{center}
+\hangcaption{MAXにおける左右に着目した相対的位置ごとの重みの合計：左側はLとL1からL10までのPOS-WOとPOS-LRにおける重みの合計を，右側はRとR1からR10までの合計を示した．すべてのPOS分類属性についても合計している．}
+\label{fig:append-LR}
+\end{figure}
+
+次に，図\ref{fig:append-LR}と図\ref{fig:append-POS-LR}の考察を行う．
+図\ref{fig:append-LR}から，一般に同義語獲得においては，右側(R, R1〜R10)の影響が左側(L, L1〜L10)の影響より大きいことがわかる．
+一方で，これを品詞ごとにわけたものが図\ref{fig:append-POS-LR}である．
+図\ref{fig:append-POS-LR}から，動詞や非カタカナ語に関しては右側にある単語の与える影響が大きいことがわかる．これは，全体として右側が与える影響が強い（図\ref{fig:append-LR}）ことから，その性質を反映していると考えられる．一方，形容詞や接頭詞においては，左側にある単語の方が同義語獲得に大きな影響を与えることがわかる．これは，形容詞や接頭詞は修飾する単語の左側に付くことが多いためであると考えられる．このように，周辺単語の単語属性や相対位置をそれぞれ区別して扱うことで，日本語の性質を反映した同義語獲得が可能になると考えられる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-2ia1f5.eps}
+\end{center}
+\hangcaption{MAXにおける単語分類属性に着目した左右の相対位置ごとの重みの合計：POS分類属性ごとに左側(L, L1〜L10)と右側(R, R1〜R10)のPOS-WOとPOS-LRにおける重みを合計した値を示した．}
+\label{fig:append-POS-LR}
+\end{figure}
+
+\begin{table}[b]
+\begin{minipage}[t]{162pt}
+\setlength{\captionwidth}{162pt}
+\hangcaption{カタカナ語と和語からなる対の同義語獲得におけるALLとMAXの性能比較} 
+\label{tb:katakana} 
+\input{01table04.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{243pt}
+\setlength{\captionwidth}{243pt}
+\hangcaption{MAXにおいて獲得可能となった同義対のうちALLでの順位が低い対}
+\label{tb:katakana-synonym}
+\input{01table05.txt}
+\end{minipage}
+\end{table}
+
+さて，同義語獲得の具体的な問題として，第\ref{sec:introduction}節において，
+カタカナ語と和語からなる同義対のコサイン類似度が低くなるという報告があると述べた．
+そこで，提案手法でこの問題が解決されるかを調べた．
+そこで，ALLとMAXについて，
+カタカナ語と和語からなる対の同義語獲得問題に関する性能を比較した．
+正例の同義対の中で，対の片方がカタカナ語であり，もう一方が和語のものは，
+2,457対存在した．同様に負例は7,782対存在した．
+このデータセットを利用した性能比較の結果を表\ref{tb:katakana}に示す．
+既存手法ALLと比べ，提案手法MAXの精度，再現率は高い値を示している．
+また，具体的な成功例として，ALLでは非同義対と判定され
+MAXにて同義対と正しく判定されたもののうち
+ALLでの順位が低いもの10例を表\ref{tb:katakana-synonym}に示す．
+一方，失敗例としてALLでは獲得できていたがMAXで獲得不可能になった同義対のうち
+ALLでの順位が高いもの10例を表\ref{tb:MAX-cannot-acquire}に示す．
+また，それぞれの表にはALLとMAXにおけるSVMの学習に用いた単語対（29,240対）の中での順位も示した．
+なお，ここでいう順位とは線形SVMの値とF値最大化によって得られた閾値の距離を降順に並べた時の順位である．
+表\ref{tb:katakana-synonym}の10例中7例はカタカナ語と和語からなる対であるが，ALLでは獲得が難しかったこれらの対の順位がMAXでは高くなっていることがわかる．このことから，カタカナ語と和語からなる対に対してMAXが有効であるといえる．
+一方，MAXにおいて獲得不可能になった対（表\ref{tb:MAX-cannot-acquire}）を見ると，カタカナ語と和語からなる対が少ないことが読み取れる．これは，カタカナ語と和語からなる対のALLの値が低くなること，および，MAXにおいてはカタカナ語と和語／漢語の対の獲得性能が向上しているためであると考えられる．
+
+\begin{table}[t]
+\caption{ALLにおいては獲得できたがMAXでは獲得不可能になった同義対のうちALLでの順位が高い対}
+\label{tb:MAX-cannot-acquire}
+\input{01table06.txt}
+\end{table}
+
+第\ref{sec:introduction}節に述べたように，カタカナ語は周辺単語にカタカナ語を生じやすいが，非カタカナ語は周辺単語に非カタカナ語を生じやすいという傾向がある．そのため，周辺単語から中心単語のベクトル表現を学習するというモデルでは，「カタカナ語と非カタカナ語からなる同義対」の獲得が難しいという問題点があった．提案手法では，図\ref{fig:POSMAX-weight}に示したように，周辺単語を非カタカナ語に限定した要素の重みを線形SVMを用いて最適に調節することで，上記の問題を緩和し，カタカナ語と和語／漢語からなる同義対の獲得精度を高めることができたと考えられる．
+
+
+\section{結論}
+\label{sec:conclusion}
+
+本研究では，同義語獲得において周辺単語の
+相対位置や品詞等の様々な属性情報を利用するために，
+Skip-gramモデルを改良し，文脈限定関数を利用した手法を提案した．
+実験の結果，周辺単語の語順や品詞を考慮して文脈を限定し，
+それらの影響の重みを線形SVMで推定することで，
+同義語獲得の精度を向上させることができることがわかった．
+また，中心単語の直後の単語と非カタカナ語が同義語獲得に大きな影響を与えていること，
+及び，全体としては相対位置が右側にある単語の与える影響が大きいが，
+形容詞や接続詞においては，逆に左側の与える影響が大きいことがわかった．
+
+
+本研究のひとつの大きな優位点は，文脈情報や単語分類属性（品詞等）を用いて
+Skip-gramを「個別に」学習したものを組み合わせることで，
+同義語獲得において重要であると考えられる周辺単語の性質を
+知ることができる高い解釈可能性である．
+もうひとつの大きな優位点は，Skip-gramのモデル自体は変更せず，
+文脈限定関数で学習データを変更するだけで，
+利用する単語属性の追加や変更が可能であるという高い拡張可能性である．
+本論文で挙げた属性以外にも，容易に他の有用と考えられる単語属性を利用することができる．
+本手法を，既存の辞書ベースの手法\cite{kato}や
+    検索エンジンを利用する手法 (渡辺 他 2008) \nocite{watanabe}等と組
+み合わせることで，さらに同義語獲得精度を
+向上させることができると期待される．
+
+以下，今後の課題について述べる．
+最初に多義性の問題に関して述べる．
+提案手法と既存手法の両者において獲得に失敗した単語対の傾向を観察したところ，
+その単語の多くに多義性が見られた．既存手法のSkip-gramモデルおよび提案手法である文脈限定Skip-gramモデルは1つの単語につき1つの``意味''しか学習できないため，このような傾向が生じると考えられる．この問題は，多義性の問題の解決を試みたSkip-gramモデル（\citeA{neelakantan}, \citeA{bartunov}, \citeA{cheng}など）を提案手法と組み合わせ同義語獲得に適用することで解決できる可能性がある．
+
+第二に，データスパースネスの問題について述べる．
+既存手法では獲得に成功していたが提案手法において失敗するようになった単語については一般的には使われない単語が多く見受けられたが，これは文脈限定Skip-gramモデルでは文脈を限定していることから既存手法よりもデータスパースネスに弱くなり，低頻度語の``意味''の獲得精度が弱まっていることが原因であると考えられる．この問題は，``Yahoo! 知恵袋データ''\footnote{http://www.nii.ac.jp/dsc/idr/yahoo/chiebkr2/Y\_chiebukuro.html}など，他のコーパスも加えデータサイズを増やすことで本問題を緩和可能であると考えられる．
+また，Skip-gramにおける学習の特徴として，局所最適解の影響により，単語ベクトルが実行ごとに結果が変化することが知られている\cite{suzuki}．そこで，コーパスのデータサイズを増やすことでこのような局所最適解の影響を調査することも必要であると考えられる．
+
+第三に，文脈限定関数の構築方法に関して述べる．
+本研究では多くの文脈限定関数について（品詞）辞書を使用したが，表\ref{tb:proposed-result}からもわかるように，（品詞）辞書情報を必要としないALL+WOにおいても既存手法に比べて大きなF値の向上が見られた．
+このことから，位置情報を始めとする，辞書情報を必要としない文脈限定関数を
+利用することでも精度が更に高まる可能性があると考えられる．
+このような文脈限定関数としては，本研究で述べたLRやWO以外にも「ある特定の文脈窓内（例えば，L2〜L5以内）に含まれるかどうか」によって限定するものも考えられる．
+また，辞書を使用するものに関しても「内容語か機能語か」という限定の仕方なども考えられる．
+これら「文脈窓内に含まれるかどうか」や「内容語か機能語か」といった限定条件の変更は，文脈の限定の程度を緩和することから，上に述べたデータスパースネスの問題を緩和することにも繋がる点でもメリットがある．
+
+最後に，同義対教師データについて述べる．今回は教師例が少ないため最善モデルのF値の推定にとどまったが，今後はさらに教師例を収集して，提案手法の正確なF値の推定を行う必要があると考えられる．
+
+以上を踏まえ，今後は多義性の問題緩和と，コーパスのサイズや同義対教師例の増加，文脈限定関数の変更・追加により，提案手法のさらなる精度向上を目指していく予定である．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{有賀\JBA 鶴岡}{有賀\JBA 鶴岡}{2015}]{ariga}
+有賀竣哉\JBA 鶴岡慶雅 \BBOP 2015\BBCP.
+\newblock 単語のベクトル表現による文脈に応じた単語の同義語拡張.\
+\newblock \Jem{言語処理学会第 21 回年次大会発表論文集 (NLP2015)}, \mbox{\BPGS\
+  752--755}.
+
+\bibitem[\protect\BCAY{Bartunov, Kondrashkin, Osokin, \BBA\ Vetrov}{Bartunov
+  et~al.}{2015}]{bartunov}
+Bartunov, S., Kondrashkin, D., Osokin, A., \BBA\ Vetrov, D. \BBOP 2015\BBCP.
+\newblock \BBOQ Breaking Sticks and Ambiguities with Adaptive Skip-gram.\BBCQ\
+\newblock {\Bem CoRR}, {\Bbf {\mdseries arXiv:1502.07257}}.
+
+\bibitem[\protect\BCAY{Bian, Gao, \BBA\ Liu}{Bian et~al.}{2014}]{bian}
+Bian, J., Gao, B., \BBA\ Liu, T.-Y. \BBOP 2014\BBCP.
+\newblock \BBOQ Knowledge-powered Deep Learning for Word Embedding.\BBCQ\
+\newblock In {\Bem Joint European Conference on Machine Learning and Knowledge
+  Discovery in Databases}, \mbox{\BPGS\ 132--148}. Springer.
+
+\bibitem[\protect\BCAY{Cheng, Wang, Wen, Yan, \BBA\ Chen}{Cheng
+  et~al.}{2015}]{cheng}
+Cheng, J., Wang, Z., Wen, J.-R., Yan, J., \BBA\ Chen, Z. \BBOP 2015\BBCP.
+\newblock \BBOQ Contextual Text Understanding in Distributional Semantic
+  Space.\BBCQ\
+\newblock In {\Bem ACM International Conference on Information and Knowledge
+  Management (CIKM)}. ACM -- Association for Computing Machinery.
+
+\bibitem[\protect\BCAY{Hagiwara, Ogawa, \BBA\ Toyama}{Hagiwara
+  et~al.}{2006}]{hagiwara}
+Hagiwara, M., Ogawa, Y., \BBA\ Toyama, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Selection of Effective Contextual Information for Automatic
+  Synonym Acquisition.\BBCQ\
+\newblock In {\Bem Proceedings of Coling/ACL2006}, \mbox{\BPGS\ 353--360}.
+
+\bibitem[\protect\BCAY{乾}{乾}{2007}]{inui}
+乾健太郎 \BBOP 2007\BBCP.
+\newblock 自然言語処理と言い換え.\
+\newblock \Jem{日本語学}, {\Bbf 26}  (13), \mbox{\BPGS\ 50--59}.
+
+\bibitem[\protect\BCAY{城光\JBA 松田\JBA 山口}{城光 \Jetal }{2015}]{joko}
+城光英彰\JBA 松田源立\JBA 山口和紀 \BBOP 2015\BBCP.
+\newblock 同義語判定問題を用いた語義ベクトルの評価の検討.\
+\newblock
+  \Jem{人工知能学会インタラクティブ情報アクセスと可視化マイニング研究会}, {\Bbf
+  10}, \mbox{\BPGS\ 21--25}.
+
+\bibitem[\protect\BCAY{笠原\JBA 稲子\JBA 加藤}{笠原 \Jetal }{2003}]{kato}
+笠原要\JBA 稲子希望\JBA 加藤恒昭 \BBOP 2003\BBCP.
+\newblock テキストデータを用いた類義語の自動作成.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 18}  (4), \mbox{\BPGS\ 221--232}.
+
+\bibitem[\protect\BCAY{Levy \BBA\ Goldberg}{Levy \BBA\ Goldberg}{2014}]{levy}
+Levy, O.\BBACOMMA\ \BBA\ Goldberg, Y. \BBOP 2014\BBCP.
+\newblock \BBOQ Dependency-Based Word Embeddings.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 302--308}.
+
+\bibitem[\protect\BCAY{Ling, Tsvetkov, Amir, Fermandez, Dyer, Black, Trancoso,
+  \BBA\ Lin}{Ling et~al.}{2015}]{ling}
+Ling, W., Tsvetkov, Y., Amir, S., Fermandez, R., Dyer, C., Black, A.~W.,
+  Trancoso, I., \BBA\ Lin, C.-C. \BBOP 2015\BBCP.
+\newblock \BBOQ Not All Contexts Are Created Equal: Better Word Representations
+  with Variable Attention.\BBCQ\
+\newblock In {\Bem Proceedings of the 2015 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1367--1372}, Lisbon, Portugal.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Mikolov, Chen, Corrado, \BBA\ Dean}{Mikolov
+  et~al.}{2013}]{mikolov1}
+Mikolov, T., Chen, K., Corrado, G., \BBA\ Dean, J. \BBOP 2013\BBCP.
+\newblock \BBOQ Efficient Estimation of Word Representations in Vector
+  Space.\BBCQ\
+\newblock {\Bem Proceedings of Workshop at International Conference on Learning
+  Representations (ICLR)}, {\Bbf \textmd{arXiv:1301.3781}}.
+
+\bibitem[\protect\BCAY{Neelakantan, Shankar, Passos, \BBA\
+  McCallum}{Neelakantan et~al.}{2015}]{neelakantan}
+Neelakantan, A., Shankar, J., Passos, A., \BBA\ McCallum, A. \BBOP 2015\BBCP.
+\newblock \BBOQ Efficient Non-parametric Estimation of Multiple Embeddings per
+  Word in Vector Space.\BBCQ\
+\newblock {\Bem CoRR}, {\Bbf \textmd{arXiv:1504.06654}}.
+
+\bibitem[\protect\BCAY{Oyama \BBA\ Manning}{Oyama \BBA\ Manning}{2004}]{oyama}
+Oyama, S.\BBACOMMA\ \BBA\ Manning, C.~D. \BBOP 2004\BBCP.
+\newblock \BBOQ Using Feature Conjunctions across Examples for Learning
+  Pairwise Classifiers.\BBCQ\
+\newblock In {\Bem Prodeedings of the 15th European Conference on Machine
+  Learning (ECML2004)}, \mbox{\BPGS\ 322--333}.
+
+\bibitem[\protect\BCAY{Schwartz, Reichart, \BBA\ Rappoport}{Schwartz
+  et~al.}{2015}]{roy}
+Schwartz, R., Reichart, R., \BBA\ Rappoport, A. \BBOP 2015\BBCP.
+\newblock \BBOQ Symmetric Pattern Based Word Embeddings for Improved Word
+  Similarity Prediction.\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL}, \mbox{\BPGS\ 258--267}.
+
+\bibitem[\protect\BCAY{Suzuki \BBA\ Nagata}{Suzuki \BBA\ Nagata}{2015}]{suzuki}
+Suzuki, J.\BBACOMMA\ \BBA\ Nagata, M. \BBOP 2015\BBCP.
+\newblock \BBOQ A Unified Learning Framework of Skip-Grams and Global
+  Vectors.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 186--191}.
+
+\bibitem[\protect\BCAY{Trask, Gilmore, \BBA\ Russell}{Trask
+  et~al.}{2015}]{trask}
+Trask, A., Gilmore, D., \BBA\ Russell, M. \BBOP 2015\BBCP.
+\newblock \BBOQ Modeling Order in Neural Word Embeddings at Scale.\BBCQ\
+\newblock In {\Bem Proceedings of the 32nd International Conference on Machine
+  Learning (ICML)}, \mbox{\BPGS\ 2266--2275}.
+
+\bibitem[\protect\BCAY{内海\JBA 小町}{内海\JBA 小町}{2013}]{utsumi}
+内海慶\JBA 小町守 \BBOP 2013\BBCP.
+\newblock ウェブ検索クエリログとクリックスルーログを用いた同義語獲得.\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 6}  (1), \mbox{\BPGS\ 16--28}.
+
+\bibitem[\protect\BCAY{渡部\JBA {Danushka Bollegala}\JBA 松尾\JBA 石塚}{渡部
+  \Jetal }{2008}]{watanabe}
+渡部啓吾\JBA {Danushka Bollegala}\JBA 松尾豊\JBA 石塚満 \BBOP 2008\BBCP.
+\newblock 検索エンジンを用いた関連語の自動抽出.\
+\newblock \Jem{人工知能学会全国大会論文集}.
+
+\bibitem[\protect\BCAY{Wen, Eshley, \BBA\ Bond}{Wen et~al.}{2006}]{wordnet}
+Wen, H. M.~S., Eshley, G.~H., \BBA\ Bond, F. \BBOP 2006\BBCP.
+\newblock \BBOQ Using WordNet to predict numeral classifiers in Chinese and
+  Japanese.\BBCQ\
+\newblock In {\Bem The 6th International Conference of the Global WordNet
+  Association}, \mbox{\BPG\ 211}.
+
+\bibitem[\protect\BCAY{Yu \BBA\ Dredze}{Yu \BBA\ Dredze}{2014}]{yu}
+Yu, M.\BBACOMMA\ \BBA\ Dredze, M. \BBOP 2014\BBCP.
+\newblock \BBOQ Improving lexical embeddings with semantic knowledge.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 545--550}.
+
+\bibitem[\protect\BCAY{Zellig}{Zellig}{1954}]{harris}
+Zellig, H. \BBOP 1954\BBCP.
+\newblock \BBOQ Distributional Structure.\BBCQ\
+\newblock {\Bem Word}, {\Bbf 10}  (23), \mbox{\BPGS\ 146--162}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{城光　英彰}{
+2014年早稲田大学基幹理工学部応用数理学科卒業．2016年東京大学大学院総合文化研究科広域科学専攻修士課程修了．同年，三菱電機（株）情報技術総合研究所入社．言語処理に関する研究開発に従事．
+}
+
+\bioauthor{松田　源立}{
+1997年東京大学教養学部卒業．2002年東京大学大学院総合文化研究科博士課程修了．博士（学術）．学振特別研究員(PD) ，青山学院大学理工学部助教を経て，2013年より東京大学大学院総合文化研究科学術研究員．
+}
+
+\bioauthor{山口　和紀}{
+1979年東京大学理学部数学科卒業．1985年理学博士（東京大学）．1992年東京大学教養学部助教授．2007年より東京大学大学院総合文化研究科教授．コンピュータのためのモデリング全般に興味を持つ．
+}
+
+\end{biography}
+
+\biodate
+
+
+
+
+\end{document}

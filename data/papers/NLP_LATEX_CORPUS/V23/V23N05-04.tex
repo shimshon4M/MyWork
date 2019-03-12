@@ -1,0 +1,1623 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\makeatletter
+\renewcommand{\paragraph}{}
+\makeatother
+
+    \usepackage{amssymb}
+\usepackage{arydshln}
+\newcommand{\argmax}{}
+\newcommand{\modified}[1]{}
+
+
+\Volume{23}
+\Number{5}
+\Month{December}
+\Year{2016}
+
+\received{2016}{5}{12}
+\revised{2016}{8}{17}
+\accepted{2016}{10}{4}
+
+\setcounter{page}{463}
+
+\jtitle{文書間類似度について}
+\jauthor{浅原　正幸\affiref{Author_1} \and 加藤　　祥\affiref{Author_1}}
+\jabstract{
+文書間類似度は，内容の類似度と表現の類似度の二つの側面を持っている．
+自動要約や機械翻訳ではシステム出力の内容評価を行うために参照要約（翻訳）との類似
+度を評価する尺度が提案されている．
+一方，表現を対照比較するための手段として，形態素（列）を特徴量とする空間上の計量が用いられる．
+本稿では，さまざまな文書間類似度について，距離・類似度・カーネル・順序尺度・相関
+係数の観点から，計量間の関係や同値性を論じた．
+さらに内容の同一性保持を目標として構築したコーパスを用いて，内容の差異と表現の差
+異それぞれに対する各計量のふるまいを調査し，文書間類似度に基づく
+自動評価の不安定さを明らかにした．
+}
+\jkeywords{文書間類似度，距離空間，カーネル，順序尺度，文体}
+
+\etitle{On Document Similarity Measures}
+\eauthor{Masayuki Asahara\affiref{Author_1} \and Sachi Kato\affiref{Author_1}} 
+\eabstract{
+Document similarity measuring techniques are used to evaluate both content and writing style.
+Evaluation measures for comparing the summary or translation of a
+system-generated source text with that of human-generated text have been proposed in text summarization and machine translation fields.
+The distance metrics are measures in terms of morphemes or morpheme sequences 
+to evaluate or register different writing styles.
+In this study, we discuss the relations among the equivalence properties of mathematical metrics, similarities, kernels, ordinal scales, and correlations.
+In addition, we investigate the behavior of techniques for measuring content and
+style similarities for several corpora having similar content.
+The analysis results obtained using different document similarity measurement
+techniques indicate the instability of the evaluate system.
+}
+
+\ekeywords{Document Similarity Measures, Distance Metrics, Kernels, Ordinal Scale, Writing Style}
+
+\headauthor{浅原，加藤}
+\headtitle{文書間類似度について}
+
+\affilabel{Author_1}{人間文化研究機構国立国語研究所}{National Institute for Japanese Language and Linguistics}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+文書間類似度がはかるものとして「伝える内容の一致」（内容一致）だけでなく「伝える
+表現の一致」（表現一致）がある．
+文書間類似度は自動要約や機械翻訳ではシステム出力の内容評価を行うために参照要約
+（翻訳）との差異を評価する指標として用いられる．
+一方，文書間類似度は表現の差異を評価することを目的としてテキストの文体の計量比較にも用いられる．
+
+本稿では，文書間類似度の数理的構造の説明し，
+様々な内容もしくは文体が同じであることが想定されるテキストを用いて，
+各計量の特性について検討する\modified{．}
+\cite{nanba-hirao-2008-JSAI-journal}は2008年時点での自動要約の評価指標についての評価をまとめている．
+2008年以降に提案された語順を考慮した内容評価のための指標を含めて，
+語順に対する順序尺度を含めた距離空間・類似度・カーネル・相関係数などの尺度を用い
+て，
+数理的構造について整理する．
+
+具体的には，一致部分文字列による尺度・一致部分列による尺度・ベクトル型順序尺度・編集型順序尺度の四つに分類し議論する．
+これらの四つの尺度に基づき，内容一致（内容の同一性）と表現一致（文体の類似性）の観点から，言語生産過程の多様性を評価する．
+複数人が同一課題を実施した場合の各評価尺度の分散や，同一人が同一課題を繰り返し実施した場合の各評価尺度の分散などを検討する．
+生産過程においては口述・筆術・タイプ入力の三種類について評価し，
+課題においては要約・語釈・再話について評価する．
+要約は長い文書を同等の内容で短く言い換えることを目的とする言語生産過程
+であるが，
+語釈は短い単語が指し示す意味と同等の内容を長く言い換えることを目的とする言語生産
+過程であることから，要約は語釈の逆写像の一般化ととらえることができる．
+また，再話は長い文書を再度同等の内容でそのまま提示することを目的とする言語生産過
+程であることから，要約の一般化であるととらえることができる．
+
+この評価を通して，四つの指標における差異がどのような生産過程の差異に現れるのかを
+調査する．また同一言語生産課題に対する生成物の多様性についても議論する．
+
+表現一致をつかさどるものとして，情報の提示順序を含む修辞法(rhetoric)・
+使用域(register)や位相(phase)\footnote{ここでは「使用域」と「位相」は数学の用途
+ではなく文体論の用語として用いている．}に内在する文体・個人に内在する文体などが考えられる．
+要約を評価するにあたり，内容一致は重要であると考えるが，表現一致はどの程度重要で
+あるのだろうか．さらにこれらはどの評価尺度に表出するのだろうか．
+対照比較を介して，各言語生産過程に共通のふるまいを示す評価尺度と課題に特有のふる
+まいを示す評価尺度について調査する．
+
+
+
+\modified{
+自動要約評価のための参照文書は一般に口述筆記の専門家や記者経験者などにより作
+成され，統制された少数のものが提供される．
+自動翻訳評価においても職業翻訳家等により限られた数の参照文書が作成される．
+統制は距離空間上の凸問題として課題を設定し，
+その課題設定の枠組内で評価したい工学研究者の都合で行われているものである．
+さらに，工学研究者は参照文書の差異がユークリッド距離空間上に規定され，文書間類
+似度で比較可能なレベルで統制できうるものだと考えているきらいがある．
+一方，文書を介したコミュニケーションにおいて，言語生産者ではない者による受容過程は統制されるものではなく，複数の受容者間で共有されるものではない．一人の受容
+者においても時間的経過などで統制できるものでもない．本稿では，人間の要約作成時の
+不安定な言語受容過程\footnote{ここで言語受容過程とは，要約作成時に元文書を読む過
+程のことを指す．}において文書の重要箇所選択がどの程度ゆれるものなのかを評価すると
+ともに，そのゆれは評価指標を構成するどの尺度に表れるのかを調査する．この調査を通
+して，本来誤りでないものが課題設定の時点で誤りになっている可能性があるという実態を明らかにする．}
+
+
+本稿の貢献は以下のとおりである：
+ \begin{itemize}
+  \item 既存の文書要約や機械翻訳の自動評価に利用される評価指標と，距離空間・類
+	似度・カーネル空間・順序尺度・相関係数などの尺度との関係を整理\modified{した}
+  \item 同一課題について複数人の言語生産者間で生成される文書のゆれを定量的に評価
+	\modified{した}
+  \item 課題ごとに同一人の言語生産者の課題試行間で生成される文書のゆれを定量的に
+	評価\modified{した}
+  \item 上に述べたゆれの評価に基づき，内容評価と表現評価の尺度上のふるまいの\modified{不安定さを明らかにした}
+ \end{itemize}
+
+尚，本稿では，「評価指標」と「尺度」を区別して用いる．
+自動要約や機械翻訳ではシステム出力の内容評価を行うための ROUGE や BLEU など広く知られているものを表す際に
+「評価指標」と呼び，「評価指標」を構成する距離空間・類似度・カーネル・相関係数な
+どを「尺度」と呼ぶ．「評価指標」が単一の「尺度」から構成されることもあり，「評価指標」=「尺度」である場合もある．
+
+以下，\ref{sec:sim}節では既存の自動評価指標を距離・類似度・カーネル・順序尺度・
+相関係数により説明することで，文書間類似度を四つに分類し整理する．3節では尺度を適用して比較するさまざまな言語生成過
+程を記録した言語資源について説明する．
+4節では評価尺度の定性的な評価について示す．
+5節にまとめと今後の研究の方向性について示す．
+
+
+\section{評価指標と距離・類似度・カーネル・順序尺度・相関係数}
+\label{sec:sim}
+
+\subsection{本節の趣旨}
+\label{ss:sim-intro}
+
+本節では，過去に提案されている自動要約と機械翻訳の評価指標を距離・類似度・カーネル・順序尺度・相関係
+数などの尺度により説明することを試みる．この説明の過程で，いくつかの評価指標が擬距離の公理の対称性，三角不等式や，距離の公理の非退化性を満たさないことに言及する．
+
+まず，部分文字列(substring)と部分列(subsequence)の違いを明確にするため，
+2.2節で部分文字列と部分列に基づく類似度について解説する．
+2.3節で先行研究で言及されている評価指標について解説する．
+2.4節で関連するカーネル・順序尺度について示す．
+2.5節で指標の一般化について述べる．
+
+評価指標においては，二つのデータ比較という観点から，単一の参照テキストと単一のシ
+ステム出力テキストの対の文書間類似度に限定して議論する．複数の参照テキストを考慮
+する場合には退化性等を考慮する必要がある．
+尚，本節で用いる用語や記号の定義は\ref{sec:app:term}節にまとめてある．
+
+
+\subsection{LCSubstrとLCS}
+
+\subsubsection{記号列と文字列と部分文字列と部分列}
+
+評価指標の議論を始める前に，記号列，文字列，部分文字列，部分列の違いについて確認する．
+
+何らかの全順序が付与されている記号集合のことを{\bf 記号列}と呼ぶ．
+本稿では記号列ベクトル $s = \langle s_{1}, \ldots, s_{m} \rangle, t = \langle t_{1}, \ldots, t_{m} \rangle$ などで表現する．
+参照テキスト，システム出力テキストは，ともに文字(character)ベースの記号列もしくは形態素解析後の形態素(morpheme)ベースの記号列とみなすことができる．
+
+評価する記号列上の連続列のことを{\bf 文字列(string)}と呼ぶ．記号列の要素が文字(character)である場合を「文字ベースの文字列(character-based string)」，記号列の要素が形態素(morpheme)である場合を「形態素ベースの文字列(morpheme-based)」と呼ぶこととする．
+
+記号列に対して隣接性と順序を保持した部分的記号列のことを{\bf 部分文字列(substring)}と呼ぶ．長さ $n$ の部分文字列を特に n-gram 部分文字列と呼ぶ．
+  記号列 $s$ の $i$ 番目の要素からはじまる n-gram 部分文字列を 
+$s_{i \ldots i + n - 1}$で表現する．
+
+記号列に対して順序を保持した部分的記号列のことを{\bf 部分列(subsequence)}と呼ぶ．隣接性は保持しなくてよい．長さ $p$ の部分列を特に p-mer 部分列と呼ぶ．
+  記号列 $s$の p-mer 部分列を，インデックスベクトル $\vec{i}=\langle i_{1},\ldots,i_{p}\rangle (1\leq i_{1} < i_{2} < \cdots < i_{p} \leq |s|)$ を用いて，
+  $s[\vec{i}]$と表す．
+
+
+\subsubsection{最長共通部分文字列(Longest Common Substring: LCSubstr)長}
+\label{sss:LCStr}
+
+最長共通部分文字列(Longest Common Substring)の\modified{略称}は LCS だが，一般には
+\ref{sss:LCS}\modified{節}に示す最長共通部分列(Longest Common Subsequence)のことを LCS と呼ぶことが多い．
+本稿では前者を \modified{LCSubstr}, 後者を LCS と呼び，区別する．
+
+記号列 $s$, $t$ を与えた際の最長共通部分文字列を次式で定義する：
+\[
+\mbox{\modified{LCSubstr}}(s,t) = \argmax_{s_{i \ldots i+n-1} | \exists j, s_{i
+\ldots i+n-1} = t_{j \ldots j+n-1}} n
+\]
+
+記号列 $s$, $t$ を与えた際の最長共通部分文字列長（\modified{LCSubstr}長）を次式で定義する：
+\[
+|\mbox{\modified{LCSubstr}}(s,t)| = \max_{\forall i, \forall j, s_{i \ldots
+i+n-1} = t_{j \ldots j+n-1}} n 
+\]
+
+これを[0,1]区間に正規化すると以下のようになる：
+\[
+\mbox{Score}_{\mbox{\modified{LCSubstr}}}(s,t) = \frac{2 \cdot |\mbox{\modified{LCSubstr}}(s,t)|}{|s|+|t|}
+\]
+
+
+\subsubsection{最長共通部分列(Longest Common Subsequence: LCS)長とLevenshtein距離}
+\label{sss:LCS}\label{para:Levenshtein}
+
+記号列 $s$, $t$ を与えた際の最長共通部分列(Longest Common Subsequence: LCS)を次式で定義する：
+\[
+\mbox{LCS}(s,t) = \argmax_{s[\vec{i}]\exists \vec{j}, s[\vec{i}]=t[\vec{j}]} |\vec{i}| 
+\]
+
+記号列 $s$, $t$ を与えた際の最長共通部分列長（LCS長）を次式で定義する：
+\[
+|\mbox{LCS}(s,t)| = \max_{\forall \vec{i}, \forall \vec{j}: s[\vec{i}]=t[\vec{j}]} |\vec{i}| 
+\]
+
+[0,1]区間に正規化すると，以下のようになる：
+\[
+\mbox{Score}_{\mbox{LCS}}(s,t) = \frac{2\cdot|\mbox{LCS}(s,t)|}{|s|+|t|}
+\]
+
+なお，挿入のコストを1，削除のコストを1，代入のコストを2（もしくは代入を禁止）とし
+た場合の Levenshtein 距離（編集型距離）と LCS長の関係は以下のようになる：
+\[
+\mbox{d}_{\mbox{Levenshtein}}(s,t) = |s| + |t| - 2 \cdot |\mbox{LCS}(s,t)|
+\]
+
+さらに LCS は\ref{para:rankedit}節で示すとおり，対称群上の編集型距離の
+うちの Ulam 距離と深く関連し，一種の順序尺度であるとも考えられる．
+
+
+\subsubsection{ギャップ加重最長共通部分列長による指標}
+\label{sss:WLCS}
+
+部分列LCSは部分文字列\modified{LCSubstr}と異なり，ギャップを伴う．
+ギャップが多いLCSに減衰させた値を割り当てるために，「LCSの記号列上の長さ」に対し
+て加重を行うことができる．「LCSの記号列上の長さ」は参照テキスト
+\footnote{本稿では参照テキストを $R$ と定義する．}側
+（$|\mbox{LCS}(C,R)|_{R}$で表す）とシステム出力テキスト\footnote{本稿で
+はシステム出力テキストを $C$ と定義する．}側（$|\mbox{LCS}(C,R)|_{C}$で表す）とで異なるために，それぞれ計算する必要がある．
+\begin{gather*}
+ |\mbox{LCS}(C,R)|_{R} = \argmax_{(j_{|\vec{j}|} - j_{1}) |\forall \vec{i}, \forall \vec{j}, C[\vec{i}]=R[\vec{j}]} |\vec{j}|\\
+ |\mbox{LCS}(C,R)|_{C} = \argmax_{(i_{|\vec{i}|} - i_{1}) |\forall \vec{i}, \forall \vec{j}, C[\vec{i}]=R[\vec{j}]} |\vec{i}|
+\end{gather*}
+
+参照テキスト側で重みを付けて正規化する再現率的な指標を$\mbox{R}_{\mbox{WLCS}}(C,R)$とし，
+システム出力テキスト側で重みを付けて正規化する精度的な指標を$\mbox{P}_{\mbox{WLCS}}(C,R)$とすると以下のようになる．
+\begin{gather*}
+ \mbox{R}_{\mbox{WLCS}}(C,R) =
+\frac{\alpha^{|\mbox{LCS}(C,R)|_{R}-|\mbox{LCS}(C,R)|} \cdot
+|\mbox{LCS}(C,R)|}{|R|} \\[1ex]
+\mbox{P}_{\mbox{WLCS}}(C,R) = \frac{\alpha^{|\mbox{LCS}(C,R)|_{C}-|\mbox{LCS}(C,R)|} \cdot|\mbox{LCS}(C,R)|}{|C|}
+\end{gather*}
+
+全体を正規化すると以下のようになる．
+\[
+\mbox{Score}^{(\gamma)}_{\mbox{WLCS}}(C,R) = \frac{(1+\gamma^{2})R_{\mbox{WLCS}}(C,R) P_{\mbox{WLCS}}(C,R)}{R_{\mbox{WLCS}}(C,R)+\gamma^{2}P_{\mbox{WLCS}}(C,R)} 
+\]
+
+ここで$\gamma$は$\mbox{R}_{\mbox{WLCS}}$と$\mbox{P}_{\mbox{WLCS}}$のどちらを重視
+するかの混ぜ合わせ係数である．
+
+
+\subsection{自動評価指標}
+
+次に自動要約と機械翻訳の自動評価指標を確認するが，
+基本的には文単位の評価かつ参照テキストが一つであるという仮定をおく．
+
+
+\subsubsection{要約の評価指標}
+
+ROUGE-L \cite{Lin-2004-WSTS}は\modified{，}システム出力テキストと参照テ
+キストの最長共通部分列(LCS)長を指標として正規化したものである．
+\[
+\mbox{Score}^{(\gamma)}_{\mbox{ROUGE-L}}(C,R) = \frac{(1+\gamma^{2})\cdot R_{\mbox{LCS}}(C,R)\cdot  P_{\mbox{LCS}}(C,R)}{R_{\mbox{LCS}}(C,R)+\gamma^{2}P_{\mbox{LCS}}(C,R)} 
+\]
+
+ここで再現率に相当する$R_{\mbox{LCS}}(C,R)$と精度に相当する$P_{\mbox{LCS}}(C,R)$は以下のように定義する：
+ \begin{gather*}
+  R_{\mbox{LCS}}(C,R) = \frac{\displaystyle |\mbox{LCS(C,R)}|}{|R|} \\[1ex]
+  P_{\mbox{LCS}}(C,R) = \frac{\displaystyle |\mbox{LCS(C,R)}|}{|C|}
+ \end{gather*}
+
+ 上記指標は文単位のものであり，文書レベルに拡張するために，
+システム出力テキスト中の文 $c_{i}\in C$と参照テキスト中の文 $r_{j} \in R$ のLCS記号列中の記号の集合和を用いて評価する．
+ 同様の議論が他の指標においても行われているが，以下本稿ではこの議論を省略する．
+
+
+\paragraph{ROUGE-W}
+\label{para:ROUGE-W}
+
+\modified{ROUGE-W \cite{Lin-2004-WSTS}は，}
+ ギャップ加重最長共通部分列長に似た概念である．
+ 違いとしては
+ 「LCSの記号列上の長さ」を参照テキスト側とシステム出力テキスト側
+ $|\mbox{LCS}(C,R)|_{R}+|\mbox{LCS}(C,R)|_{C}$でとった上で，
+ 加重関数 $f(x):f(x+y)>f(x)+f(y),x>0,y>0, x\in N, y \in N$ （$N$は自然数）を別に定
+\pagebreak
+ 義して「LCSの記号列上の長さ」に対して加重を行う．ROUGE-W の実装では $f(x) =
+ x^{\alpha}$ という多項式を用いており，ギャップ加重最長共通部分列長
+ $\mbox{Score}^{(\gamma)}_{\mbox{WLCS}}(C,R)$の変種と考えることができる．
+ 
+
+\paragraph{ROUGE-N}
+\label{para:ROUGE-N}
+
+ROUGE-N \cite{Lin-2003-NAACL,Lin-2004-WSTS}は n-gramの一致度を指標として用いるものである．
+\[
+\mbox{Score}^{(R)}_{\mbox{ROUGE-N}}(C,R) = \frac{\displaystyle \sum_{e \in (\mbox{n-gram}(C) \cap \mbox{n-gram}(R))} \min(|e|_{C},|e|_{R})}{\displaystyle \sum_{e \in \mbox{n-gram}(R)} |e|_{R}}
+\]
+
+但し，$\mbox{n-gram}(C)$はシステム出力テキスト C 中の n-gram集合，
+$\mbox{n-gram}(R)$は 参照テキストR 中の n-gram 集合，
+$|e|_{C}$は Cに含まれる $e$ の要素数（のべ出現数），
+$|e|_{R}$はRに含まれる $e$ の要素数とする．
+
+
+\paragraph{ROUGE-S(U)}
+\label{para:ROUGE-S}
+
+ROUGE-S \cite{Lin-2004-WSTS}は， 2-mer の部分列の一致度を指標として用いるものである．
+\[
+\mbox{Score}^{(\gamma)}_{\mbox{ROUGE-S}}(C,R) = \frac{(1+\gamma^{2})P_{S}(C,R) R_{S}(C,R)}{R_{S}(C,R)+\gamma^{2}P_{S}(C,R)} 
+\]
+
+ここで精度に相当する$P_{S}(C,R)$と再現率に相当する$R_{S}(C,R)$は以下のように定義する：
+\begin{align*}
+P_{S}(C,R) & =  \frac{\displaystyle \sum_{e\in (\mbox{2-mer}_{C} \cap \mbox{2-mer}_{R})} \min(|e|_{C},|e|_{R})}{\displaystyle \sum_{e\in\mbox{2-mer}(C)}|e|_{C}} \\
+R_{S}(C,R) & = 
+ \frac{\displaystyle \sum_{e\in (\mbox{2-mer}_{C} \cap \mbox{2-mer}_{R})} \min(|e|_{C},|e|_{R})}{\displaystyle \sum_{e\in\mbox{2-mer}(R)}|e|_{R}} 
+\end{align*}
+
+但し，$\mbox{p-mer}(C)$は C 中の p-mer集合，
+$\mbox{p-mer}(R)$は参照テキストR 中の p-mer 集合とする．
+
+ROUGE-SU は上の ROUGE-S の $p=2$を $p\leq 2$に拡張したものである．
+
+
+\paragraph{ESK}
+\label{para:ESK}
+
+ESK \cite{hirao-2006-IPSJ-journal}は畳み込みカーネルの一つである拡張文字列カーネルのうち，
+ギャップ加重 p-mer 部分列カーネルを評価指標として定義したものである．
+\[
+\begin{split}
+ & \mbox{Score}^{\mbox{p-mer}}_{\mbox{ESK}}  (C,R) \\ 
+ &\quad = \frac{\displaystyle \sum_{u\in{\mbox{p-mer}(C)}}
+ \sum_{v\in{\mbox{p-mer}(R)}} \lambda^{|u|-p}
+ \delta(u,v)|u||v|}{\displaystyle \sqrt{(\sum_{u,u'\in{\mbox{p-mer}(C)}}
+ \lambda^{(|u|-p)}|u||u'|) + ( \sum_{v,v'\in{\mbox{p-mer}(R)}} \lambda^{(|v|-p)}|v||v'|)}}
+\end{split}
+\]
+
+\cite{hirao-2006-IPSJ-journal}では 2-mer の部分列に制限するほか，文
+単位に比較し精度重視の指標と再現度重視の\modified{指標}の
+二つの\modified{重みつき}調和平均\modified{($0 \leq \lambda \leq 1$)}を定義している．
+
+ESK は他に各形態素に付与される意味ラベルを考慮した評価指標を提案してい
+るが，本稿で用いる ESK は意味ラベルを考慮しない形態素基本形に基づくものとする．
+
+
+\subsubsection{翻訳の評価指標}
+
+\paragraph{BLEU}
+
+BLEU \cite{Papineni-2001-BLEU} は機械翻訳評価のための指標で，
+$n$の値を変えたn-gram の精度系指標の重み($\omega_{n}$)付き相乗平均により指標を定義する．
+\begin{align*}
+P^{\mbox{n-gram}}_{\mbox{BLEU}} (C,R) & = \frac{\displaystyle \sum_{e \in (\mbox{n-gram}(C) \cap \mbox{n-gram}(R))} \min(|e|_{C},|e|_{R}) }{\displaystyle \sum_{e\in\mbox{n-gram}(C)}|e|} \\
+\mbox{Score}_{\mbox{BLEU}} (C,R) & = BP(C,R) \cdot \exp ( \displaystyle
+\sum^{N}_{n=1} \omega_{n} \log P^{\mbox{n-gram}}_{\mbox{BLEU}} (C,R) )
+\end{align*}
+
+ここで相乗平均の計算を簡単にするために $\sum^{N}_{n=1} \omega_{n} = 1$という制約がある．
+
+短いシステム出力テキストに対して高い精度が出やすいこの精度系の指標に対し，精度と再現率の重み付き調和平均という方法を取らず，
+Brevity Penalty (BP)という項を入れて補正している．
+\[
+ \mbox{BP} (C,R)=
+   \left\{
+       \begin{array}{ll}
+          1 & \mbox{if}\   |C| > |R| \\
+          \exp(1- \frac{|R|}{|C|}) & \mbox{if}\ |C| \leq |R|
+    \end{array} \right.
+\]
+
+
+\paragraph{IMPACT}
+\label{para:IMPACT}
+
+IMPACT\cite{echizen-ya-2007-MTSUMMIT} は LCSに基づく指標ではなく，\modified{LCSubstr} の再帰的な取得による指標である．
+{\allowdisplaybreaks
+\begin{align*}
+ R_{IP} (C,R) & = \Biggl(\displaystyle \frac{\displaystyle \sum^{\mbox{RN}}_{r=0}(\alpha^{r} \sum_{e \in \mbox{\modified{LCSubstr}}(C^{(r)},R^{(r)})}|e|^{\beta})}{|R|^{\beta}}\Biggr)^{\displaystyle \frac{1}{\beta}} \\[1ex]
+ P_{IP} (C,R) & = \Biggl(\displaystyle \frac{\displaystyle
+\sum^{\mbox{RN}}_{r=0}(\alpha^{r} \sum_{e \in
+\mbox{\modified{LCSubstr}}(C^{(r)},R^{(r)})}|e|^{\beta})}{|C|^{\beta}}\Biggr)^{\displaystyle
+\frac{1}{\beta}} 
+\end{align*}
+}
+
+ここで $\alpha$ はイテレート回数 $r$($r\leq \mbox{RN}$)に対する重み ($\alpha<1.0$)，$\beta$ は\modified{\modified{LCSubstr}長に対する重み}($\beta>1.0$)，$C^{(1)} = C$，$R^{(1)} = R$，$C^{(r)} = C^{(r-1)} \setminus \{\mbox{\modified{LCSubstr}}(C^{(r-1)} ,R^{(r-1)} )\}$，$R^{(r)} = R^{(r-1)} \setminus \{\mbox{\modified{LCSubstr}}(C^{(r-1)} ,R^{(r-1)} )\}$
+\pagebreak
+とする．
+\[
+ \mbox{Score}_{\mbox{IP}} = \frac{(1+\gamma^{2})R_{\mbox{IP}}P_{\mbox{IP}}}{R_{\mbox{IP}}+\gamma^{2}P_{\mbox{IP}}}
+\]
+
+この指標は\ref{para:allstr}節に示す文字列長加重全部分文字列カーネルに関
+連がある．文字列長加重全部分文字列カーネルに対して，再帰的に \modified{LCSubstr} を選
+択する際に既選択の \modified{LCSubstr} を排除し，再帰の回数を RN で制限するという制約
+を入れたものである．
+
+
+\paragraph{RIBES}
+\label{para:RIBES}
+
+    RIBES (平尾, 磯崎, 須藤, Duh, 塚田, 永田 2014)は，\nocite{hirao-2014-JNLP-journal}システム出力テキストと
+参照テキストのアラインメントをとったうえで，語順の編集型順序尺度を考慮したものである．
+\[
+\begin{split}
+ \mbox{Score}_{\mbox{RIBES}}
+ & = \Biggl( d_{\mbox{Kendall}}(\mbox{1-gram}_{\mbox{align}}(C,R)) \Biggr) \cdot \\
+ & \quad \Biggl( P_{\mbox{RIBES}}(C,R)  \Biggr)^{\alpha} \cdot
+  \Biggl( \mbox{BP}(C,R)  \Biggr)^{\beta}
+\end{split} 
+\]
+
+ここで $d_{\mbox{Kendall}}(\mu,\nu)$は\ref{para:rankedit}\modified{節}で定義する順位ベクトル$\mu,\nu$に対する Kendall 距離，
+$\mbox{1-gram}_{\mbox{align}}(\mu,\nu)$は元論文
+\cite{hirao-2014-JNLP-journal}の \modified{{\tt worder}} で出力されるアラインメント
+された二つの順序ベクトルの対
+を表す．
+右辺2項目は1-gram（単語ベースのもの）精度とよび$P_{\mbox{RIBES}}(C,R) = \frac{|\mbox{1-gram}_{\mbox{align}}(C,R)|}{|C|}$とする．
+$|\mbox{1-gram}_{\mbox{align}}(\mu,\nu)|$は \modified{{\tt worder}} で出力されるア
+ラインメントされた順序ベクトルの長さ（二つ出力されるが等しい）である．
+
+$\alpha$は 1-gram 精度に対する重み，
+$\beta$はBLEU で用いられた BP に対する重みである．
+
+なお，$P_{\mbox{RIBES}}(C,R)$ は，それぞれの記号列に重複する記号がない場合，以下が成り立つ：
+\begin{align*}
+ P_{\mbox{RIBES}}(C,R) &= \mbox{Score}^{(P)}_{\mbox{ROUGE-1}}(C,R)  \\[1ex]
+     = & \frac{\displaystyle \sum_{e\in(\mbox{1-gram}(C) \cap \mbox{1-gram}(R))} \min(|e|_{C},|e|_{R})}{\displaystyle \sum_{e\in\mbox{1-gram}(R)} |e|}
+\end{align*}
+
+
+\paragraph{LRscore}
+\label{para:LRscore}
+
+LRscore \cite{Birch-2010}も同様に，アラインメントをとったうえで，語順の順序尺度を考慮したものである．
+順序尺度としてベクトル型である Hamming 距離と編集型である Kendall 距離を用い
+ている．
+\begin{align*}
+ \mbox{Score}^{\mbox{Hamming}}_{\mbox{LRscore}}(C,R)
+  & = \alpha \cdot BP(C,R) \cdot d_{\mbox{Hamming}}(C,R) + (1 - \alpha) \mbox{Score}_{\mbox{BLEU}(C,R)} \\[1.5ex]
+ \mbox{Score}^{\mbox{Kendall}}_{\mbox{LRscore}}(C,R)
+  & = \alpha \cdot BP(C,R) \cdot d_{\mbox{Kendall}}(C,R) +  (1 - \alpha) \mbox{Score}_{\mbox{BLEU}(C,R)}
+\end{align*}
+
+$\alpha$ は語順をどの程度考慮するかの重みつけ係数．
+
+
+
+\subsection{関連するカーネル・順序尺度}
+
+上に述べた指標は，基本的には以下のカーネルおよび順序尺度の組み合わせで構
+成することができる．
+以下では，各種指標に関連するカーネルおよび順序尺度について確認する．
+
+
+\subsubsection{カーネル・距離（文字列の共有）}
+
+畳み込みカーネルのうち系列データに対するカーネルは，共通する部分文字列・部分列を数え上げる．いずれも効率よく計数する方法が提案されてい
+    る(Shawe-Taylor and Cristianini, 大北 訳 2010)\nocite{Taylor-2010}．また，適切に正規化することにより部分文字列・部分列の共有についての距離や指標を規定することができる．
+
+
+様々なカーネルの説明に入る前に，[0,1]区間正規化について示す．
+カーネルの[0,1]区間正規化はカーネルの研究分野でよく用いられており以下の式により行われる：
+\[
+\mbox{Score}_{K_{-}}(s,t) = \frac{K_{-}(s,t)}{||K_{-}(s,s)|| \cdot ||K_{-}(t,t)||}
+\]
+
+各種指標のように，再現率--精度間の重み $\gamma$ を入れたい場合には以下のようにする：
+\[
+\mbox{Score}^{(\gamma)}_{K_{-}}(s,t) = \frac{(1 + \gamma^{2})K_{-}(s,t)}{\sqrt{(K_{-}(s,s))^{2} + \gamma^{2} (K_{-}(t,t))^{2}}}
+\]
+
+
+\paragraph{全部分文字列カーネルと文字列長加重全部分文字列カーネル}
+\label{para:allstr}
+
+全部分文字列カーネル(All String Kernel or Exact Matching Kernel)
+は共通する全ての部分文字列の数を数える．
+
+任意の長さの部分文字列 $u$ の出現数を座標軸とする特徴量空間 $F_{\mbox{all\_str}}$を考える．
+\begin{align*}
+\Phi^{*}_{\mbox{str}}: \sigma^{*} & \rightarrow  F_{\mbox{all\_str}} \sim R^{|\sigma|^{*}} \\
+\Phi^{*}_{\mbox{str}}(s) & =  (\phi^{*}_{u}(s))_{u \in \sigma^{*}} \\
+\phi^{*}_{u}(s) & =  |\{i|s_{i \ldots *} = u\}|  \\
+K_{\mbox{all\_str}}(s,t) & =  \langle \Phi^{*}_{\mbox{str}} (s), \Phi^{*}_{\mbox{str}} (t) \rangle_{F_{\mbox{all\_str}}} \\
+ & = \sum_{u \in \sigma^{*}} \phi^{*}_{u} (s) \phi^{*}_{u} (t) 
+\end{align*}
+
+カーネル関数を直接計算すると以下のようになる：
+\[
+K_{\mbox{all\_str}}(s,t) = \sum^{\min(|s|,|t|)}_{n=1}
+\sum^{|s|-n+1}_{i=1} \sum^{|t|-n+1}_{j=1}
+\delta (s_{i \ldots i + n - 1},t_{j \ldots j + n - 1}) 
+\]
+
+ここで $\delta$はクロネッカーのデルタとする．
+言語処理の場合，得られるn-gram に対して加重をかけることが一般に
+行われている．文字列長に対して加重をかけたものを
+文字列長加重全部分文字列カーネル
+(Length Weighted All String Kernel or Length Weighted Exact Matching
+Kernel)
+と呼ぶ．
+\[
+\begin{split}
+ & K_{\mbox{w\_all\_str}}(s,t) \\
+ & \quad = \sum^{\min(|s|,|t|)}_{n=1}
+\sum^{|s|-n+1}_{i=1} \sum^{|t|-n+1}_{j=1}
+\omega_{|s|} \delta (s_{i \ldots i + n - 1},t_{j \ldots j + n - 1})
+\end{split}
+\]
+
+ここで $\omega_{n}$は長さ $n$に対する重みを表す．
+
+\ref{para:IMPACT}節で述べた IMPACT はこのカーネルの特殊形とみなすこと
+ができる．
+
+このカーネルと次の n-スペクトラムカーネルは Suffix Tree を用いて効率よく
+計算する方法が提案されている．
+
+
+\paragraph{n-スペクトラムカーネル}
+\label{para:n-spec-k}
+
+n-スペクトラムカーネル (Spectrum Kernel)は共通する長さ $n$の部分文字列(n-gram)の数を数える．
+
+長さ $n$ の部分文字列 $u$ の出現数を座標軸とする特徴量空間 $F_{\mbox{n-gram}}$を考える．
+\begin{align*}
+\Phi^{n}_{\mbox{str}}: \sigma^{n} & \rightarrow  F_{\mbox{n-gram}} \sim R^{|\sigma|^{n}} \\
+\Phi^{n}_{\mbox{str}}(s) & =  (\phi^{n}_{u}(s))_{u \in \sigma^{n}} \\
+\phi^{n}_{u}(s) & =  |\{i|s_{i \ldots i + n - 1} = u\}| \\
+K_{\mbox{n-gram}}(s,t) & =  \langle \Phi^{n}_{\mbox{str}} (s), \Phi^{n}_{\mbox{str}} (t) \rangle_{F_{\mbox{n-gram}}} \\
+& =  \sum_{u \in \sigma^{n}} \phi^{n}_{u} (s) \phi^{n}_{t} (t) 
+\end{align*}
+
+直接計算すると以下のようになる：
+\[
+K_{\mbox{n-gram}}(s,t)  =  \sum^{|s|-n+1}_{i=1} \sum^{|t|-n+1}_{j=1} \delta(s_{i \ldots i + n - 1} ,t_{j \ldots j + n - 1} )
+\]
+
+ROUGE-N は，分子に $K_{\mbox{n-gram}}(C,R)$より小さい値を持ち，分母に参照テキストの
+のべ出力 n-gram 数を持つことから，再現率として正規化したものに相当する．
+通常の正規化した $K_{\mbox{n-gram}}(s,t)$ は再現率と精度の調和平均と解釈
+できる．
+
+また 1-gram スペクトラムカーネルは1-mer 部分列カーネルと同値で，
+これらは近似的に BLEU などで利用されている BP 相当の値を計算すると考える．
+
+
+\paragraph{全部分列カーネル}
+\label{para:allseq-k}
+
+全部分列カーネルは共通するすべての部分列の数を数える．
+
+任意の長さの部分列 $v$ の出現数を座標軸とする特徴量空間 $F_{\mbox{all\_seq}}$を考える．
+{\allowdisplaybreaks
+\begin{align*}
+\Psi^{*}_{\mbox{seq}}: \sigma^{*}  \rightarrow & F_{\mbox{all\_seq}} \sim R^{|\sigma|^{\infty}} \\
+\Psi^{*}_{\mbox{seq}}(s)  = & (\psi^{*}_{v}(s))_{v \in \sigma^{*}} \\
+\psi^{*}_{v}(s)  = & |\{\vec{i}|s[\vec{i}]=v\}| \\
+K_{\mbox{all\_seq}}(s,t)   = & \langle \Psi^{*}_{\mbox{seq}} (s), \Psi^{*}_{\mbox{seq}} (t) \rangle_{F_{\mbox{all\_seq}}} \\
+ = & \sum_{v \in \sigma^{*}} \psi^{*}_{v}(s) \cdot \psi^{*}_{v}(t) 
+\end{align*}
+}
+
+$K_{\mbox{all\_seq}}(s,t)$は以下のように再帰的に計算することにより $O(|s||t|)$で計算することができる．
+$\epsilon$を空記号列とすると
+$K_{\mbox{all\_seq}}(s,\epsilon) = K_{\mbox{all\_seq}}(t,\epsilon) = 1$とし，
+$K_{\mbox{all\_seq}}(s,t) $が求まると
+$K_{\mbox{all\_seq}}(s \cdot a,t) = K_{\mbox{all\_seq}}(s,t) + \sum_{1\leq i \leq |t|, j:t_{j}=a} K_{\mbox{all\_seq}}(s,t_{i \ldots j-1}) $と $s$ 再帰的に定義できる．
+さらに$\tilde{K}_{\mbox{all\_seq}}(s \cdot a,t) = K_{\mbox{all\_seq}}(s,t_{i \ldots j-1})$とすると，$\tilde{K}_{\mbox{all\_seq}}(s \cdot a,t \cdot b) = \tilde{K}_{\mbox{all\_seq}}(s \cdot a,t) + \delta(a,b) K_{\mbox{all\_seq}}(s,t)$と $t$再帰的に定義できる．
+
+
+\paragraph{固定長部分列カーネル}
+\label{para:p-mer-k}
+
+固定長部分列カーネルは共通する長さ $p$の部分列(p-mer)の数を数えあげる．
+
+長さ $p$ の部分文字列 $v$ の出現数を座標軸とする特徴量空間 $F_{\mbox{p-mer}}$を考える．
+\begin{align*}
+\Psi^{p}_{\mbox{seq}}: \sigma^{p} & \rightarrow  F_{\mbox{p-mer}} \sim R^{|\sigma|^{p}} \\
+\Psi^{p}_{\mbox{seq}}(s) & =  (\psi^{p}_{v}(s))_{v \in \sigma^{p}} \\
+\psi^{p}_{v}(s) & =  |\{\vec{i}|s[\vec{i}]=v\}| \\
+K_{\mbox{p-mer}}(s,t)  & =  \langle \Psi^{p}_{\mbox{seq}} (s), \Psi^{p}_{\mbox{seq}} (t) \rangle_{F_{\mbox{p-mer}}} \\
+& =  \sum_{v \in \sigma^{p}} \psi^{p}_{v}(s) \cdot \psi^{p}_{v}(t) 
+\end{align*}
+
+ROUGE-S は，分子に $K_{\mbox{2-mer}}(C,R)$より小さい値を持ち，分母に参照テキストのの
+べ出力 2-mer 数を持つことから，再現率として正規化したものに相当する．
+ROUGE-SU は，分子に $K_{\mbox{1-mer,2-mer}}(C,R)$より小さい値を持ち，分母に参照テキストののべ出力 1-mer, 2-mer 数を持つことから，再現率として正規化する．
+通常の正規化した $K_{\mbox{p-mer}}(s,t)$ は再現率と精度の調和平均と解釈できる．
+
+
+\paragraph{ギャップ加重部分列カーネル}
+\label{para:gap-p-mer-k}
+
+ギャップ加重部分列カーネル\modified{は} p-merの部分列の数え上げの際に隣接性を考慮して重み
+$\lambda$ を加重する．ESK \cite{hirao-2006-IPSJ-journal}は，このカーネルを用いた尺度である．
+
+長さ $p$ の部分列 $v$ を座標とする特徴量空間 $F_{\mbox{p-mer}}$を考える．
+\begin{align*}
+ K_{\mbox{gap\_p-mer}}(s,t)  & =  \langle \Psi^{gap\_p}_{\mbox{seq}} (s), \Psi^{gap\_p}_{\mbox{seq}} (t) \rangle_{F_{\mbox{p-mer}}} \\
+ & = \sum_{v \in \sigma^{p}} \psi^{gap\_p}_{v}(s) \cdot \psi^{gap\_p}_{v}(t)
+\end{align*}
+
+ここで $\psi^{gap\_p}_{v}(s) = \sum_{\vec{i}:v=s[\vec{i}]} \lambda^{l(\vec{i})}$ とし，$l(\vec{i})=|s_{i_{1} \ldots i_{|v|}}| (\vec{i} = \langle i_{1}, \ldots, i_{|v|} \rangle)$ とする．
+
+
+\subsubsection{順序尺度}
+
+以下では順序尺度について考えるが，文献\cite{kamishima-2009-JSAI-sig-dmsm}に詳し
+い解説がある．基本的には同じ長さ $m$ の二つの順位ベクトル$\mu,\nu \in S_{m}$に対する2種類の距離を考える．
+
+\paragraph{順位ベクトル型距離}
+\label{para:rankvec}
+
+一つ目の距離は「順位ベクトル型」の距離で順位ベクトルを $m$次元空間中の点を表すベ
+クトルとみなし，ベクトル空間上の距離を定義する．\modified{ベクトル空間上の$\theta$-ノルム
+を用いる}と以下のようになる：
+\[
+d_{||\mbox{Rank}||_{\theta}}(\mu,\nu) = (\sum^{m}_{i=1} | \mu(i) - \nu(i)|^{\theta})^{1/\theta}
+\]
+
+
+ここで$\theta = 1$の場合，特にSpearman footrule と呼ぶ．
+\[
+d_{\mbox{Footrule}}(\mu,\nu) = (\sum^{m}_{i=1} | \mu(i) - \nu(i)|)
+\]
+
+$\theta = 2$の場合は通常の Euclid距離だが，このEuclid 距離を2乗したもの 
+  を特に Spearman 距離と呼ぶ．
+\[
+d_{\mbox{Spearman}}(\mu,\nu) = (\sum^{m}_{i=1} | \mu(i) - \nu(i)|^{2})
+\]
+
+Spearman 距離は，距離の公理のうち対称性と正定値性を満たす．しかし，Euclid 距離を
+2乗したものなので三角不等式を満たさないが，慣習的\modified{に}距離として扱われる．さらに$[-1, 1]$区間に正規化したものは Spearman の順位相関係数 $\rho$ として知られている．
+\[
+\mbox{Spearman's }\; \rho = 1 - \frac{6 \cdot d_{\mbox{Spearman}}(\mu,\nu)}{m^3-m}
+\]
+
+この値は順序尺度に基づく二つの順位ベクトル $\mu, \nu$の Pearson 相関係数
+と等しい\footnote{ここで順序尺度とは，間隔に意味がある間隔尺度を順位のみ
+に変換していることを前提にしている．}．
+
+その他，順位ベクトルの同一順位のものが同じ要素である要素数を数えたHamming 距離がある．
+\[
+d_{\mbox{Hamming}}(\mu,\nu) = \sum^{m}_{i=1} \delta(\mu(i),\nu(i))
+\]
+Hamming 距離は文字列上で代入（コスト1）のみを許した編集距離としても解釈できる．
+
+また，距離$\mbox{d}_{||\mbox{rank}||_\theta}$，$d_{\mbox{Footrule}}$，
+$d_{\mbox{Spearman}}$，$d_{\mbox{Hamming}}$ に対応するスコア
+$\mbox{Score}_{||\mbox{rank}||_\theta}$，$\mbox{Score}_{\mbox{Footrule}}$，
+$\mbox{Score}_{\mbox{Spearman}}$ ，$\mbox{Score}_{\mbox{Hamming}}$  を次のように
+規定することができる．
+\[
+ \mbox{Score}_{-} = \frac{1}{1+d_{-}}
+\]
+
+
+\paragraph{対称群上の編集型距離}
+\label{para:rankedit}
+
+二つ目の距離は「編集型」の距離である．
+
+順序ベクトルを記号列とみなした場合，順位ベクトル $\mu$ をもうひとつの順位ベクトル $\nu$ に変換するために必要な最小操作数を意味する Levenshtein 距離について述べた．
+以下では，順序ベクトルを対称群とみなした場合の編集型距離について述べる．
+編集に許される操作によっていくつかの距離のバリエーションがある．
+
+\begin{itemize}
+\item Kendall 距離：\\
+Kendall 距離 $d_{\mbox{Kendall}}(\mu,\nu)$ は
+順序ベクトルを対称群とみなした際に隣接互換
+で置換する最小回数によって定義される．
+言い換えると隣接する対象対を交換(Swap)する操作の最小回数を用いたものである．
+Kendall 距離は，二つの順位ベクトル中の$\frac{m(m-1)}{2}$個の対象対のうち逆順になっている対の数に等しい．
+\begin{gather*}
+d_{\mbox{Kendall}}(\mu,\nu) = \min (\argmax_{\bar{q}} \delta((\Pi^{\bar{q}}_{q=1} \pi_{2}(k_{q},k_{q}+1)) \cdot \mu, \nu) ) \\
+d_{\mbox{Kendall}}(\mu,\nu) = \sum^{m}_{i=1} \sum^{m}_{j=i+1} \chi (i, j)
+\end{gather*}
+
+ここで，$k_{q}$は順位ベクトル$\mu$のインデックス．
+また，$\chi$は対象対 $\langle i, j \rangle$が同順のとき0，逆順のとき1を返す指示関数：
+\[
+\chi = \left\{ \begin{array}{ll}
+          1 & \mbox{if}\  (\mu(i)-\mu(j))(\nu(i)-\nu(j)) < 0, \\
+          0 & \mbox{if}\  (\mu(i)-\mu(j))(\nu(i)-\nu(j)) \geq 0
+          \end{array} \right.
+\]
+
+$\pi_{2}=(i,i+1)$は隣接する二つの元のみを入れ替えて他の元は変えない操作である隣
+      接互換を意味する．
+
+これを指標として使いやすくするために[0,1]区間の範囲に正規化すると以下のようになる：
+\[
+\mbox{Score}_{\mbox{Kendall}}(\mu, \nu)  = 1 - \frac{2 \cdot d_{\mbox{Kendall}}(\mu,\nu)}{m^2-m}
+\]
+
+これを $[-1,1]$ 区間の範囲に正規化したものは Kendall の順位相関係数 $\tau$として知られている．
+\[
+\mbox{Kendall's }\; \tau = 1 - \frac{4 \cdot d_{\mbox{Kendall}}(\mu,\nu)}{m^2-m}
+\]
+
+\item Cayley 距離：\\
+Cayley 距離 $d_{\mbox{Caylay}}$ は
+順序ベクトルを対称群とみなした際に互換
+で置換する最小回数によって定義される．
+言い換えると隣接していなくても良い対象対を交換(Swap)する最小回数を用いたものである．
+\newpage
+\[
+d_{\mbox{Caylay}}(\mu, \nu)  = \min (\argmax_{\bar{q}} \delta((\Pi^{\bar{q}}_{q=1} \pi_{2}(k_{q},l_{q})) \cdot \mu, \nu) )
+\]
+
+ここで，$k_{q},l_{q}$は順位ベクトル$\mu$のインデックス．
+$\pi_{2}=(i,j)$は二つの元のみを入れ替えて他の元は変えない操作である互換を意味する．
+
+\item Ulam 距離：\\
+Ulam 距離 $d_{\mbox{Ulam}}$ は
+順序ベクトルを対称群とみなした際に連続した順序ベクトル部分列 $\langle i,i+1,\ldots,j-1,j \rangle$ の巡回置換の操作のみで置換する最小回数によって定義される．
+これは「本棚の本の入れ換え」で例えられる．順位ベクトル$\mu$で並んでいる
+      本棚の本を順位ベクトル$\nu$に並べ替えるために，
+      ある要素を抜いて別の場所に挿入するということを行う．
+
+Ulam 距離は同じ要素が記号列に存在しないという前提のもと，最長一致部分列長と以下の関係にあることが知られている．
+\[
+d_{\mbox{Ulam}}(\mu, \nu) = m - |\mbox{LCS}(\mu, \nu)|
+\]
+
+これを[0,1]区間の範囲に正規化すると以下のように正規化最大共通部分列と同じになる：
+\begin{align*}
+  \mbox{Score}_{\mbox{Ulam}} (\mu,\nu) & = 1 - \frac{d_{\mbox{Ulam}}(\mu,\nu)}{m} \\
+  & = \frac{|\mbox{LCS}(\mu, \nu)|}{m} \\
+  & = \mbox{Score}_{\mbox{LCS}}(\mu,\nu)
+\end{align*}
+
+\end{itemize}
+
+\modified{図\ref{fig:editdist}に順序ベクトルによる置換により表現した編集型距離の
+例を示す．
+編集型距離の定義で許される編集の回数を数えると，順序ベクトル $(1,4,3,2)$と
+$(1,2,3,4)$の Kendall 距離は 3，Caylay 距離は 1，Ulam 距離は 2となる．
+また，順序ベクトル $(2,3,1,4)$と
+$(1,2,3,4)$の Kendall 距離は 2，Caylay 距離は 2，Ulam 距離は 1となる．
+}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-5ia4f1.eps}
+\end{center}
+\caption{対称群上の編集型距離}
+\label{fig:editdist}
+\end{figure}
+
+以下は，我々の意見だが，言語生産時の編集作業の工数を評価する場合には，
+\cite{Nivre-2009-ACL}の swap に代表されるような Kendall距離のような
+編集よりも Ulam 距離のような編集を考慮すべきであると考える．
+言語生産時に，Kendall 距離で考慮される列内絶対位置よりも，Ulam 距離で考慮される
+列内相対位置を考えながら編集を行う方が人にとって自然な処理であると考える．
+
+
+\paragraph{順序尺度間の関係}
+\label{para:rankrel}
+
+ベクトル型の $\mbox{Spearman's }\; \rho$と$\mbox{Kendall's }\; \tau$との
+      間には以下の Daniels の不等式が成立する：
+\[
+-1 \leq \frac{3(m+2)}{m-2} \tau - \frac{2(m+1)}{m-2}\rho \leq 1
+\]
+
+$m\rightarrow \infty$ の極限をとると
+$-1 \leq 3 \tau - 2 \rho \leq 1$ が成り立つ．このことから二つの相関係数の
+間の相関が高いことが示される．
+
+距離の観点からは，
+$d_{\mbox{Caylay}} \leq d_{\mbox{Kendall}}$が成り立つ．さらに Footrule
+距離と Kendall 距離と Cayley 距離の間に以下の不等式が成り立つ
+(Diaconis-Graham inequality):
+\[
+ d_{\mbox{Kendall}} + d_{\mbox{Caylay}} \leq d_{\mbox{Footrule}} \leq 2
+      \cdot d_{\mbox{Kendall}}
+\]
+
+また Spearman距離と Kendall の距離の間には以下の不等式が成り立つ
+(Durbin-Stuart inequality):
+\[
+ \frac{4}{3} d_{\mbox{Kendall}} (1 + \frac{d_{\mbox{Kendall}}}{m}) \leq d_{\mbox{Spearman}}
+\]
+
+つまり，評価指標のデザインにおける順序尺度の選択に
+よる差異は，これらの不等式の範囲によって制限される．
+
+
+\subsection{指標の一般化}
+\label{ss:sim-general}
+
+以上，評価指標・距離・カーネル・相関係数を議論してきた．
+まとめると付記 B 表\ref{table:scores}のようになる．
+
+各指標と人手の評価結果をできるかぎり合わせるという観点からすると，
+\cite{hirao-2007-JSAI-journal} のように，表\ref{table:scores}にあげたす
+べての尺度 $\mbox{Score}_{-} \in \{\mbox{Score}_{*}\}$の加重相乗平均
+（下式）を考え，加重 $\omega_{-}$ と各指標に付随するパラメータを，各指標の
+従属性や相関に注意しながら人手の評価結果との回帰により求めれば良い．
+\begin{gather*}
+\overline{\mbox{Score}_{*}} = \sqrt[\displaystyle \sum \omega_{-}]{\displaystyle \Pi \mbox{Score}^{\omega_{-}}_{-}} \\
+\log \overline{\mbox{Score}_{*}} = \frac{1}{\displaystyle \sum \omega_{-}} ( \sum w_{-} \cdot \log \mbox{Score}_{-})
+\end{gather*}
+
+この指標のあり方については注意すべき点がいくつかある．
+\begin{itemize}
+ \item substring（部分文字列：n-gram 系）とsubsequence（部分列：p-mer 系）との違いを踏まえる．
+ \item 最長一致部分長は対称群上の編集型距離である Ulam 距離と深く関連する．
+ \item 順序に対する順位ベクトル型距離と編集型距離の間には
+       \ref{para:rankrel}節に示される関係が成り立つ．
+\end{itemize}
+
+本稿では，先に述べた四つの尺度がそれぞれどのような特性があるかを明らかにすることを
+目的としており，最適な指標の組み合わせについては検討を行わない．
+次節以降，各尺度がさまざまな言語資源上でどのようなふるまいをするのかについてみていきたい．
+
+
+\section{評価に用いる言語資源}
+
+ここでは様々な言語生成過程を記録した言語資源におけるテキスト対の尺度の差異を検証するこ
+とにより，各尺度がとらえようとしているものが何なのかを分析する．
+
+表\ref{tbl:resources}に，利用する言語資源について示す．
+まず言語生産過程として，要約(BCCWJ-SUMM)と語釈(GLOSS)と再話(RETELLING)
+の3種類の言語資源を用いる．
+要約は長い元文書を短くする情報提示手法である．
+語釈は短い単語を長い文書で説明する情報提示手法である．
+再話は長い元文書をできるだけその内容を保存したまま示す情報提示手法である．
+情報提示手法を比較することで，各尺度が何を評価しているのかを明らかにすることを試
+みる．
+
+\begin{table}[t]
+\caption{指標評価に使う言語資源}
+\label{tbl:resources}
+\input{04table01.txt}
+\end{table}
+
+要約と語釈については，クラウドソーシングに
+より安価で大量にデータを得る手法（タイプ入力）と実験室にて被験者に繰り返し
+同一課題を依頼してデータを得る手法（筆述）の2種類の方法を用いた．
+再話のデータについては既存のデータを用い，筆述による形態と口述による形態のデー
+タを準備した．
+言語生産形態として，タイプ入力・筆術・口述の3種類のデータを対照比較する．これは評価尺度が，要約の内容の類似度だけでなく，個人の文体の類似度を評価してしまう部分を分析するために準備した．それぞれ文体の統制が可能なレベルが異なっており，評価尺度に影響を与えるものだと考え，これを評価することを試みる．
+さらに，大勢の実験協力者に同じタスクを行わせる場合の協力者間の尺度のふるまいと，同一の実験協力者に同じタスクを複数回行わせる場合の尺度のふるまいを検証し，どの尺度にゆれが生じるかを明らかにする．
+
+以下各言語資源について解説する．
+
+
+\subsection{BCCWJ-SUMM\_C}
+
+BCCWJ-SUMM\_Cは『現代日本語書き言葉均衡コーパス』\cite{Maekawa-2014-LRE}(BCCWJ)の新聞記事（PNサンプル）の要約をYahoo! クラウドソーシング（15歳以上の男女）により被験者実験的に作成したもの\cite{asahara-2015-jclws7}である．
+
+BCCWJの1サンプルには複数の記事が含まれており，それを記事単位に分割したうえで元文書集合19文書を構築した．元文書集合は BCCWJ コアデータ PN サンプル（優先順位 A）から選択した．
+40文字毎に改行した元文書を画像として提供し，実験協力者に50--100文字に要約せよとい
+う指示で収集した．
+自動\modified{要約}の本来のあり方としては，文字数の削減ではなく，読み手の読み時間の削減が本
+質であると考えるが，実験の都合上，文字数による制限を課した．
+実験協力者の環境はPCに限定した．元文書毎に約100--200人の実験協力者が要約に従事した．実験実施時期は 2014年9月である．
+
+得られたデータには，文字数制限を守っていないもの・実験の趣旨を理解してい
+ないもの・既に実験を行った実験協力者から同一回答を提供されたと考えられる
+ものなどが含まれており，これらを排除したものを有効要約とする．
+統計分析においてこの有効要約のみを用いる．
+
+
+\subsection{BCCWJ-SUMM\_L}
+
+BCCWJ-SUMM\_LはBCCWJの新聞記事の要約を実験室環境で筆述により作成したもの\cite{asahara-2015-jclws7}である．
+BCCWJ-SUMM\_Cで用いた元文書を印刷紙面で提供し，実験協力者に50--100文字に
+要約せよという指示で収集した．一つの元文書に対して，3回まで繰り返して要約文作
+成を行った．実験協力者は1回の要約文作成に10分間の時間制限を設定した．
+各回の間には休憩時間をおかず，早く要約課題が完成した場合には，ただちに次の回の要
+約作成を行った．
+尚，各実験協力者は要約対象文書を含む文書群の読文時間を評価する実験を，本実験の前
+に行っており，要約文作成前に元新聞記事を1回読んでいる．
+今後，読文時間と要約抽出箇所との評価を進める予定である．
+繰り返しに際しては，特別に「前と同じ要約文を作成してください」
+などといった指示は行わず，質問された場合にも「自由に要約文を作成してくだ
+さい」と教示した．実験協力者は原稿用紙上で筆述（鉛筆と消しゴム利用）で要約を行い，そのデータを電子化した．
+
+本実験の実験参加者は要約作業前に要約元文書の
+読み時間のデータも取得した．さらに被験者の特性（最終学歴・語彙数・言語形成地・記
+憶力）などのデータについても取得した．
+実験実施時期は 2014年8月--10月であるが，今後このデータは引き続き拡充し
+て
+いく予定である．
+
+統計分析においては，同一課題について，異なる被験者間のスコア（1回目のみ
+を評価：BCCWJ-SUMM\_L(P)）と，同一被験者の回数間のスコア
+(BCCWJ-SUMM\_L(T))の両方を評価する．
+
+
+\subsection{GLOSS\_C}
+
+GLOSS\_Cは語釈文を Yahoo! クラウドソーシング（15歳以上の男女）により被験者実験的に作成したものである．実験実施時期は2014年2月である．
+
+「その動物を全く知らない人がどのようなものかわかるように説明してください」と
+教示し，同意した実験協力者は兎（単語親密度6.6）・鶏（同6.4）・象（同6.0）
+の3種類から対象物を選択回答した．単語親密度は
+\cite{amano-1999-ntt-database}による．
+150文字以上250文字以内で3文字以上の同文字連続は認めない設定とした．
+実験協力者300名を募集したところ得られた解答数は，鶏：71・兎：111・象：113 (295/300)であった．
+
+\modified{尚，このデータの質的分析は \cite{kato-cjws-2015} を参照されたい．}
+
+
+\subsection{GLOSS\_L}
+
+GLOSS\_Lは語釈文を実験室環境で筆述により収集したものである．
+実験実施時期は2013年5月--6月である．
+
+実験協力者8名（20代--50代の男女）に，
+GLOSS\_Cと同様に「その動物を全く知らない人がどのようなものかわかるように説明して
+ください」と教示した．実験協力者は，10分間で兎（単語親密度6.6）・鶏（同6.4）・象（同6.0）の3種類から2種類の対象物を選択回答した．目安として5分経過時にブザー音を鳴らした．選択した対象物について同様に記述を繰り返すことを4回行った．
+得られた解答数は，兎7人分×4回，鶏6人分×4回，象3人分×4回である．平均145文
+字（max 227文字, min 85文字）を得た．
+
+統計分析においては，同一課題について，異なる被験者間のスコア（1回目のみ
+を評価：GLOSS\_L(P)）と，同一被験者の回数間のスコア
+(GLOSS\_L(T))の両方を評価する．
+
+\modified{尚，このデータを用いた認知的な分析は \cite{kato-ninjal-2015,kato-jcss-2015} を参照されたい．}
+
+
+\subsection{RETELLING\_I}
+
+最初の再話のデータは「独話Retelling コーパス」
+\cite{yasuda-2013-JASS31,yasuda-2013-JASS32}である．このコーパスは
+\cite{miyabe-2014-GNWS}でも用いられている．
+
+実験協力者は5名で，同一人が同内容をそれぞれ10回独話を繰り返した．
+就職活動を前提とした模擬面接の設定で，実験協力者は自ら予め用意した「学生生活で力を入れてきたこと（3分間程度）」についての独話を行った．
+同内容を繰り返すことや何回依頼するかは知らせていない．
+5人分×10回（50話分）の独話を取得した．
+面接官（聴衆）は有無を交互とした．奇数回（1・3・5・7・
+9回）は聴衆なしの独話，偶数回（2・4・6・8・10回）は聴衆に対する独話であ
+る．聴衆には，聴いていることを表すために頷くことのみを許可しており，話者
+への質問や意見など，発話は一切行わなかった．
+収録は録音と録画を行い，音声データを書き起こした．
+
+被験者によってインタビュー内容が異なるために，統計分析においては同一被験者の回数間のスコア(RETELLING\_I(T))のみを評価する．
+
+
+\subsection{RETELLING\_K}
+
+次の再話のデータは怪談を繰り返し口述したものであり，先行研究\cite{yasuda-2012-JCSS}によるものである．
+
+実験協力者は3名\footnote{実験協力者1 20代・女性・東京都，実験協力者2 30代・女性・茨城県，実験協力者3 20代・女性・神奈川県}で，実験は1名ずつ個別に行った．
+実験協力者は怪談を聞いたのち，その怪談について3回の再話を行った．
+怪談は3種類を用意したため，各人9回の語りを行った．語りに関しては，「怪談と
+して他の人に伝えるよう話す」との指示をした．
+既存の物語では，個人の記憶による先入観の影響が予測されたため，4分間程度の新規な怪談を3本作成した．
+
+実験環境は図2のように，ビデオカメラと録音機により，録音と録画を行った．聴衆の影響を除去するために，聴衆は設置しなかった．実験協力者は以下の配置で録音機に向かって話した． 
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-5ia4f2.eps}
+\end{center}
+\caption{RETELLING\_Kデータの収録環境}
+\end{figure}
+
+本稿では音声データを書き起こしたものを用いる．
+
+統計分析においては，同一課題について，異なる被験者間のスコア（1回目のみ
+を評価：RETELLING\_K(P)）と，同一被験者の回数間のスコア
+(RETELLING\_K(T))の両方を評価する．
+
+
+\subsection{RETELLING\_M}
+
+最後の再話のデータは桃太郎の物語を筆述で繰り返し記述したものであり，先行研究\cite{yasuda-2014-JASS33}によるものである．
+
+実験協力者10名（20代--50代の男女）に，「桃太郎の物語を全く知らない人に向けて
+記述してください」と教示し，実験協力者は10分間で記述（筆述）した．同様に記述を繰り返すことを4回行った．
+平均のべ284語（min: 150語・max: 451語），異なり語107語（min: 74語・max: 152語）の「桃太郎」 10人分×4回（40 話分）を取得した．
+
+統計分析においては，同一課題について，異なる被験者間のスコア（1回目のみ
+を評価：RETELLING\_M(P)）と，同一被験者の回数間のスコア
+(RETELLING\_M(T))の両方を評価する．
+
+
+\section{尺度の定性的な分析}
+
+\subsection{尺度の分析方法}
+
+本節では前節で述べたコーパスを用いて各尺度がどのように振る舞うかを観
+察する．利用する尺度は以下の30種類である．
+
+\begin{itemize}
+ \item n-gram スペクトラム (1,2,3,4) (char/mrph)
+ \item n-gram 以下スペクトラム ($\leq$2,$\leq$3,$\leq$4) (char/mrph)       
+ \item p-mer 部分列 (2,3,4) (char/mrph)
+ \item p-mer 以下部分列 ($\leq$2,$\leq$3,$\leq$4) (char/mrph)  
+ \item 1-gram スペクトラム+Footrule (char/mrph) (=Spearman)
+ \item 1-gram スペクトラム+Kendall (char/mrph)
+ \end{itemize}
+
+ 付記 C 表\ref{tbl:score-sum-gross}, \ref{tbl:score-retelling}に各コーパス中の2サンプル
+ 間の尺度の平均値(Mean)と標準偏差(SD)\footnote{サンプル対に規定する同値類内全組
+ み合わせに対する算術平均．実験室において複数回実施したコーパスについては，回数
+ を固定した場合(T)と，被験者を固定した場合(P)と部分集合群を規定し，各部分集合中
+ で全組み合わせに対する算術平均を得た．標準偏差も同様．}を示す．
+ スコアについて (char)``\_c'' は文字単位の記号列として評価したもの，
+ (mrph)``\_m'' は形態素単位の記号列(MeCab-0.98+IPADIC-2.7.0による)として評価し
+ たものである．
+括弧内の数字は部分文字列長（n-gramにおけるn）もしくは部分列長（p-merにおけるp）を
+ 示す．
+シャピロ・ウィルク検定の結果，ほとんどの場合p値が 0.05 未満であり，正規分布とはいえない傾向が見られた．
+
+
+\subsection{尺度のグラフ}
+
+図\ref{fig:score-task-graph} に形態素単位に評価した，
+n-gram(1), n-gram(2), p-mer(2), Kendallの尺度のタスク毎の平均値グラフを示す．
+エラーバーは標準誤差を表す．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia4f3.eps}
+\end{center}
+\caption{課題と評価尺度（n-gram(1), n-gram(2), p-mer(2), Kendall: 形態素単位 平均値と標準誤差）} 
+\label{fig:score-task-graph}
+\end{figure}
+
+unigram(n-gram(1))を用いた場合，要約と語釈は中程度，
+再話はかなり高い値である．
+GLOSS\_{\linebreak}L(T)がほぼ再話と同程度の値である一方，
+BCCWJ-SUMM\_L(T)が低いことから，要約を繰り返す際の言語生産の特殊性が見ら
+れる．要約を繰り返す際には，回数毎に文章中の重要箇所を変更するサンプル・
+被験者が存在し，標準偏差も高くなっている．
+
+bigram(n-gram(2)), skip-bigram(p-mer(2))を用いた場合，異なる被験者間と繰り返し間との間に差が見られるようになる．
+これは何らかの個人の文体差が形態素の連接に影響を与えているのではないかと
+考える．
+
+bigram(n-gram(2))とskip-bigram(p-mer(2))の間の差として，語釈の場合のみ
+bigram の値が下がった．
+語釈という課題の性質上，物語や要約と異なり，情報の提示順が変わることも考えられる．
+しかし，順序尺度であるKendall の値では bigram の値ほど顕著な差が
+見られなかった．
+単語の隣接性が語釈のみ下がるという値のふるまいについては今後検討していきたい．
+
+クラウドソーシングと研究室内被験者実験との差
+(BCCWJ-SUMM\_C $\Leftrightarrow$ BCCWJ-SUMM\_L(P),
+GLOSS\_C $\Leftrightarrow$ GLOSS\_L(P))については，
+各尺度・各課題（要約・語釈）で差が見られなかった．
+
+
+\subsection{課題間の評価}  
+\label{sub:test}
+
+以下，課題間を比較するために，6種類の評価軸を分析する．
+ほとんどの場合，正規分布であることも等分散であること（F検定による）も仮定できな
+い．ここではウィルコクソンの順位和検定（0.05未満で2群の代表値が左右にずれている）を行う\footnote{コルモゴロフ=スミルノフ検定（0.05未満で2群は異なる分布
+   から取り出されたことを示す）も行ったが，ほぼ同等の結果が得られたため
+   省略する．}．\modified{多重比較に対応するために Bonferroni法を用いた．}
+付記 C 表\ref{tbl:test}に結果のまとめを示す．
+
+\begin{itemize}
+  \item 実験室における複数人の課題間の違いの評価 \\
+	BCCWJ-SUMM\_L(P) $\Leftrightarrow$ GLOSS\_L(P) $\Leftrightarrow$
+	RETELLING\_K(P) $\Leftrightarrow$ RETELLING\_M(P) 
+	\begin{itemize}
+	 \item BCCWJ-SUMM\_L(P) $\Leftrightarrow$ GLOSS\_L(P) \\
+\modified{文字単位の評価の場合 n-gram(2,3,4)\_char に
+	       有意差が見られた．\\
+	       形態素単位の評価の場合
+	       n-gram(2,3,4)\_mrph に有意差が見られた．}
+	 \item BCCWJ-SUMM\_L(P) $\Leftrightarrow$ RETELLING\_K(P) \\
+\modified{n-gram(4)\_char, n-gram(3,4)\_mrph 以外で有意差が見られた．}
+	 \item BCCWJ-SUMM\_L(P) $\Leftrightarrow$ RETELLING\_K(M) \\
+\modified{n-gram(4)\_mrph 以外で有意差が見られた．}
+	 \item GLOSS\_L(P) $\Leftrightarrow$ RETELLING\_\{K,M\}(P)\\
+	       全ての尺度について，有意差が見られた．
+	 \item RETELLING\_K(P) $\Leftrightarrow$ RETELLING\_M(P)\\
+	       \modified{全ての尺度について，有意差が見られなかった．}
+	\end{itemize}
+	要約$\Leftrightarrow$語釈間は n-gram(1)で有意差が見られなかった．
+	同じ文字・同じ形態素を使うという観点では一致度のレベルが
+	等しいが，\modified{語の連接が入ると有意差が見られることがわかっ
+	た．}グラフからは語釈の方が語の連接や順序尺度の一致度が低い．
+これは語釈の目的としては情報の提示順に重要性のないことが伺える．\\
+	要約$\Leftrightarrow$再話，語釈$\Leftrightarrow$再話の間において
+	は有意差が見られた．再話は同じ話をするという特性から一致度が高
+	くなる一方，要約・語釈は目的を達成するがために同じ表現を用いなけ
+	ればならないという制約がなく，一致度が低くなる傾向にある．
+	\modified{また同一課題の語釈間では有意差はなかった．}
+  \item 実験室における単一人の回数間距離の課題間の違いの評価 \\
+	BCCWJ-SUMM\_L(T) $\Leftrightarrow$ GLOSS\_L(T) $\Leftrightarrow$
+	RETELLING\_I(T) $\Leftrightarrow$ RETELLING\_K(T)
+	$\Leftrightarrow$ RETELLING\_M(T)
+	\begin{itemize}
+	 \item BCCWJ-SUMM\_L(T) $\Leftrightarrow$ GLOSS\_L(T) \\
+\modified{文字単位の評価の場合 n-gram(1,$\leq$2,$\leq$3,$\leq$4)\_char,
+	       p-mer(2,3,4,$\leq$2,$\leq$3,$\leq$4)\_charに有意差があった．\\
+	       形態素単位の評価の場合
+	       n-gram(1,$\leq$2,$\leq$3)\_mrph, Kendall\_mrph に有意差があった．}
+	 \item BCCWJ-SUMM\_L(T) $\Leftrightarrow$ RETELLING\_\{I,K,M\}(T) \\
+\modified{	       n-gram(4)\_char (BCCWJ-SUMM\_L(T) $\Leftrightarrow$
+	       RETELLING\_\{K\}(T)), n-gram(4)\_mrph (BCCWJ-SUMM\_L(T)
+	       $\Leftrightarrow$ RETELLING\_\{K,M\}(T))以外の全ての尺度について，有意差が見られた．}
+	 \item GLOSS\_L(T) $\Leftrightarrow$ RETELLING\_\{I,K,M\}(T)\\
+	       全ての尺度について，有意差があった．
+	 \item RETELLING\_I(T) $\Leftrightarrow$ RETELLING\_K(T) \\
+\modified{n-gram(1)\_mrph についてのみ有意差があった．}
+	 \item RETELLING\_I(T) $\Leftrightarrow$ RETELLING\_M(T) \\
+\modified{文字単位の評価の場合 n-gram(4)\_char, footrule\_char,
+	       kendall\_char 以外に有意差があった．
+	       形態素単位の評価の場合，
+	       kendall\_mrph 以外に有意差があった．}
+	 \item RETELLING\_I(T) $\Leftrightarrow$ RETELLING\_M(T) \\
+\modified{文字単位の評価の場合全ての尺度に有意差がなかった．
+	       形態素単位の評価の場合，
+n-gram($\leq$2,$\leq$3,$\leq$4)\_mrph, footrule\_mrph,kendall\_mrph 以外に有意差があった．}\\
+	\end{itemize}
+	複数人間の評価ではなく，複数回間の評価でも同じ傾向が見ら
+	れる．\\
+	再話課題間については，形態素単位の評価において，三課題のうち
+	どの二つ組においても有意差が出る傾向にある．
+	口述による再話(RETELLING\_\{I,K\})の方が筆述による再話
+	(RETELLING\_M)より一致度が高くなる．
+	また口述による再話においては，自身の体験に基づく再話
+	(RETELLING\_I)の方が，他者から聞いた話の再話(RETELLING\_K)よりも
+	一致度の高くなることが認められた．
+  \item クラウドソーシングにおける課題間の違いの評価 \\
+	BCCWJ-SUMM\_C $\Leftrightarrow$ GLOSS\_Cについて，全
+	ての尺度について，有意差があった．\\
+	クラウドソーシングにおける課題間の違いについても，前項と同じ傾向
+	が見られる．
+  \item 要約課題においてクラウドソーシングと実験室との違い\modified{の評価}（複数
+	人間） \\
+	BCCWJ-SUMM\_C $\Leftrightarrow$ BCCWJ-SUMM\_L(P) について，
+	n-gram(2)\_char, n-gram(3)\_char, n-gram(4)\_char にのみ
+	有意差があった．\\
+	これは，タイプ入力(BCCWJ-SUMM\_C)と筆述(BCCWJ-SUMM\_L(P))とで，
+	表記ゆれ統制の差の影響が考えられる．
+  \item 語釈課題においてクラウドソーシングと実験室との違い\modified{の評価}（複数
+	人間） \\
+	GLOSS\_C $\Leftrightarrow$ GLOSS\_L(P)について，
+	n-gram(2,3,4)\_char,
+	n-gram(2,3,4)\_mrph,
+	Footrule\_mrph, Kendall\_mrph 以外について有意差があった．
+	\\
+	語釈においては，クラウドソーシングの場合 wikipedia や辞書サイト
+	からのコピーが行われる傾向にある一方，実験室の場合は特にリファレ
+	ンスもなく筆述で行うために差が出たのではないかと考える．
+  \item 複数人間距離と単一人の回数間距離の違い\modified{の評価} \\
+	BCCWJ-SUMM\_L(P) $\Leftrightarrow$ BCCWJ-SUMM\_L(T), 
+	GLOSS\_L(P) $\Leftrightarrow$ GLOSS\_L(T),\linebreak
+	RETELLING\_K(P) $\Leftrightarrow$ RETELLING\_K(T),
+	RETELLING\_M(P) $\Leftrightarrow$ RETELLING\_M(T)について，全
+	ての尺度について有意差があった．\\
+	基本的に単一人が実施したほうが一致度が高いと考えられるが，統計分
+	析の結果からもそれが確認できる．
+ \end{itemize} 
+
+
+\subsection{各評価尺度の特性}
+
+課題間の議論から考えられる各尺度の特性について論じる．
+
+まず，文字n-gramはタイプ入力と筆述入力の差として認められることから，
+表記ゆれレベルで一致度の下がる特性があると考える．
+形態素n-gramは再話と繰り返しで顕著に高くなったことから，個人の
+文体などを反映していると考える．
+
+p-mer, Footrule, Kendallなどは語順の一致を反映していると考えられるが，
+ストーリー性がある要約・再話で一致度が高い一方，
+語釈などにおいては低い傾向にあることがわかった．
+語順に対して，ストーリーの一致を評価するのか，説明の順序を評価するのかについて深
+く検討する必要があると考える．
+ストーリーの一致については\cite{kato-jnlp-2016}において，被験者実験的に人が何を
+同一の物語とみなすかについて検討されている．
+また，語釈などにおいても情報提示順序により伝わりやすさが変わること\cite{kato-jcss-2015}が
+報告されている．
+自動要約の評価尺度で導入された語順の尺度については，ストーリーの一致（内容一致）を目的とする
+のか，伝わりやすさの一致（表現一致）を目的とするのかについては言及されていない．
+今回の調査では，タスクの設定によりこれらを切り分けることを試みたが，タスク間の差
+異は確認できなかった．
+
+n-gram, p-merともに $n$, $p$ の値が高くなるにつれて尺度の値が低くなる．
+このために有意差が出にくくなる傾向にある．
+n-gram, p-merともに $n$ (or $p$)以下の尺度として設定した場合に，よ
+り低い $n$ (or $p$) の方が一致が多くなる傾向にあるために，より高い
+$n$ (or $p$)の差異が見られなくなる傾向がある．
+これは尺度の自然な解釈であると考えられるが，何らかの用途で
+長い n-gram, p-mer を重要視する場合には部分（文字）列長に対して加重を行う必要があるだろう．
+n-gram(1)\_* と Kendall\_* と比較した場合， n-gram(1)\_*では有意差が出
+るが，順序尺度を入れた Kendall\_* では有意差が出ない尺度の組み合わせ
+がいくつかあった．これは文字順・語順の一致度が低い場合に，順序尺度を掛
+けあわせたがために全体の一致度の差がなくなったことが考えられる．
+ 
+
+\section{おわりに}  
+
+本稿では，まず自動要約・機械翻訳で用いられている評価指標の数理的構造を
+説明した．
+評価指標がどのカーネル・距離・相関係数などの尺度と対応しているのかを説明し，
+n-gram 系，p-mer 系，\modified{ベクトル型順序尺度，編集型}順序尺度の\modified{四つ}に抽象化した．
+
+次に様々な言語資源を用いて各指標を構成する尺度の特性を明らかにした．要約・語釈・再話からなる7種類の言語資源を用いて，課題・多人数
+産出・複数回産出・産出手段（口述・筆述・タイプ）の軸を用いて，どのよ
+うな分散が観察されるかを確認した．
+\modified{結果，各評価尺度において，表現一致と内容一致の識別は困難であり，評価の識別限界としての分散があることを示した．}
+
+今後の展開として以下の\modified{五}つを考えている．
+
+一つ目は要約評価に求められる尺度とは何かを明らかにすることである．
+尺度が捉える言語の特性については明らかにしたが，
+自動要約に必要な内容評価と読みやすさの観点については何も言っていないに等しい．
+現在，収集した要約に対して，以下の五つの軸で人手による評価を付与している
+\cite{asahara-2015-jclws7}．
+\begin{itemize}
+ \item 文法性(Grammaticality): 誤字・文法的でない文が含まれていないか
+ \item 非冗長性(Non-redundancy): 全く同じ情報が繰り返されていないか
+ \item 指示詞の明解さ(Referential clarity): 先行詞のない指示詞（代名詞）が含まれ
+       ていないか
+ \item 焦点(Focus): 要約全体と無関係な情報が含まれていないか
+ \item 構造と一貫性(Structure and Coherence): 接続詞を補ったり削除したりする必要のある箇所はないか
+\end{itemize}
+人手による評価を悉皆的に付与したうえで，各評価軸がどの尺度に表れるのかを引き続き
+分析していきたい．
+
+\modified{
+二つ目は情報構造アノテーションとの重ね合わせである．尺度において，語順の評価を入
+れるかどうかが一つの論点であった．日本語において語順を決める一つの要素として情
+報構造がある．情報構造は言語生産者側の観点である情報状態 \{speaker-new,
+speaker-old\}と言語受容者側の観点である共有性 \{hearer-new, hearer-old\}の区別
+を行い，後者については被験者実験的にアノテーションを行う．これらのアノテーション
+結果を用いて，なぜ要約文はその順序で情報を提示する必要があるのかについて検討する．}
+
+\modified{三つ目は要約文の言語受容者側の観点からの認知的な評価である．
+今回は元文書の言語受容者であり要約文の言語生産者側の観点からの認知的な評価を主に
+扱った．生産された要約文が他の言語受容者にとって同じ話として認定されるか
+\cite{kato-jnlp-2016,kato-jcss-2015}を検討していきたい．
+一方，日本語複数文書要約についての拡張も考えられるが，元文書側の言語生産者が複数
+人になるという問題がある．複数の言語生産者側が考慮している情報構造が，要約作成者
+と要約受容者にどのように受容されるか追跡可能な認知実験手法を検討する．
+}
+
+\modified{四}つ目は人文系の研究者が評価する文体についての尺度を明らかにすることである．
+文体の研究は使用域(register)や位相(phase)などに着目して行われるが，
+現在のところ役割語など単一の語についての研究がほとんどである．
+語の連接や語の順序などの使用域や位相を，先に述べた尺度で捉えることを目標とする．
+
+\modified{五}つ目は同じ話とは何かということを定量的に評価する手法の提案である．
+内容を捉える尺度と表現を捉える尺度を分離することで，
+人が内容が一致していると認知できる表現のゆれを捉えることを目標とする．
+既に同じ話を構成する要素について，様々な分析\cite{yasuda-2012-JCSS,yasuda-2013-JASS32,yasuda-2014-JASS33,kato-jass-2015,kato-jass-2016}を進
+めているが，これらの結果が尺度にどのように表れるのかについて分析を行う．
+
+
+\acknowledgment
+
+要約文の作成および評価については NTT CS研の平尾努氏の助言を受けました．
+本研究の一部は，国立国語研究所基幹型共同研究プロジェクト「コーパスアノテー
+ションの基礎研究」(2011--2015)および国立国語研究所「超大規模コーパス構築プロジェクト」(2011--2015)によるものです．
+本研究はJSPS科研費 基盤研究(B) 25284083，若手研究(B) 26770156の助成を受
+けたものです．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{天野\JBA 近藤}{天野\JBA
+  近藤}{1999}]{amano-1999-ntt-database}
+天野成昭\JBA 近藤公久 \BBOP 1999\BBCP.
+\newblock \Jem{日本語の語彙特性第 1 期 CD-ROM 版}.
+\newblock 三省堂.
+
+\bibitem[\protect\BCAY{浅原\JBA 杉\JBA 柳野}{浅原 \Jetal
+  }{2015}]{asahara-2015-jclws7}
+浅原正幸\JBA 杉真緒\JBA 柳野祥子 \BBOP 2015\BBCP.
+\newblock BCCWJ-SUMM:
+  『現代日本語書き言葉均衡コーパス』を元文書とした要約文書コーパス.\
+\newblock \Jem{第 7 回コーパス日本語学ワークショップ予稿集}, \mbox{\BPGS\
+  285--292}.
+
+\bibitem[\protect\BCAY{Birch \BBA\ Osborne}{Birch \BBA\
+  Osborne}{2010}]{Birch-2010}
+Birch, A.\BBACOMMA\ \BBA\ Osborne, M. \BBOP 2010\BBCP.
+\newblock \BBOQ LRscore for Evaluation Lexical and Reordering Quality in
+  MT.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint 5th Workshop on Statistical Machine
+  Translation and MetricsMATR}, \mbox{\BPGS\ 327--332}.
+
+\bibitem[\protect\BCAY{Echizen-ya \BBA\ Araki}{Echizen-ya \BBA\
+  Araki}{2007}]{echizen-ya-2007-MTSUMMIT}
+Echizen-ya, H.\BBACOMMA\ \BBA\ Araki, K. \BBOP 2007\BBCP.
+\newblock \BBOQ Automatic Evaluation of Machine Translation based on Recursive
+  Acquisition of an Intuitive Common Parts Continuum.\BBCQ\
+\newblock In {\Bem Proceedings of the MT Summit XI Workshop on Patent
+  Translation}, \mbox{\BPGS\ 151--158}.
+
+\bibitem[\protect\BCAY{平尾\JBA 磯崎\JBA 須藤\JBA {K. Duh}\JBA 塚田\JBA
+  永田}{平尾 \Jetal }{2014}]{hirao-2014-JNLP-journal}
+平尾努\JBA 磯崎秀樹\JBA 須藤克仁\JBA {K. Duh}\JBA 塚田元\JBA 永田昌明 \BBOP
+  2014\BBCP.
+\newblock 語順の相関に基づく機械翻訳の自動評価法.\
+\newblock \Jem{自然言語処理}, {\Bbf 21}  (3), \mbox{\BPGS\ 411--444}.
+
+\bibitem[\protect\BCAY{平尾\JBA 奥村\JBA 磯崎}{平尾 \Jetal
+  }{2006}]{hirao-2006-IPSJ-journal}
+平尾努\JBA 奥村学\JBA 磯崎秀樹 \BBOP 2006\BBCP.
+\newblock 拡張ストリングカーネルを用いた要約システムの自動評価法.\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 47}  (6), \mbox{\BPGS\ 1753--1765}.
+
+\bibitem[\protect\BCAY{平尾\JBA 奥村\JBA 安田\JBA 磯崎}{平尾 \Jetal
+  }{2007}]{hirao-2007-JSAI-journal}
+平尾努\JBA 奥村学\JBA 安田宣仁\JBA 磯崎秀樹 \BBOP 2007\BBCP.
+\newblock 投票型回帰モデルによる要約自動評価法.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 22}  (2), \mbox{\BPGS\ 115--126}.
+
+\bibitem[\protect\BCAY{神嶌}{神嶌}{2009}]{kamishima-2009-JSAI-sig-dmsm}
+神嶌敏弘 \BBOP 2009\BBCP.
+\newblock 順序の距離と確率モデル.\
+\newblock \Jem{人工知能学会研究会資料 SIG-DMSM-A902-07}.
+
+\bibitem[\protect\BCAY{加藤}{加藤}{2015a}]{kato-ninjal-2015}
+加藤祥 \BBOP 2015a\BBCP.
+\newblock テキストから対象物認識に有用な記述内容—動物を例に—.\
+\newblock \Jem{国立国語研究所論集}, {\Bbf 9}, \mbox{\BPGS\ 23--50}.
+
+\bibitem[\protect\BCAY{加藤}{加藤}{2015b}]{kato-cjws-2015}
+加藤祥 \BBOP 2015b\BBCP.
+\newblock 象は鼻が長いか—テキストから取得される対象物情報.\
+\newblock \Jem{第 7 回コーパス日本語学ワークショップ}, \mbox{\BPGS\ 35--44}.
+
+\bibitem[\protect\BCAY{加藤}{加藤}{2015c}]{kato-jass-2015}
+加藤祥 \BBOP 2015c\BBCP.
+\newblock 同じ話における共通語彙.\
+\newblock \Jem{社会言語科学会第 36 回大会}.
+
+\bibitem[\protect\BCAY{加藤\JBA 浅原}{加藤\JBA 浅原}{2015}]{kato-jcss-2015}
+加藤祥\JBA 浅原正幸 \BBOP 2015\BBCP.
+\newblock テキストからの対象物認識における情報提示順序の影響.\
+\newblock \Jem{2015 年度日本認知科学会第 32 回大会}, \mbox{\BPGS\ 362--369}.
+
+\bibitem[\protect\BCAY{加藤\JBA 浅原}{加藤\JBA 浅原}{2016}]{kato-jass-2016}
+加藤祥\JBA 浅原正幸 \BBOP 2016\BBCP.
+\newblock
+  恋愛小説において物語を特徴づける表現—タイトルと帯に見られる表現分析の試み—.\
+\newblock \Jem{社会言語科学会第 38 回大会}, \mbox{\BPGS\ 128--131}.
+
+\bibitem[\protect\BCAY{加藤\JBA 富田\JBA 浅原}{加藤 \Jetal
+  }{2016}]{kato-jnlp-2016}
+加藤祥\JBA 富田あかね\JBA 浅原正幸 \BBOP 2016\BBCP.
+\newblock
+  物語がその物語であるための要素—何が同じであれば同じで何が違えば違うのか—.\
+\newblock \Jem{言語処理学会第 22 回発表論文集}, \mbox{\BPGS\ 266--269}.
+
+\bibitem[\protect\BCAY{Lin}{Lin}{2004}]{Lin-2004-WSTS}
+Lin, C.-Y. \BBOP 2004\BBCP.
+\newblock \BBOQ ROUGE: A Package for Automatic Evaluation of Summaries.\BBCQ\
+\newblock In {\Bem Proceedings of Workshop on Summarization Branches Out, Post
+  Conference Workshop of ACL 2004}, \mbox{\BPGS\ 74--81}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Hovy}{Lin \BBA\ Hovy}{2003}]{Lin-2003-NAACL}
+Lin, C.-Y.\BBACOMMA\ \BBA\ Hovy, E. \BBOP 2003\BBCP.
+\newblock \BBOQ Automatic Evaluation of Summaries Using N-gram Co-occurrence
+  Statistics.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Meeting of the North American Chapter
+  of the Association for Computational Linguistics and Human Language
+  Technology}, \mbox{\BPGS\ 150--157}.
+
+\bibitem[\protect\BCAY{Maekawa, Yamazaki, Ogiso, Maruyama, Ogura, Kashino,
+  Koiso, Yamaguchi, Tanaka, \BBA\ Den}{Maekawa et~al.}{2014}]{Maekawa-2014-LRE}
+Maekawa, K., Yamazaki, M., Ogiso, T., Maruyama, T., Ogura, H., Kashino, W.,
+  Koiso, H., Yamaguchi, M., Tanaka, M., \BBA\ Den, Y. \BBOP 2014\BBCP.
+\newblock \BBOQ Balanced corpus of contemporary written Japanese.\BBCQ\
+\newblock {\Bem Language Resources and Evaluation}, {\Bbf 48}, \mbox{\BPGS\
+  345--371}.
+
+\bibitem[\protect\BCAY{宮部\JBA 四方\JBA 久保\JBA 荒牧}{宮部 \Jetal
+  }{2014}]{miyabe-2014-GNWS}
+宮部真衣\JBA 四方朱子\JBA 久保圭\JBA 荒牧英治 \BBOP 2014\BBCP.
+\newblock
+  音声認識による認知症・発達障害スクリーニングは可能か？—言語能力測定システム“言秤”の提案—.\
+\newblock \Jem{グループウェアとネットワークサービスワークショップ2014}.
+
+\bibitem[\protect\BCAY{難波\JBA 平尾}{難波\JBA
+  平尾}{2008}]{nanba-hirao-2008-JSAI-journal}
+難波英嗣\JBA 平尾努 \BBOP 2008\BBCP.
+\newblock テキスト要約の自動評価.\
+\newblock \Jem{人工知能学会誌}, {\Bbf 23}  (1), \mbox{\BPGS\ 10--16}.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2009}]{Nivre-2009-ACL}
+Nivre, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Non-Projective Dependency Parsing in Expected Linear
+  Time.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 351--359}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2001}]{Papineni-2001-BLEU}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2001\BBCP.
+\newblock \BBOQ Bleu: a Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock \BTR, IBM Research Report RC22176 (W0109-022).
+
+\bibitem[\protect\BCAY{{Shawe-Taylor,~J.}\JBA {Cristianini N.}\JBA
+  {大北剛（訳）}}{{Shawe-Taylor,~J.} \Jetal }{2010}]{Taylor-2010}
+{Shawe-Taylor,~J.}\JBA {Cristianini N.}\JBA {大北剛（訳）} \BBOP 2010\BBCP.
+\newblock \Jem{カーネル法によるパターン解析 (Kernel Methods for Pattern
+  Analysis), 第 11 章 構造化データに対するカーネル：文字列，木など}.
+\newblock 共立出版.
+
+\bibitem[\protect\BCAY{保田}{保田}{2014}]{yasuda-2014-JASS33}
+保田祥 \BBOP 2014\BBCP.
+\newblock 同じ話を成立させる語—「桃太郎」を「桃太郎」として成立させる語彙—.\
+\newblock \Jem{社会言語科学会第33回大会発表論文集}, \mbox{\BPGS\ 138--141}.
+
+\bibitem[\protect\BCAY{保田\JBA 荒牧}{保田\JBA 荒牧}{2012}]{yasuda-2012-JCSS}
+保田祥\JBA 荒牧英治 \BBOP 2012\BBCP.
+\newblock
+  人が同じ話を何度もするとどうなるか？：繰り返しによって生じる物語独話の変化.\
+\newblock \Jem{日本認知科学会第29回大会}, \mbox{\BPGS\ 217--223}.
+
+\bibitem[\protect\BCAY{保田\JBA 田中\JBA 荒牧}{保田 \Jetal
+  }{2013a}]{yasuda-2013-JASS31}
+保田祥\JBA 田中弥生\JBA 荒牧英治 \BBOP 2013a\BBCP.
+\newblock 繰り返しにおける独話の変化.\
+\newblock \Jem{社会言語科学会第 31 回大会発表論文集}, \mbox{\BPGS\ 190--193}.
+
+\bibitem[\protect\BCAY{保田\JBA 田中\JBA 荒牧}{保田 \Jetal
+  }{2013b}]{yasuda-2013-JASS32}
+保田祥\JBA 田中弥生\JBA 荒牧英治 \BBOP 2013b\BBCP.
+\newblock 同じ話であるとはどういうことか.\
+\newblock \Jem{社会言語科学会第32回大会発表論文集}, \mbox{\BPGS\ 30--33}.
+
+\end{thebibliography}
+
+
+
+\appendix
+
+\section{\ref{sec:sim}節で用いる用語定義}
+\label{sec:app:term}
+
+以下\ref{sec:sim}節で用いる用語を定義する：
+\begin{itemize}
+\item 記号集合：本稿では記号の集合を $\sigma$ で表す．
+\item 記号列：何らかの全順序が付与されている記号集合．\\
+  本稿では記号列ベクトル $s = \langle s_{1}, \ldots, s_{m} \rangle, t = \langle t_{1}, \ldots, t_{m} \rangle$ などで表現する．
+\item 文字(character),文字ベース(character-based): 記号集合$\sigma$の要素の記号$s_{i}\in\sigma$としての文字．記号集合$\sigma$の要素が文字であること．
+\item 形態素(morpheme), 形態素ベース(morpheme-based): 記号集合$\sigma$の要素の記号$s_{i}\in\sigma$としての形態素．記号集合$\sigma$の要素が形態素であること．
+\item 文字列(string): 評価する記号列上の連続列．記号列の要素が文字(character)で
+      ある場合を「文字ベースの文字列(character-based string)」，記号列の要素が形
+      態素(morpheme)である場合を「形態素ベースの文字列(morpheme-based string)」と呼ぶこととする．
+\item 部分文字列(substring): 記号列に対して隣接性と順序を保持した部分的記号列．長さ $n$ の部分文字列を特に n-gram 部分文字列と呼ぶ．\\
+  記号列 $s$ の $i$ 番目の要素からはじまる n-gram 部分文字列を
+      $s_{i \ldots i+n-1}$で表現する．
+\item 部分列(subsequence): 記号列に対して順序を保持した部分的記号列．隣接性は保持しなくてよい．長さ $p$ の部分列を特に p-mer 部分列と呼ぶ．
+  記号列 $s$の p-mer 部分列を，インデックスベクトル $\vec{i}=\langle i_{1},\ldots,i_{p}\rangle (1\leq i_{1} < i_{2} < \cdots < i_{p} \leq |s|)$ を用いて，
+  $s[\vec{i}]$と表す．
+ \item 参照テキスト(reference): 人間が作成した正解要約／翻訳．本稿では記号列 $R$で表す．
+\item システム出力テキスト(candidate): 要約作成器／機械翻訳器が出力した要約／翻訳．本稿では記号列 $C$で表す．
+\item 距離(distance): 集合 $X$上で定義された2変数の実数値関数で，本稿では $d: X \times X \rightarrow R$ などの記号を使う．正定値性($d(x,y) \geq 0$),\modified{非退化性($x=y \Rightarrow d(x, y) = 0$)},対称性($d(x,y)=d(y,x)$),三角不等式($d(x,y)+d(y,z)\geq d(x,z)$)を満たす．
+\item 絶対値(absolute value): 大きさの一般化概念．実数については0からの距離，集合
+      については要素数を表すのに用い $|x|$で表す．また，テキストC中の
+      単語/n-gram/p-merの要素数（のべ出現数）を $|e|_{C}$で表す．
+\item $\theta$-ノルム(norm): ベクトル空間上に距離を規定する長さの一般化概念．ベクトル $x=\langle x_{1}, \ldots, x_{n} \rangle$の $\theta$-ノルムを \modified{$||x||_{\theta} = (\sum^{n}_{i=1} |x_{i}|^{\theta})^{1/\theta}$ }により定義する．特に$\theta$を定義しない場合($||x||$)は 2-ノルムを用いる．
+\item 内積記号 $\cdot$ : 文字列に対しては連結，整数・実数については積，ベクトルなどについては内積，対称群については写像の合成（積）を扱うために用いる．
+\item 類似度(similarity): 二つの元の距離は遠さを表すのに対し，類似度は近さを表す．距離の逆数は類似度として扱える．
+\item 相関係数(correlation): 二つの確率変数の間の相関を表す指標で，類似度として扱える．$[-1,1]$ 区間の値をとり，1に近い場合は正の相関があると呼び，$-1$に近い場合には負の相関があると呼ぶ．0に近い場合には相関が弱いという意味がある．
+\item カーネル関数(kernel function):  特徴空間中の座標の明示的な計算を経由せずに特徴量空間における内積(正定値性と非退化性をもち，実数ベクトル空間では対称性ももつ)を定義するもの．本稿では $K(s,t)$と表記する．内積を正規化することにより cosine 類似度($\frac{K(s,t)}{||K(s,s)||\cdot||K(t,t)||}$)を定義することができる．
+\item スコア(score): 類似度などを [0,1] 区間に正規化したもの．本稿では $\mbox{score}$ などの記号で示す．
+\item 接頭辞(prefix): 記号列の先頭要素を含む連続文字列．
+\item 接尾辞(suffix): 記号列の末尾要素を含む連続文字列．
+\item 部分集合(subset): 記号列を集合とみなした場合の部分集合．隣接性と順序は保持しなくてよい．要素数 $k$ の部分集合を特に $k$-element 部分集合と呼ぶ．
+\item 順位ベクトル(rank vector): インデックス$i$ 要素が対象 $i$ の順位を表すベクトル．本稿では $m$ 次元の順位ベクトル空間を $S_{m}$で表し，順位ベクトル空間の要素である順位ベクトルを $\mu= \langle \mu(1), \ldots, \mu(m) \rangle$ で表す．$\mu(i)$ には対象 $i$ の順位を表す自然数が入る．
+\item 順序ベクトル(order vector): 順位が $i$ 番目である要素がインデックス$i$ の位置に格納されているベクトル．
+  本稿では $m$ 次元の順序ベクトル空間を $T_{m}$で表し，順位ベクトル $\mu(i)$に対応する順序ベクトルを $\mu^{-1} = \langle \mu^{-1}(1), \ldots, \mu^{-1}(m) \rangle$で表す．$\mu^{-1}(i)$ には順位が $i$ である要素（の順位ベクトル上でのインデックス）が入る．
+\item 同順(concordant): 二つの順位ベクトル中で対象対 $i$と$j$が以下を満たすとき，その対象対が同順であるという．\\
+  $ (\mu(i)-\mu(j))(\nu(i)-\nu(j))\geq 0 $
+\item 逆順(discordant): 二つの順位ベクトル中で対象対が同順でないことを逆順という．
+\item 文字列上の編集：挿入(insertion)，削除(deletion)，代入(substitution)
+      の三つを規定する．
+\item 順序ベクトル上の編集：順序ベクトルを対称群(symmetric group)と考えて編集する
+      際の操作を規定する．
+\item \modified{対称群}：並び替えの編集操作（置換：permutation）を元とする群．順序ベクトル$\mu^{-1} = \langle \mu^{-1}(1), \ldots, \mu^{-1}(m) \rangle$のうち，$\mu^{-1}(k_{1}),\mu^{-1}(k_{2}),\ldots,\mu^{-1}(k_{r})$以外は動かさず，$\mu^{-1}(k_{1}) \rightarrow \mu^{-1}(k_{2}), \mu^{-1}(k_{2}) \rightarrow \mu^{-1}(k_{3}), \ldots$のように順にずらす置換 \\
+  $\left(  
+\begin{array}{cccc}
+  \mu^{-1}(k_{1}) & \mu^{-1}(k_{2}) &  \ldots & \mu^{-1}(k_{r}) \\
+  \mu^{-1}(k_{2}) & \mu^{-1}(k_{3}) &  \ldots & \mu^{-1}(k_{1})
+\end{array}   \right)$ \\
+のことを巡回置換と呼び，$\pi_{r}=(k_{1},k_{2},\ldots,k_{r})$で表す．
+二つの元のみを入れ替えて他の元は変えないもの（2元の巡回置換）を互換
+      (transposition)と呼び，$\pi_{2}=(i,j)$で表す．隣接する二つの元のみを入れ替えて他の元は変えないものを隣接互換(adjacent transposition)と呼び，$\pi_{2}=(i,i+1)$で表す．
+\item クロネッカーのデルタ $\delta$:
+  $\delta(i,j) = 
+  \left\{ \begin{array}{ll}
+          1 & (i = j) \\
+          0 & (i \neq j)
+    \end{array} \right. $
+\item \modified{$s$再帰($s$-recursive), $t$再帰($t$-recursive): それぞれ変数$s$,
+      $t$に対して再帰的に定義すること．本稿では$s$,$t$は文字列を想定し，1文字増
+      やした際の文字列を定義する差分方程式の説明に用いる．}
+\end{itemize}
+\newpage
+
+\section{指標・スコア・距離・カーネル・相関係数の関係まとめ}
+
+
+\begin{table}[b]
+\rotatebox{90}{
+\begin{minipage}{470pt}
+\caption{指標・スコア・距離・カーネル・相関係数の関係まとめ}
+\label{table:scores}
+\input{04table02.txt}
+\end{minipage}
+}
+\end{table}
+
+\clearpage
+
+\section{言語生成過程と尺度}
+
+\modified{表\ref{tbl:test}に\ref{sub:test}節で行った検定の結果のまとめを示す．}
+表\ref{tbl:score-sum-gross}に要約課題・語釈課題と各尺度の比較を
+表\ref{tbl:score-retelling}に再話課題と各尺度の比較を示す．
+標準偏差は BCCWJ-SUMM\_L(T) が最も大きい．これは繰り返し要約する際に全く同
+じ要約文を再生産する被験者と全く異なる要約文を再生産する被験者とが存在す
+るからだと考えられる．しかし，他の再話 (RETELLING\_K(T),RETELLING\_M(T))
+でも被験者間の標準偏差と比して高いことから要約文特有の現象ではないと考え
+る．
+
+\begin{table}[h]
+\caption{\ref{sub:test}節で行った検定の結果のまとめ（有意差があったもの一覧）}
+\label{tbl:test}
+\input{04table03.txt}
+\end{table}
+
+\begin{table}[p]
+\rotatebox{90}{
+\begin{minipage}{570pt}
+\caption{要約課題・語釈課題と各尺度}
+\label{tbl:score-sum-gross}
+\input{04table04.txt}
+\end{minipage}
+}
+\end{table}
+
+\begin{table}[p]
+\rotatebox{90}{
+\begin{minipage}{570pt}
+\caption{再話課題と各尺度}
+\label{tbl:score-retelling}
+\input{04table05.txt}
+\end{minipage}
+}
+\end{table}
+
+
+\begin{biography}
+\bioauthor{浅原　正幸}{
+2003年奈良先端科学技術大学院大学情報科学研究科博士後期課程修了．
+2004年より同大学助教．
+2012年より国立国語研究所コーパス開発センター特任准教授．\modified{国立国語研究所言語資源研
+究系准教授を経て，現在国立国語研究所コーパス開発センター准教授．}博士（工学）．
+}
+
+\bioauthor{加藤　　祥}{
+2011年神戸大学人文学研究科博士後期課程修了．201\modified{2}年より国立国語研究所コーパス開発
+センタープロジェクトPDフェロー．現在国立国語研究所コーパス開発センタープロジェク
+ト非常勤研究員．博士（文学）．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+
+\clearpage
+
+
+
+
+
+
+
+
+\clearpage
+
+\end{document}

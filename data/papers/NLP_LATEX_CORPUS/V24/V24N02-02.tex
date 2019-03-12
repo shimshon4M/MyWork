@@ -1,0 +1,1430 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{pifont}
+\usepackage{amsmath}
+\usepackage{float}
+
+\usepackage{dingbat}
+\usepackage{wasysym}
+\usepackage[multi]{otf}
+\usepackage{multirow}
+\usepackage{array}
+\newfont{\boldsf}{cmssbx10}
+
+
+
+\Volume{24}
+\Number{2}
+\Month{March}
+\Year{2017}
+
+\received{2016}{10}{21}
+\revised{2016}{12}{8}
+\accepted{2017}{1}{13}
+
+\setcounter{page}{205}
+
+\etitle{Construction of a Multilingual Annotated Corpus for Deeper Sentiment Understanding in Social Media\\[6pt]}
+\eauthor{Yujie Lu\affiref{Student} \and Kotaro Sakamoto\affiref{Student} \and Hideyuki Shibuki\affiref{Teacher} \and Tatsunori Mori\affiref{Teacher}} \eabstract{
+The surge of social media use, such as Twitter, introduces new opportunities for understanding and gauging public mood across different cultures. However, the diversity of expression in social media presents a considerable challenge to this task of opinion mining, given the limited accuracy of sentiment classification and a lack of intercultural comparisons. Previous Twitter sentiment corpora have only global polarities attached to them, which prevents deeper investigation of the mechanism underlying the expression of feelings in social media, especially the role and influence of rhetorical phenomena. To this end, we construct an annotated corpus for multilingual Twitter sentiment understanding that encompasses three languages (English, Japanese, and Chinese) and four international topics (iPhone 6, Windows 8, Vladimir Putin, and Scottish Independence); our corpus incorporates 5,422 tweets. Further, we propose a novel annotation scheme that embodies the idea of separating emotional signals and  rhetorical context, which, in addition to global polarity, identifies rhetoric devices, emotional signals, degree modifiers, and subtopics. Next, to address low inter-annotator agreement in previous corpora, we propose a pivot dataset comparison method to effectively improve the agreement rate. With manually annotated rich information, our corpus can serve as a valuable resource for the development and evaluation of automated sentiment classification, intercultural comparison, rhetoric detection, etc. Finally, based on observations and our analysis of our corpus, we present three key conclusions. First, languages differ in terms of emotional signals and rhetoric devices, and the idea that cultures have different opinions regarding the same objects is reconfirmed. Second, each rhetoric device maintains its own characteristics, influences global polarity in its own way, and has an inherent structure that helps to model the sentiment that it represents. Third, the models of the expression of feelings in different languages are rather similar, suggesting the possibility of unifying multilingual opinion mining at the sentiment level.\\[6pt]
+}
+\ekeywords{Corpus Annotation, Sentiment Understanding, Rhetorical Context, \linebreak Multilingual Resource}
+
+\headauthor{Lu, Sakamoto, Shibuki, Mori}
+\headtitle{A Multilingual Annotated Corpus for Sentiment Understanding}
+
+\affilabel{Student}{}{Graduate School of Environment and Information Sciences, Yokohama National University}
+\affilabel{Teacher}{}{Faculty of Environment and Information Sciences, Yokohama National University}
+
+
+\begin{document}
+
+\maketitle
+
+\clearpage
+\section{Introduction}
+
+A vast amount of user-generated content has been created from the prevalence of social media applications, such as Twitter. Here, users post opinions in real time on various topics including products, public figures, and events. The resulting large-scale dataset provides researchers an unprecedented opportunity to leverage social media for different types of scientific studies \cite{Liu12}. Many useful applications have been proposed thus far, such as investigating consumer reaction to products of a company \cite{Jansen09}, understanding the popularity of political parties and candidates among voters for forecasting election results \cite{Tumasjan11}, polling public opinion on social events \cite{Brendan10}, responding to terrorism according to social emotion \cite{Cheong11}, and predicting stock price movements \cite{Lu15}.
+
+Although there has been some progress in sentiment analysis for social media on which the above applications have been based, two key challenges remain. First, the diverse nature of social media, with its subtle forms of expression, makes it difficult to study sentiment analysis. Recent studies on SemEval datasets \cite{Nakov13,Santos14,Xiang14} have shown that the highest accuracy of Twitter sentiment analysis is approximately 70\%, while the same studies applied to traditional text-based datasets have attained 88.3\% accuracy on the IMDB dataset and 93.7\% accuracy on the polarity dataset \cite{Tang09}.
+
+Second, although social media generates a significant amount of multilingual opinions, available to us for the first time, few studies have been conducted on the comparison of cultural differences among these opinions. Balahur and Turchi \citeyear{Balahur13} discussed the implementation of sentiment analysis on multiple languages by simply using machine translation. Further, Volkova, Wilson, and Yarowsky \citeyear{Volkova13} showed how the use of gender information affects sentiment classification in different languages; however, neither of these studies considered the cultural differences in the same opinion targets (i.e., evaluation objects).
+
+To tackle the first challenge, we need to understand the key differences between ``tweet text'' (i.e., text snippets taken from Twitter data) and traditional text, the latter including examples such as newswire feeds and product reviews. Traditional text usually has relatively explicit subjective expressions, while tweets are expressed in a more flexible and casual way; therefore, the sentiment that tweets contain may be implicit and subtle, as shown in example tweet (1) below.
+
+\begin{enumerate}
+\item[\bf (1)] {\bf Wow, with \#iPhone6, you can send a message just by talking! In any voice you like. So can my mom's old rotary dial.}
+\end{enumerate}
+
+In the first two sentences of the above example, the author is praising iPhone 6, whereas in the third sentence, the author turns to criticism by comparing it with something ``old.'' Overall, this is a sarcastic tweet that strengthens the sense of looking down upon iPhone 6. Such rhetorical phenomena that humans can immediately perceive are hard to recognize and model via natural language processing (NLP) systems. Traditional methods that heavily depend on a polarity dictionary would probably yield a ``positive'' output since there are more positive words in the example tweet than negative.
+
+Errors in Twitter sentiment analysis are often caused by such sophisticated tweets that contain special phenomena such as rhetoric, which is one of the main reasons for failure in existing systems \cite{Sidorenko13,Xie12,Wiegand10}. Therefore, to fully understand the flexibility of expressions of feelings in social media, it is necessary to observe real tweets by human beings and characterize the underlying context, particularly rhetorical context.\footnote{Other contexts such as part of discourse context (e.g., but, despite) \cite{Mukherjee12}, whole-part context, and temporal context also affect global polarity, but occur much less frequently and can be handled by other existing technologies. In this paper, we therefore focus on rhetorical context.}
+
+Given the above, to reveal clues that suggest the true global polarity of a tweet, we propose a relatively fine-grained annotation scheme based on separating emotional signals and rhetorical context, thus allowing a deeper investigation of the underlying mechanism by using instances with the same language phenomena. In addition to global polarity, our scheme identifies key components that may affect the emotions of tweets, including the use of rhetoric devices, emotional signals, degree modifiers, and subtopics. To briefly illustrate our scheme, an example annotation of the above example tweet is as follows. In the first two sentences, there are three positive signals (i.e., wow, can, and like) and two intensifiers without a specific context (i.e., just and any). Next, the polarity of iPhone 6 is compared to a negative object in the third sentence. The sarcasm identified across the three sentences then finally determines the global polarity of the original tweet as being ``negative.''
+
+\vspace{0.5\Cvs}
+\noindent {\bf \underline{Wow}}(positive){\bf , with \#iPhone6, you \underline{can}}(positive) {\bf send a message \underline{just}}(intensifier) {\bf by talking! In \underline{any}}(intensifier) {\bf voice you \underline{like}}(positive){\bf . [So can my mom's \underline{old}}(negative) {\bf [rotary dial]}{\em (Comparatively equal)}{\bf .]}{\em (Sarcastically negative)}\\$\odot$ Global Polarity to iPhone 6: {\bf Negative}
+\vspace{0.5\Cvs}
+
+To tackle the second challenge, a multilingual corpus that can support intercultural comparison is necessary. Annotated datasets for sentiment analysis in social media have already been proposed, but these are primarily monolingual. The few multilingual corpora are topic-irrelevant, making it impossible to verify whether there are differences in public mood regarding the same object in different cultures. Therefore, we implement our annotations in a multilingual setting on common international topics. More specifically, we span three languages, i.e., English, Japanese, and Chinese, to magnify the variations between languages; further, to avoid domain limitations, we cover three common genres of evaluation objects, namely products (i.e., iPhone 6 and Windows 8), public figures (i.e., Vladimir Putin), and events (i.e., Scottish Independence).
+
+We apply our annotation scheme to 5,422 real tweets. To solve the reported problem of low inter-annotator agreement in previous Twitter sentiment annotation methods, we propose a pivot dataset comparison (PDC) method to improve agreement by correcting understanding errors. Our PDC method represents a good compromise between annotation quality and speed; as detailed in Section 5.3, increases in the Kappa statistic endorses our method's effectiveness and reliability.
+
+Many applications would benefit from better Twitter sentiment analysis systems, which rely on corpora with rich annotations. Our corpus can serve as an ideal testbed for measuring the effectiveness of any sentiment analysis method, especially its rhetoric tolerance and cross-language adaptability, since our corpus includes multilingual tweets in various contexts. Further, our word/phrase-level annotated corpus makes it possible to experiment with new methods for solving special language phenomena in sentiment analysis. As examples, deep learning methods and the synthesis of multiple rhetoric solvers can be implemented to comprehend the emotions implied in rhetorical contexts based on certain forms of our corpus development. Therefore, the goals of this paper are to reveal the key principles behind the expression of feelings in social media and explore possible breakthrough points for the aforementioned challenges. By making flexible use of our annotated multilingual dataset, we hope to promote research on sentiment analysis for social media in multilingual settings.
+
+In this paper, we not only describe the construction of such a resource but also report on its analysis. Based on our observations and analysis of the corpus, we argue the following three points. 
+\begin{itemize}
+\item[(i)]Languages differ in terms of their use of emotional signals and rhetoric devices, and the idea that cultures have different opinions regarding the same objects is reconfirmed (Section 6).
+\item[(ii)]Each rhetoric device has its own characteristics, influences global polarity in its own way, and has an inherent structure that helps to model the sentiment that it represents (Section 7).
+\item[(iii)]Models of expression of feelings in different languages are most likely similar, suggesting the possibility of unifying multilingual opinion mining at the sentiment level (see the last paragraphs of Sections 4.1 and 7). 
+\end{itemize}
+To the best of our knowledge, our work is the first to build a comprehensive multilingual corpus that handles rhetorical phenomena for sentiment analysis in social media.
+
+The remainder of this paper is organized as follows. In Section 2, we discuss related work. In Section 3, we describe the data collection and selection processes for our annotations. In Section 4, we elaborate our annotation scheme by using examples. We introduce the annotation process and the effect of our PDC method in Section 5. In Section 6, we provide a basic analysis of the corpus to reveal the key differences between languages and topics. In Section 7, we discuss how rhetoric devices affect collective sentiment and global polarity. In Section 8, we present individual differences of different annotators and note the deficiencies of our annotations. Finally, we describe our conclusions and suggest future work in Section 9. 
+
+
+\section{Related Work}
+
+To date, there are numerous annotated datasets in the field of sentiment analysis. In this section, we describe these datasets and show how our annotation scheme differs from these.
+
+
+\subsection{Traditional Datasets for Sentiment Analysis}
+
+Movie reviews, product reviews, newswire feeds, and so on are traditional study objects for sentiment analysis, which is also known as opinion mining. Pang, Lee, and Vaithyanathan \citeyear{Pang02} used movie review data to test the effectiveness of machine learning methods for sentiment analysis. The latest version of their dataset consists of 1,000 positive and 1,000 negative processed reviews. Wiebe, Wilson, and Cardie \citeyear{Wiebe05} annotated the MPQA corpus, which contains hundreds of news articles from a wide variety of news sources, by using a fine-grained scheme that centered on private state, e.g., beliefs, emotions, sentiments, and speculations. Liu, Hu, and Cheng \citeyear{Liu05} gathered thousands of consumer opinions from online customer review sites into the pros and cons dataset, discussing a new technique to identify product features (i.e., attributes). Ganapathibhotla and Liu \citeyear{Ganapathibhotla08} collected hundreds of comparative sentences from product review websites and online forums, and then proposed an opinion mining method that identifies preferred entities. Miyazaki and Mori \citeyear{Miyazaki10} proposed a model for separating attribute-value pairs of products and their corresponding evaluations, discussed a method for decreasing disagreement between annotators, and annotated a collection of product reviews from an online commercial site for information extraction.
+
+The above corpora have proved very valuable as resources for learning about the expression of feelings in general, but do not focus on social media. Unlike traditional long text inputs, our social media corpus consists of short text inputs, each no more than 140 characters; given this relatively limited length, the means of expression have become much more diverse, thus introducing new challenges to annotation.
+
+
+\subsection{Twitter Datasets for Sentiment Analysis}
+
+SemEval 2013 and 2014 tasks \cite{Nakov13,Rosenthal14} offer a dataset comprised of thousands of English tweets tagged with global polarity. Many researchers \cite{Balahur13,Xiang14} have performed experiments on it for various purposes. The TASS corpus \cite{Villena14} is a Spanish Twitter corpus consisting of 7,219 messages tagged with global polarity and entity polarity (where it exists). The i-sieve corpus \cite{Kouloumpis11} and the Sanders corpus \cite{Sidorenko13} are two English tweet datasets offered by private companies, with only the latter being publicly available. 
+
+Similar datasets tagged only with global polarity were introduced by Saif, Fernandez, He, and Alani \citeyear{Saif13}, while there are other datasets that use noisy labeling with emoticons \cite{Go09,Pak10}. Similarly, sarcasm tweet datasets have been built for English \cite{Roberto11,Reyes12} by relying on \#sarcasm or \#irony hashtags; however, datasets that stem from noisy labeling contain significant levels of noise and bias \cite{Davidov10,Read05}. Tang and Chen \citeyear{Tang14} built a Chinese irony microblog dataset containing 1,005 ironic messages from a bootstrapping procedure using customary patterns (e.g., degree adverb and positive adjective) that they claimed to be the first irony dataset for Chinese.
+
+In general, Twitter datasets for sentiment analysis are monolingual and labeled only with global polarity, whereas our corpus is carefully tagged with rich information at the word/phrase level. In addition, most current datasets do not consider other rhetoric devices except sarcasm, and datasets with sarcasm have various constraints (e.g., the reliance on specific hashtags or patterns). Conversely, our corpus contains four common rhetoric devices (i.e., comparison, metaphor, sarcasm, and rhetorical question) without restrictions.
+
+
+\subsection{Multilingual Datasets for Sentiment Analysis}
+
+Few previous studies exist on multilingual sentiment annotation for traditional text. Steinberger, Lenkova, Kabadjov, Steinberger, and van der Goot \citeyear{Steinberger11} annotated a sentiment-oriented parallel news corpus in seven European languages, i.e., English, Spanish, French, German, Czech, Italian, and Hungarian, with opinions toward entities in a sentence; however, here, gold-standard annotations were actually performed in English, and then simply projected to the other six languages. They used this corpus to evaluate a prototype system based on their multilingual sentiment dictionaries. Similarly, Kozareva \citeyear{Kozareva13} manually annotated a metaphor-rich corpus with polarity and valence scores for four languages (i.e., English, Spanish, Russian, and Farsi) and showed that the proposed method for polarity and valence prediction of metaphor-rich texts is portable and works well for different languages.
+
+In general, multilingual social media engagement is growing. Volkova, Wilson, and Yarowsky \citeyear{Volkova13} constructed a multilingual tweet dataset including English, Spanish, and Russian by using Amazon Mechanical Turk. They compared the variation in gender information in the three languages, showing that gender differences can effectively be used to improve sentiment analysis. Balahur and Turchi \citeyear{Balahur13} constructed a dataset by translating English tweets into Italian, Spanish, French, and German. They tested the performance of their sentiment analysis classifiers for these languages, showing the effectiveness of the joint use of training data from multiple languages.
+
+The languages used in the above corpora, each of which was constructed for a different multilingual study, are relatively close, i.e., they all belong to the Indo-European language family; conversely, our three selected languages are more distant, i.e., they belong to three different language families.\footnote{According to https://en.wikipedia.org/wiki/Language\_family, English, Japanese, and Chinese belong to Indo-European, Japanese, and Sino-Tibetan language families, respectively.} Further, compared with previous multilingual Twitter datasets, our corpus has two advantages. First, evaluation objects are the same in our corpus, enabling us to compare public opinion and interest between different cultures. Second, with the help of our fine-grained annotations, we can observe differences in emotional expression between languages.
+
+
+\section{Dataset Creation}
+
+In this section, we describe how we selected our evaluation objects, collected related tweets, and chose representative ones for annotation.
+
+
+\subsection{Evaluation Objects}
+
+To support comparisons of cultural differences,\footnote{In this paper, culture is roughly defined by language. This definition is reasonable for Japanese and Chinese because these two languages are primarily used by Japanese people in Japan and Chinese people in China, respectively. As English is currently widely used, it cannot be restricted to a fixed region. Still, it is acceptable to use it to represent Western culture to some extent. Discussions on the differences in English used in different regions is beyond the scope of this paper.} such as sentiment distribution, emotion evolution over time, and subtopic composition, we note that common and controversial topics discussed across the three selected languages (i.e., English, Japanese, and Chinese) are preferred. In our study, we considered many candidates and carefully selected four international topics spanning three genres as our evaluation objects; more specifically, we selected iPhone 6 and Windows 8 to represent products (i.e., tangible and intangible, respectively), Vladimir Putin for public figures, and Scottish Independence for events. Table \ref{query_keywords} shows each of these four targets' corresponding query keywords for obtaining tweets.\footnote{We noticed afterward that the number of tweets after selection was not high enough for iPhone 6 and Windows 8 in Japanese; therefore, we used other keywords as supplements.} These keywords are the most frequently used representations for the evaluation objects in each language. For brevity, we use the abbreviations listed in the second column of Table \ref{query_keywords}.
+
+\begin{table}[b]
+\caption{Query keywords used for data collection}
+\label{query_keywords}
+\input{02table01.txt}
+\vspace{-0.5\Cvs}
+\end{table}
+
+
+\subsection{Data Collection}
+
+Regarding the source of our data, we collected tweets from Twitter\footnote{http://www.twitter.com} via the Twitter REST API for English and Japanese using the same approach as that found in many other studies \cite{Nakov13}. Given the scarcity of Chinese tweets on Twitter, we decided to use Weibo,\footnote{http://weibo.com} a well-known Chinese version of Twitter, as a substitute. For Twitter, we employed Tweepy\footnote{http://www.tweepy.org} to access its Search API, whose returned results are similar to, but not the same as, its search service.\footnote{https://twitter.com/search-home} The Twitter API has a seven-day backtracking limit, so it is designed to run daily. Since Weibo's Search API cannot be accessed freely, we resorted to a scraper that fetched results directly from its search service.\footnote{http://s.weibo.com} Because the maximum number of pages returned per day is 50 in Weibo's search service,\footnote{Weibo's retrieval mechanism changed once, which resulted in a drop in the number of Chinese tweets in the last six months of our collecting period.} we fetched only original tweets to avoid duplication at the source.
+
+The one-year collection period started on October 19, 2014, and ended on October 18, 2015. For the convenience of management and use, we stored all tweets in a database. Twitter tweets were easily decoded since they use a JSON format, whereas we used a parser to extract desired fields from Weibo tweets because they were sourced directly from HTML files. Table \ref{number_of_tweets} shows the number of tweets collected per object and per language. The table indicates that the numbers of English and Japanese data are comparable to one another, but substantially more than the number of Chinese data. Nonetheless, they are all distributed similarly over the objects; iPhone 6 and Putin apparently attracted more attention than Windows 8 and Scottish Independence across all three cultures, whereas Scottish Independence ranked higher in English than in the other two languages.
+
+\begin{table}[t]
+\caption{Number of tweets collected between October 19, 2014, and October 18, 2015}
+\label{number_of_tweets}
+\input{02table02.txt}
+\end{table}
+
+
+\subsection{Tweet Selection}
+
+As shown in Table \ref{number_of_tweets}, the size of the raw data was too big for us to annotate all tweets. Further, social media such as Twitter contains a substantial number of undesirable tweets, such as retweets, commercials, and objective news, all of which are of low value to the annotation stage for sentiment analysis \cite{Jansen09}. Therefore, selecting representative tweets was inevitable.
+
+There are two approaches for selecting desired instances from a large amount of data, i.e., exclusive filtering \cite{Hangyo14} and inclusive filtering \cite{Nakov13}. To ensure that the annotation datasets are good estimates of public mood and simultaneously cover the diversity of emotional expressions to the extent possible, we designed a two-stage method to combine the two approaches.
+
+In the first stage, we used exclusive patterns to veto unsatisfactory tweets, i.e., we removed tweets containing exclusive patterns from the raw data. This may cause some over-excluding, but based on our preliminary investigations, most of the tweets containing these patterns were not opinionated. Table \ref{excluding_patterns} shows the exclusive patterns that we used.
+
+\begin{table}[b]
+\caption{Patterns used for excluding non-opinionated tweets}
+\label{excluding_patterns}
+\input{02table03.txt}
+\end{table}
+
+In the second stage, we performed two inclusive selections in a soft way. We first preferred longer tweets since short tweets contain less linguistic richness. Next, we preferred tweets that contained fewer special symbols (e.g., @ and \#) based on the observation\footnote{An additional experiment on 220 randomly selected English tweets yields similar results, i.e., part of special symbol count/opinioned tweet ratios of 0/0.75...3/0.75...6/0.50...9/0.30...} that the more special symbols that a tweet contains, the less likely it is to be opinionated. The thresholds for tweet length and the number of special symbols depended on the size of the previous remaining set. If the size was large, we selected longer tweets with fewer symbols; otherwise, either selection was skipped.
+
+We found that a large portion of tweets was omitted from the raw data using our two-stage screening process, with 93.1\% omitted in the first stage, 75.4\% in the second stage, and 98.3\% overall. Nonetheless, some inappropriate tweets still existed, so we manually checked the remaining tweets sequentially, filtering out apparently worthless ones until we obtained the designated number of tweets for annotation. In short, we removed three types of tweets: (1) repeated tweets that did not start with RT, (2) obviously objective tweets that did not contain the common veto words shown in Table \ref{excluding_patterns}, and (3) off-topic tweets that contained query keywords but did not actually discuss or appraise the evaluation objects. Refer to Appendix A for more details regarding our data selection process.
+
+
+\section{Annotation Scheme}
+
+A well-designed representation scheme is vital to the success of annotation work. Most existing corpora introduced in Section 2 only label global polarity and lack systematic schemes. The private state scheme adopted in the MPQA dataset by Wiebe et al.\ \citeyear{Wiebe05} is one of the few schemes for fine-grained sentiment annotation, focusing on presentation frames for private state expressions (i.e., subjective expressions). The private state scheme is a good reference here, but since our research purpose and text type are both different from those of Wiebe et al.\ \citeyear{Wiebe05}, we must take more aspects into account. In this section, we therefore introduce the basic ideas behind our annotation scheme, and then detail our presented annotation standards with examples.\footnote{In this section, we primarily present English examples; multilingual examples are presented in Section 7.2.}
+
+
+\subsection{Fundamentals}
+
+Based on our initial investigation of a certain number of tweets, we found that there are primarily two ways to express human emotion, i.e., direct expression and indirect expression. In direct expression, people express their feelings in a straightforward manner with explicit emotional elements. Conversely, indirect expression may not contain any superficially emotional elements; instead, people utilize rhetoric devices, such as comparisons, metaphors, sarcasm, and rhetorical questions, to express their opinions. Figure \ref{fig:tweet_examples} exemplifies these two different ways of expression by showing typical tweets using both techniques. Note that these examples are relatively simple; real tweets for annotation are typically much more complex.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia2f1.eps}
+\end{center}
+\caption{Tweets using different means of expressions}
+\label{fig:tweet_examples}
+\end{figure}
+
+To accommodate the characteristics of these two ways of expression, our scheme separates emotional signals (i.e., the elements containing emotion toward the evaluation object) and rhetorical context in a tweet. The polarities of emotional signals are not vulnerable to the tweet's context (Section 4.2), while the rhetorical context is modeled by formulating the common rhetoric devices at the sentence level (Section 4.3); the global polarity of a tweet can then be determined by integrating the polarities of emotional signals and the rhetorical context (Section 4.4). As an example, in the second sentence of tweet (7) shown in Figure 1 (i.e., ``Its an almost perfect \#antidesign''), the word ``perfect'' is originally positive and ``\#antidesign'' is clearly negative; thus, the contradiction of polarities (i.e., positive vs. negative) within the sentence forms the sarcasm context.\footnote{For a detailed explanation on rhetorical contexts, please refer to Section 7.2.} Together, this makes the sentence strongly negative. Here, ``perfect'' will not be tagged as negative even though it is used in an ironic context. This separation is extremely important for revealing underlying patterns of expressions of feelings.
+
+Further, we use the same scheme for all three languages. This ability is based on the hypothesis that although the three languages are different at the word and syntax levels, the ways of expressing feelings are similar. Given that direct proof of this hypothesis is difficult, we resort to a {\it reductio ad absurdum} method. More specifically, if we find any exception that contradicts the hypothesis, we refuse it; otherwise, we accept it. Because this empirical proof is required to go through both the annotation process and corpus analysis, we present our conclusions at the end of Section 7.
+
+
+\subsection{Emotional Signals and their Degree Modifiers}
+
+Emotional signals (or simply signals) are the basic emotional elements in a tweet. In tweet (3) of Figure \ref{fig:tweet_examples}, words like ``beautiful'' and ``amazing'' are positive signals for the iPhone 6 evaluation object. Here, there are three types of emotional signals, defined as follows.
+\begin{itemize}
+\item Positive signals: signals showing good attitudes toward the evaluation object.
+\item Negative signals: signals showing poor attitudes toward the evaluation object.
+\item Neutral signals: signals showing neutral or undecided attitudes toward the evaluation object.
+\end{itemize}
+
+The major difference between an emotional signal and a polarity word is that a signal influences global polarity, while a polarity word may or may not have such influence. In tweet (9) shown below, even though ``cool'' is generally a positive word in any polarity lexicon, it is not considered a positive signal here because it does not constitute a judgment on iPhone 6; hence, ``cool'' should not be tagged in this case. Further, similar to private state expressions in the MPQA dataset, annotators are not limited to marking any particular words. Signals comprised of multiple words, such as phrases and idioms, and implicit signals not containing any explicit polarity words are also allowed. Examples of such negative signals are ``p*ssed off'' from tweet (2) and ``achilles heel'' from tweet (10).
+
+\begin{enumerate}
+\item[{\bf (9)}] {\bf my cousin thought it would be \underline{cool} to sit on my phone\&see if it bend. And NOPE, it didn't. \#iPhone6 I think because i have a case on}
+\item[{\bf (10)}] {\bf Kasyanov: \#Putin's \underline{achilles heel} is economy - when regular people feel the pinch, when pension payments aren't met, it starts to crumble}
+\end{enumerate}
+
+According to the separation idea, annotators are asked to label signals with their original polarity in everyday use (strictly speaking, in social-media use). In tweet (7), even though ``impressed'' and ``perfect'' are used to satirize Windows 8, their polarities should be labeled as ``positive.'' Note that this does not mean that we judge words out of context; on the contrary, we consider not only their meanings but also their roles in context.
+
+Further, we define three types of degree modifiers for two reasons. First, degree words are important surrounding information for signals. Second, degree words can help annotators distinguish the boundary between signals, which is crucial for non-space separated languages, such as Chinese and Japanese. The three types of degree modifiers are then defined as follows. 
+
+\begin{itemize}
+\item Intensifiers: words that strengthen the signals they modify, e.g., very and really.
+\item Diminishers: words that weaken the signal they modify, e.g., a little and almost.
+\item Negations: words that reverse the signals they modify, e.g., not.
+\end{itemize}
+
+For each of these degree modifiers, in each language, there is only a limited number of degree expressions in the dictionary, on the order of tens of expressions, especially for negation (which consists of only a few). Degree modifiers are usually explicit, such as ``really'' in tweet (2), ``almost'' in tweet (7), and ``doesn't'' in tweet (2); however, negation can sometimes be implicit. For example, ``should'' in tweet (11) below is a negation of the positive signal ``fix problems.'' In addition, degree modifiers usually appear together with emotional signals, such as ``profoundly bad'' in tweet (7) and ``doesn't work'' in tweet (2). Solely tagged degree modifiers must be avoided.
+\begin{enumerate}
+\item[{\bf (11)}] {\bf @Microsoft really? I updated Win 8.1 because it \underline{should} fix problems, not generate more troubles!! \#windows8 Sucks!!!}
+\end{enumerate}
+
+
+\subsection{Rhetorical Context}
+
+Rhetorical phenomena essentially occur at the sentence level. In linguistics, there are approximately 20 classes of rhetoric devices, whereas in our computational linguistics setting, we focus on the four commonly used rhetoric devices, i.e., comparisons, metaphors, sarcasm, and rhetorical questions \cite{Bhattasali15,Ganapathibhotla08,Ghosh15}. For simplicity, these four types of rhetoric devices are defined in a relatively loose manner, as well as a fifth non-rhetoric type, as follows.
+
+\begin{itemize}
+\item Comparisons: used if the tweet compares the evaluation object with other counterparts. Comparisons also include contrast. 
+\item Metaphors: used if the tweet identifies the evaluation object as being similar to some unrelated thing. Metaphors include similar concepts such  as similes, metonymies, and synecdoche.
+\item Sarcasm: used if the tweet contains sentences stating the contrary of what is actually meant. Irony is also a form of sarcasm in our setting.
+\item Rhetorical questions: used if the tweet includes a question asked to make a point rather than to elicit an answer. Answer-seeking questions are not considered to be rhetorical questions.
+\item Non-rhetoric: used if the tweet is a direct expression of feelings.
+\end{itemize}
+
+Each rhetoric device has its own representation frame. For a comparison frame, there are three possible slots. The comparison object slot contains the anchor text of the comparison object in the tweet. The comparison base defaults to the evaluation object. Relative status here means the comparative relation of the comparison object compared with the evaluation object, defined as inferior, equal, or superior. The relative status is given by the combination of the comparison context (e.g., ``...er and more...'' in tweet (5)) and the signals (e.g., ``fast'' and ``stable'' in tweet (5)). The polarity of the comparison base can then be decided by the relative status. For example, the comparison frame for tweet (5) is as follows.
+
+\vspace{0.5\Cvs}
+\noindent {\bf Rhetoric Type: Comparison}
+\begin{itemize}
+\item[] {\bf Comparison object: \#Windows7}
+\item[] {\bf Comparison base: Windows 8(default)}
+\item[] {\bf Relative Status: inferior}
+\end{itemize}
+\vspace{0.5\Cvs}
+
+Similar to comparison, the metaphor frame also has three slots. The metaphor source slot contains the anchor text of the metaphor source in the tweet. The metaphor target defaults to the evaluation object. Metaphor polarity indicates the polarity of the metaphor source, which is negative, neutral, or positive. Annotators recognize the metaphor context (e.g., ``...is figuratively...'' in tweet (6)) and label the metaphor polarity (e.g., ``negative'' is attached to ``the bane of my existence'' in tweet (6)). The metaphor target then duplicates the metaphor polarity as its own polarity. For example, the metaphor frame for tweet (6) is as follows.
+
+\vspace{0.5\Cvs}
+\noindent {\bf Rhetoric Type: Metaphor}
+\begin{itemize}
+\item[] {\bf Metaphor source: the bane of my existence}
+\item[] {\bf Metaphor target: Windows 8(default)}
+\item[] {\bf Metaphor polarity: negative}
+\end{itemize}
+\vspace{0.5\Cvs}
+
+The frames for sarcasm and rhetorical question are similar to one another; each has two slots. The locating sentence slot contains the anchor text of the sentence in which sarcasm or a rhetorical question is located in the tweet. Sentence polarity indicates the polarity of the locating sentence to the evaluation object. The existence of sarcasm can be suggested by the contradictory signal pairs (e.g., (impressed, bad) and (perfect, \#antidesign) in tweet (7)). The polarity of a rhetorical question can be obtained by integrating the corresponding context (e.g., ``what went...?'' in tweet (8)) and the signals (e.g., ``wrong'' in tweet (8)). Since the contexts of sarcasm and a rhetorical question are not as structured as the former two, their recognition relies on the subjective interpretation of an annotator. As examples, the sarcasm frame for tweet (7) and the rhetorical question frame for tweet (8) are as follows.
+
+\vspace{0.5\Cvs}
+\noindent {\bf Rhetoric Type: Sarcasm (1)}
+\begin{itemize}
+\item[] {\bf Locating sentence: Every time I use \#Windows8, I become more impressed with how profoundly bad a UX it is.}
+\item[] {\bf Sentence polarity: negative}
+\end{itemize}
+\noindent {\bf Rhetoric Type: Sarcasm (2)}
+\begin{itemize}
+\item[] {\bf Locating sentence: Its an almost perfect \#antidesign}
+\item[] {\bf Sentence polarity: negative}
+\end{itemize}
+\vspace{0.5\Cvs}
+
+\noindent {\bf Rhetoric Type: Rhetorical question}
+\begin{itemize}
+\item[] {\bf Locating sentence: what went wrong in 30 years?}
+\item[] {\bf Sentence polarity: negative}
+\end{itemize}
+\vspace{0.5\Cvs}
+
+A tweet can simultaneously contain two or more types of rhetoric devices. For example, tweet (1) in Section 1 (shown again below) includes two rhetoric devices, i.e., comparison and sarcasm. Further, the rhetorical context sometimes spans multiple sentences. Still referring to tweet (1), sarcasm does not locate in any single sentence. In fact, the polarity collision of the first two sentences with the third sentence forms the sarcasm context. To the best of our knowledge, similar research has not been conducted as part of any other sentiment annotation work. This not only allows us to collect explicit rhetorical patterns but also offers us the opportunity to analyze their implicit structures.
+\begin{enumerate}
+\item[{\bf (1)}] {\bf Wow, with \#iPhone6, you can send a message just by talking! In any voice you like. So can my mom's old rotary dial.}
+\end{enumerate}
+
+
+\subsection{Global Polarity}
+Global polarity is fundamental information for a sentiment classification-oriented corpus. In accordance with Go et al.\ \citeyear{Go09}, the global polarity of a tweet is defined as ``the author's personal feeling to the evaluation object.'' In our annotations, global polarity is divided into the following three categories.
+
+\begin{itemize}
+\item Positive: a tweet that shows the author's supportive attitude toward an evaluation object.
+\item Negative: a tweet that shows the author's non-supportive attitude toward an evaluation object.
+\item Neutral:
+\begin{itemize}
+\item[\ding{"AC}] A subjective tweet with attitudes either undecided or mixed (i.e., half positive, half negative).
+\item[\ding{"AD}] A non-opinionated tweet, such as a non-comment tweet, an objective tweet, or an irrelevant tweet.
+\end{itemize}
+\end{itemize}
+
+According to the above definition, tweet (2) is a negative tweet, tweet (3) is a positive tweet, and tweet (4) is the first type of neutral tweet. Global polarity is sometimes difficult to determine for ambiguous tweets. For example, the global polarity of tweet (12) can be either negative or neutral depending on how people interpret the second sentence, i.e., either as mocking Scotland or as a pure statement. To secure better global polarities for these ambiguous tweets, instead of using simple majority voting over annotators' original answers, we propose an original and improved method called PDC, which we present in Section 5.2.
+\begin{enumerate}
+\item[{\bf (12)}] {\bf The nationalist criticism of the Smith Comission report is that it isn't independence. That's because Scotland didn't vote for that.}
+\end{enumerate}
+
+\subsection{Subtopic Information}
+
+It is important to know people's opinions regarding evaluation objects. It is also meaningful to know what type of related subtopics people are concerned about, which can then help us better understand differences between cultures. Therefore, we include subtopic information in our scheme.
+
+Subtopics can be nouns or nominal phrases in tweets, and annotators are encouraged to edit them to create unified forms. If there is no direct subtopic text in a tweet, the annotator is allowed to infer it through summarization. For example, ``screen'' and ``size'' are subtopics for tweet (13); here, ``screen'' can be directly extracted from the first clause of the first sentence, while ``size'' can be obtained by summarizing the second clause.
+
+Subtopics are not always as easy to discover as nouns, which are aspects or attributes of evaluation objects \cite{Hovy15}. In particular, here, ``bending'' is also a subtopic of tweet (13); however, until we observe that there are a few tweets discussing the bending problem of iPhone 6, it is difficult to identify ``bending'' as a subtopic at first glance.
+\begin{enumerate}
+\item[{\bf (13)}] {\bf Just picked up an \#iPhone6 the screen is beautiful, but my god is it large! Crossing my fingers it doesn't bend!}
+\end{enumerate}
+
+
+\section{Annotation Process}
+
+The annotation process has two phases, i.e., independent annotation (Phase 1) and annotation improvement (Phase 2). In this section, we first describe the annotation setup for Phase 1, and then detail the PDC method used in Phase 2. Finally, we analyze the effect of our PDC method.
+
+
+\subsection{Annotation Setup}
+
+\begin{table}[b]
+\renewcommand{\arraystretch}{}
+\caption{Allocation of annotators for one language}
+\label{annotator_allocation}
+\input{02table04.txt}
+\end{table}
+
+For each object and language, we prepare a collection of approximately 450 tweets by the method described in Section 3.3 above. In total, there are 12 collections (i.e., three languages times the four objects). For each collection, three different annotators perform the annotations independently according to a common standard. For each language, there are six annotators and each annotator takes charge of two objects. Table \ref{annotator_allocation} illustrates the allocation of annotators, denoted A1 through A6, for one language.
+
+The annotator team consists of 1 supervisor\footnote{The first author of this paper supervised the annotation work.} and 18 annotators. Given that expressions of feelings in social media can sometimes be rather subtle, each of our annotators is a native speaker or has the same proficiency as that of a native speaker for each language. More specifically, Japanese annotators are all native undergraduate students, while Chinese annotators are all native graduate students. Considering the geographically wide use of English, the English group consisted of two Americans, one Australian, one Indian, and two Europeans, all with excellent English skills.
+
+To ensure high-quality annotations and maintain a stable annotation speed, each annotator received a three-hour training session with a coding manual before the formal work began; a brief introduction of rhetoric devices with examples was also distributed. The coding manual was continuously refined based on discussions of training results among the annotators and the supervisor until a consensus was reached. 
+
+Next, all the 18 annotators performed the annotation work independently according to the updated coding manual in a specified room. Each annotator was assigned 18 annotation hours to finish the two objects (i.e., approximately 900 tweets) for which he or she was responsible. The supervisor provided onsite support during the entire annotation period and did not provide any direct directives that may alter an annotator's own judgment. In practice, the supervisor helped to solve problems individuals faced with the annotation tool (described below), answered questions regarding the annotation method, and discussed the meaning of some tweets upon the request of the annotators.
+
+To make operations more convenient for annotators, we developed an annotation support tool that implemented the annotation scheme described in Section 4. With the help of this tool, annotators could complete most of their tasks by mouse clicks and various keyboard shortcuts. Annotators also practiced using the tool as part of their training. Figure \ref{fig:interface} shows the general interface of our annotation tool; also see Appendix B for an example of annotation results in XML.\footnote{This example is the final version from the gold standard, which is introduced in the next section.} Annotators performed their annotations tweet by tweet until their tasks were completed. The annotation procedure for one tweet is summarized as follows (see Appendix C for the full details of the code manual).
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia2f2.eps}
+\end{center}
+\caption{Interface of the annotation tool}
+\label{fig:interface}
+\end{figure}
+
+\begin{enumerate}
+\item Annotators first quickly glimpsed the tweet, and then focused on the beginning of the tweet.
+\item From the beginning to the end of the tweet, annotators read and judged each word. If any emotional signal, degree modifier, or subtopic presented itself, the corresponding tag was added.
+\item After finishing step (2), annotators determined the global polarity of the tweet.
+\item Annotators chose the rhetoric devices that occurred in the tweet, supplementing the necessary information for each selected rhetoric device.
+\item Finally, annotators unified the forms of subtopics obtained in step (2) or summarized the tweet if no subtopics were identified.
+\end{enumerate}
+
+
+\subsection{PDC Method}
+
+The majority decision of the three original global polarities of each tweet in Phase 1 would be used as the final decision in previous studies on traditional text; however, for social media like Twitter, inter-annotator agreement on global polarity at this stage has been reported to be low \cite{Sang12,Basile13}, so global polarities decided by simple majority voting may be insufficient given that annotators can make understanding errors (i.e., misunderstandings) and human errors (i.e., misoperations) in their independent annotations.
+
+A quick way to correct possible errors in Phase 1 is to ask annotators to recheck their annotations, but this only works for human errors. For understanding errors, since sentiment annotation is rather subjective, from our experience, annotators are apt to stay with their old way of thinking and make few changes. Consider the following two tweets regarding Windows 8 as examples. One annotator misunderstood ``that'' in tweet (14) as modifying ``Windows 10 DRM,''\footnote{DRM stands for digital rights management.} and incorrectly tagged tweet (14) as ``positive''; in actuality, ``that'' modifies ``steps to fix DRM,'' so tweet (14) is actually ``neutral.'' Another annotator mistook ``linx7'' as ``Linux'' and incorrectly tagged tweet (15) as ``positive''; in actuality, ``linx7'' is a Windows 8 tablet, so tweet (15) is ``negative.'' It is difficult to correct these understanding errors with self-checks. To address this problem, the comparison method is more feasible to implement in that annotators can quickly and precisely locate their errors by comparing their annotations with reference annotations. For tweets (14) and (15), if we show annotators that they are more likely to be ``neutral'' and ``negative,'' and give them instructions about where the problem may lie, it becomes easier for them to recognize their understanding errors.
+
+\begin{enumerate}
+\item[{\bf (14)}] {\bf @GabeAul Went through all the steps to fix \#Windows10 DRM that worked in \#Windows7 and \#Windows8, and then some, but no luck. Weird!}
+\item[{\bf (15)}] {\bf Trying not to \#lol as toms losing it trying to suss his \#linx7 \#windows8  \includegraphics{24-2ia2p20.eps} \#notsomuchofabargainnow} 
+\end{enumerate}
+
+To realize this idea, we propose the PDC method, which involves the following two steps. First, we generate good reference annotations and collect them in a pivot dataset. Second, we use these annotations for comparisons. Each of these two steps is further described below.
+\begin{itemize}
+\item Step 1: Manual Merging\\
+The supervisor first goes through the meaning of each tweet in the corpus.\footnote{This created a large amount of labor for the supervisor, but efficient quality management cannot be carried out if the supervisor has little involvement with the tweets.} If the supervisor has a disparate opinion from the majority decision, or if the majority decision is undecided (i.e., all three original answers for global polarity differ), a fourth judgment is made by a new native annotator.\footnote{The new annotator is still one of the original annotators, but he or she was responsible for the other two objects, so the annotation standard did not change at all.} If the majority decision of the four answers of a tweet differs from its original three answers, the global polarity of this tweet is temporarily changed to the majority decision of the four answers.\footnote{If the new majority decision becomes undecided, the supervisor's opinion will be considered.} Meanwhile, the components (i.e., emotional signals, degree modifiers, rhetorical contexts, and subtopics) are manually merged by integrating the three original annotations\footnote{The supervisor refers to the three original component tags of a tweet, and then considers whether to keep/delete/modify any tag that appears in the original annotations or add new ones according to the same annotation schema.} and can be altered according to the fourth judgment. Results of this manual merging constitute the pivot dataset.
+\item Step 2: Pivot Dataset Comparison\\
+Based on comparisons with the pivot dataset, with both the global polarity and components shown to the annotators, we ask all annotators to revise their own original annotations. Although the supervisor is allowed to give instructions here, the annotators themselves finally decide whether to change or stay with their original answers to maintain the independence of each re-judgment. Components related to global polarity (i.e., emotional signals, degree modifiers, and rhetorical contexts) are updated along with changes in global polarity, if necessary. As a tradeoff between time cost and resulting benefits, only tweets with global polarities that differ from the pivot dataset are re-judged. After revisions are made, the pivot dataset is updated in turn by the majority decisions of the three annotators' updated answers, which is called the gold standard.
+\end{itemize}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-2ia2f3.eps}
+\end{center}
+\caption{PDC method and its resulting datasets}
+\label{fig:PDC_flowchart}
+\end{figure}
+
+From above, in addition to the original datasets, the PDC method produces three new datasets, i.e., the pivot dataset, the revised datasets, and the gold standard. The entire process of the PDC method and the relationships among these datasets are depicted in Figure \ref{fig:PDC_flowchart}, where \ding{"AC}\ding{"AD} correspond to Step 1, and \ding{"AE}\ding{"AF} correspond to Step 2. Another advantage of our PDC method is that it is introspective. Since the pivot dataset involves human judgment, the process introduces new errors as well, but incorrect global polarities can be fixed in reverse if two or more annotators refuse to make any changes. Therefore, the gold standard is taken as the optimal dataset in this paper.
+
+As for subtopic information, format errors (e.g., typos) in each tweet are fixed during the merging of the pivot dataset. To avoid notation discrepancies across tweets, the supervisor further manually calibrates subtopic expressions to unified shapes in the gold standard. There are two types of unification here, i.e., (1) unifying subtopics in different shapes to the same shape (e.g., DevoMax, \#devomac, and devo-max are unified as DevoMax\footnote{``DevoMax'' stands for maximum devolution.} for Scottish Independence) and (2) unifying subtopics with the same meaning but different expressions (i.e., synonyms), e.g., dropping, falling, and slipping are unified as dropping for iPhone 6.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-2ia2f4.eps}
+\end{center}
+\caption{Typical case of the original answers and a reference answer}
+\label{fig:PDC_case}
+\end{figure}
+
+As a comparison, consider how the PDC method differs from the naive method of rechecking once there is a difference between the annotators' original answers. In terms of time cost, since the PDC method only asks annotators to recheck tweets with global polarities that differ from the pivot dataset, the number of tweets that must be rechecked is less than that of the naive method. To illustrate, in the example shown in Figure \ref{fig:PDC_case}, the PDC method saves one time of rechecking in which the original answer is neutral. In terms of quality benefits, since the pivot dataset has already recognized understanding errors through Step 1, the comparison with reference annotations can help annotators promptly and accurately locate possible understanding errors. Conversely, as mentioned above, self-checking via the naive method is inefficient for detecting understanding errors. Note that our PDC method can even discover issues when all original answers are identical but incorrect. The disadvantage of the PDC method is that it requires additional time to obtain the pivot dataset, making it impractical for large-scale corpora. Simply put, the PDC method moves much labor from the annotators to the supervisor (and the fourth judges when necessary) such that annotators can focus on the tweets that very much need their attention. The empirical analysis of the effect of the PDC method is described in the next section.
+
+
+\subsection{Effect of the PDC Method}
+
+Table \ref{kappa_statistics} shows Cohen's Kappa statistics for the global polarity of Phase 1 (i.e., independent annotations) and Phase 2 (i.e., applying the PDC method). As shown in the table, the inter-annotator agreement rates were relatively low for all three languages in Phase 1 (i.e., 0.482, 0.600, and 0.576 for English, Japanese, and Chinese, respectively), indicating that the agreement level of the original annotation was moderate (i.e., 0.4--0.6), with English being the language for which consensus was most difficult to achieve.
+
+\begin{table}[b]
+\caption{Average kappa statistics for global polarity}
+\label{kappa_statistics}
+\input{02table05.txt}
+\end{table}
+\begin{table}[b]
+\caption{Number of tweets requiring rechecking in different settings}
+\label{number_requiring_recheck}
+\input{02table06.txt}
+\end{table}
+
+On the other hand, Cohen's Kappa statistics increased to a substantial (i.e., 0.6--0.8) or almost perfect (i.e., 0.8--1.0) level (i.e., by 0.283, 0.224, and 0.238 for English, Japanese, and Chinese, respectively) after the PDC method was applied. Among all collections, the lowest value was 0.693 (i.e., substantially reliable), whereas the highest was 0.855 (i.e., almost perfect). These results justify the main idea presented in Section 5.2 and demonstrate the effectiveness of our PDC method. By comparing results with the pivot dataset, the most obvious errors are easily revised, including human errors, tagging irreverent tweets as emotional, and mistaking author mood as the evolution of the object. Many more challenging understanding errors are also detected here, such as incorrect tagging due to a lack of background knowledge, mistaking situation analysis as an opinion, and misunderstanding from carelessness.
+
+Next, we discuss the effect from the perspective of time cost. Table \ref{number_requiring_recheck} shows the number of tweets that should be or have been rechecked in different settings. In Phase 2, each annotator spent three hours on comparison, comparing 176 tweets with the pivot dataset on average (i.e., 212 for English, 154 for Japanese, and 163 for Chinese). Among these, each annotator changed 112 tweets on average (i.e., 139 for English, 99 for Japanese, and 99 for Chinese). In contrast, each annotator should compare 380 tweets on average (i.e., 432 for English, 338 for Japanese, and 370 for Chinese) if using the naive method, which is far more than that in the PDC method. Further, we computed the ideal numbers that should be compared when using the gold standard as reference answers, showing that each annotator should at least have compared 166 tweets on average in Phase 2 (i.e., 200 for English, 147 for Japanese, and 153 for Chinese). As mentioned in Section 5.2, the pivot dataset introduces new errors, which is why there is a gap between the ideal and reality; however, compared with the naive method, our PDC method largely reduced the number of tweets that annotators needed to recheck.
+
+
+\section{Basic Analysis of the Corpus}
+
+In this section, we describe the basic analysis of the annotated corpus. We compare components of expressions of feelings between languages, as well as public mood and people's concerns regarding the same evaluation objects in different cultures. Note that our analysis here has been conducted on the gold standard unless otherwise specified.\footnote{A similar analysis of the original datasets is reported in SIG Technical Reports (2015-NL-222).}
+
+Table \ref{basic_statistics} presents an overview of the gold standard. From the table, we first observe that the final number of tweets in each collection fluctuated by around 450. Second, the average numbers of characters per tweet were 126.47 for English, 74.91 for Japanese, and 89.72 for Chinese, which are longer than the general Twitter average \cite{Neubig13} owing to the selection strategy in Section 3.3. Further, considering that the information content of characters in each language differs (i.e., hieroglyphic characters usually contain more information content than alphabetic characters), we investigated the average number of morphemes per tweet; since the morpheme is the smallest unit of meaning, it is more comparable between languages. For Japanese and Chinese tweets, we used Mecab\footnote{http://taku910.github.io/mecab/} and NLPIR\footnote{http://ictclas.nlpir.org/} to segment the remaining text of tweets after extracting the emojis and emoticons via regular expressions; for English, we employed TweetTokenizer,\footnote{http://www.nltk.org/api/nltk.tokenize.html} which is customized for English tweets with the unit being a word. As shown in Table \ref{basic_statistics}, the average numbers of morphemes/words for English, Japanese, and Chinese were 22.07, 32.79, and 48.55, respectively, which reverses the order of the average number of characters.\footnote{Apart from normal words, special symbols in tweets, such as Unicode emojis (e.g., \includegraphics{24-2ia2p25.eps}), emoticons (e.g., :-), (((o (*$^{\circ}▽^{\circ}$*) o)))) are regarded as morphemes, but all punctuation marks are ignored.} Note that the average numbers of characters in a morpheme/word are 4.64 for English, 2.03 for Japanese, and 1.66 for Chinese. 
+
+\begin{table}[t]
+\caption{Basic statistics of the gold standard}
+\label{basic_statistics}
+\input{02table07.txt}
+\end{table}
+
+
+\subsection{Emotional Signals and Degree Modifiers}
+
+Table \ref{number_signals_and_modifiers} shows the number of signals and their modifiers per tweet for each collection. As stated in Section 4.2 above, all these signals influence global polarity. First, we find that Chinese users generally use more emotional signals in a tweet than English and Japanese users; except for Scottish Independence, the sums of emotional signals for the other evaluation objects, including iPhone 6, Windows 8, and Putin, presented such a tendency. Further, the use of neutral signals was much less prevalent than that of the other two emotional signals for all three languages.
+
+\begin{table}[t]
+\caption{Average number of signals and their modifiers per tweet}
+\label{number_signals_and_modifiers}
+\input{02table08.txt}
+\end{table}
+
+Each degree modifier modified its targeted emotional signal in its own way. As shown in Table~\ref{number_signals_and_modifiers}, the frequency of modifiers essentially had the same order as emotional signals, with Chinese ranking first, followed by English and Japanese; again, except for Scottish Independence, the sums of degree modifiers for the other evaluation objects followed this trend. Further, the number of diminishers was much smaller than that of intensifiers in all three languages, implying that expressions of feelings in social media tend to be intense rather than reserved. As to negation, for the products (i.e., iPhone 6 and Windows 8), Chinese users (i.e., 0.43 and 0.37) used negation more than Japanese users (i.e., 0.25 and 0.34), who in turn used negation more than English users (i.e., 0.22 and 0.24); for Putin and Scottish Independence, English users (i.e., 0.18 and 0.19) used negation more than Chinese users (i.e., 0.16 and 0.13), who in turn used negation more than Japanese users (i.e., 0.06 and 0.04, respectively).
+
+
+\subsection{Rhetorical Context}
+
+Table \ref{number_rhetoric_devices} shows the distribution of the four rhetoric devices in each collection. We first observe that the rhetoric occurrence rate across the entire corpus was 21.9\%. English users used rhetoric devices to express their feelings most often (i.e., 30.6\%), followed by Chinese users (i.e., 23.9\%) and then Japanese users (i.e., 11.2\%). This indicates that rhetorical phenomena occur more frequently in English and Chinese tweets.
+
+In terms of the type of rhetoric device, comparison was the most frequently used rhetoric device in all three languages, followed by rhetorical questions, sarcasm, and metaphors, implying that individuals in different cultures prefer to provide their opinions on an object by comparing it with its competitors. Further, the top two rhetoric devices (i.e., comparisons and rhetorical questions) formed the majority of the rhetoric used, accounting for 64.5\%, 83.2\%, and 82.6\% of the total number for English, Japanese, and Chinese, respectively. In addition, the frequency of metaphors used in each language was relatively low (i.e., 13.75\%, 5.75\%, and 7.75\% for English, Japanese, and Chinese, respectively). 
+
+\begin{table}[t]
+\hangcaption{average number of rhetoric devices per collection, with the occurrence rate equal to the total number of rhetoric devices in a collection divided by the number of tweets in a collection}
+\label{number_rhetoric_devices}
+\input{02table09.txt}
+\end{table}
+
+Sarcasm was where the largest difference among languages occurred in terms of rhetoric use. It accounted for 26\% of all rhetoric occurrences in English, but only 9.5\% and 5.4\% for Chinese and Japanese, respectively. This phenomenon may be attributed to the following two reasons.\footnote{People may argue that the more negative the public opinion is, the more sarcasm there is; however, we found that the proportion of sarcasm is not necessarily linearly correlated with public opinion by conducting a correlation analysis between the proportion of sarcasm and public opinion.} First, it may be due to cultural factors, such as habitual patterns of expression, which can be endorsed by the fact that Western people are known for critical thinking, and that irony, as a hallmark, appears in many Western literary classics. This may explain why the occurrence of sarcasm in reference to Windows 8 varies among languages, though public opinions on Windows 8 are very close, as shown in Table \ref{polarity_distribution}.
+
+\begin{table}[t]
+\caption{Global polarity distribution of each evaluation object}
+\label{polarity_distribution}
+\input{02table10.txt}
+\end{table}
+
+Second, it may be due to subtopic composition, particularly the things that people talk about. As shown in Table \ref{number_rhetoric_devices}, the amount of sarcasm shown for Scottish Independence in English was much higher than that for iPhone 6. We studied English tweets regarding Scottish Independence and found that there was a football game between Scotland and England after the independence referendum. The fact that Scotland voted ``no'' for independence but still booed the British national anthem brought a lot of sarcastic mocking from the English. Hence, a resolution of the sarcasm context is especially important for the English language.
+
+
+\subsection{Global Polarity}
+
+The collective sentiment (denoted as the PN ratio) for an object is used to represent public opinion, measuring the degree of happiness of a group of people \cite{Brendan10,Lu15}. The PN ratio of object X of a collection is defined as
+\begin{equation}
+{\rm PN\ ratio\ (X) = \frac{\#positive\ tweets\ of\ X\ in\ the\ collection}{\#negative\ tweets\ of\ X\ in\ the\ collection}}
+\end{equation}
+
+By definition (1), if the PN ratio is greater than one, people are happy with the object, while a value less than one indicates the opposite. When the size of the collection is too small or the polarity distribution is skewed, the numerator or denominator tends toward zero. In such instances, they are set to one in practice. Table \ref{polarity_distribution} shows the global polarity distribution (i.e., the number of tweets for each polarity) of each collection.
+
+We first observe the PN ratios to determine whether there is any difference in public mood between cultures. As a hit product of the renowned Apple Inc., iPhone 6 was welcomed by English users (i.e., 1.53) and Chinese users (i.e., 1.41), whereas Japanese users (i.e., 0.64) showed an unfavorable attitude, primarily due to its frequent malfunctions. As for Windows 8, all three cultures reached a high degree of consensus, complaining about its user-unfriendly design and experience (i.e., 0.27, 0.23, and 0.29 for English, Japanese, and Chinese users, respectively).
+
+Individuals were evidently divided over Putin. Japanese users (i.e., 2.88) and English users (i.e., 0.21) markedly opposed one another, whereas Chinese users (i.e., 1.25) adopted a pro-center stance. People appreciate Putin for his all-round personal abilities, but dislike him for his dictatorship. Regarding Scottish Independence, both English users (i.e., 1.31) and Chinese users (i.e., 1.49) showed their support for independence. Inspecting the tweets more closely, we found that English users talked about Scottish identity, whereas Chinese users emphasized the democratic practices, sometimes as an example of schadenfreude. Japanese users (i.e., 0.94) were almost neutral on this issue. As a conclusion, we note that the three cultures had different opinions on three objects and similar opinions on one object, so it is clear that public mood variance does exist between cultures.
+
+Further, we observed that far fewer Japanese tweets (i.e., 64) and Chinese tweets (i.e., 177) had explicit opinions on Scottish Independence versus English tweets (i.e., 324). This is in accordance with the low public attention in the former two regions discussed in Section 3.2, since the issue was more important for European people, especially those in Britain. The decreasing number of non-neutral tweets also explains the sharp decrease in rhetoric occurrences in Scottish Independence in Japanese (i.e., 2.7\%) and Chinese (i.e., 8.7\%) shown in Table \ref{number_rhetoric_devices}. On the contrary, the percentages of non-neutral tweets are similar for the other three objects since users generally took the same stance (i.e., as outsiders for Putin and as customers for Windows 8 and iPhone 6). This suggests that user stance or interest relationship should be taken into account in a cross-cultural setting.
+
+Last, we note that the entire corpus is well-balanced, with 0.75 inclined to the negative side, making it a suitable learning resource for three-class sentiment classification.
+
+
+\subsection{Subtopic Information}
+
+Table \ref{subtopic_number} shows the average number of subtopics per tweet for each collection, revealing that Japanese users (i.e., 3.55) introduce a few more subtopics than Chinese users (i.e., 3.22) and English users (i.e., 2.91). Along with the small number of emotional signals, this may imply that Japanese users focus more on sharing than on judging. Further, the average number of subtopics over the corpus (i.e., 3.23) demonstrates that although a tweet is limited to 140 characters, it still consists of approximately three subtopics. As an example, tweet (13)\footnote{\textbf{(13) Just picked up an \#iPhone6 the screen is beautiful, but my god is it large! Crossing my fingers it doesn't bend!}} in Section 4.5 is a tweet that contains three subtopics, i.e., screen, size, and bending. Our findings here may weaken the conclusions of topic-related Twitter research \cite{Si13}, which assume that a tweet has only one subtopic. 
+
+\begin{table}[b]
+\caption{Subtopic number for each topic and language}
+\label{subtopic_number}
+\input{02table11.txt}
+\end{table}
+\begin{table}[b]
+\caption{High-frequency subtopics of iPhone 6 tweets}
+\label{subtopic_I6}
+\input{02table12.txt}
+\vspace{4pt}\small\textsuperscript{*}iPhone here means a kind of phone.
+\end{table}
+
+To see how subtopic components differ between cultures, the top 10 subtopics in each collection are shown in Tables \ref{subtopic_I6} through \ref{subtopic_SI}. In Tables \ref{subtopic_I6} and \ref{subtopic_W8}, we observe that even though there were some exceptions, the products (i.e., iPhone 6 and Windows 8) shared many similar subtopics, such as phone, acquisition, Apple, case, screen, and apps for iPhone 6 and Windows 7, laptop, user experience, updating, and Microsoft for Windows 8. This suggests that the same subtopic list can be shared among different languages for products when using topic-relevant methods.
+
+\begin{table}[p]
+\caption{High-frequency subtopics of Window 8 tweets}
+\label{subtopic_W8}
+\input{02table13.txt}
+\end{table}
+\begin{table}[p]
+\caption{High-frequency subtopics of Putin tweets}
+\label{subtopic_PU}
+\input{02table14.txt}
+\end{table}
+\begin{table}[p]
+\caption{High-frequency subtopics of Scottish independence tweets}
+\label{subtopic_SI}
+\input{02table15.txt}
+\end{table}
+
+As for Putin, the cultures seemed to have their own interest points. Although there are common subtopics, such as Obama, Russia, and US, English users primarily gave general political opinions on the Ukraine, West, and world, whereas Japanese users focused more on 柔道 (judo), 空手 (karate), and called Putin a 政治家 (politician) and 大統領 (president). Chinese users mentioned APEC and G20 summit meetings much more, likely because APEC was held in Beijing and the G20 summit was widely reported in China during our data-collection period.
+
+For Scottish Independence, subtopics between the third-party regions (i.e., Japanese and Chinese areas) and interested regions (i.e., English areas) differed greatly. The third-party regions discussed the issue at a macroscopic level, including campaign, referendum, and England, whereas interested regions mentioned more specific subtopics, such as the Scotland versus England football match, SNP, and Westminster. What surprised us is that the largest subtopic for the English, i.e., the Scotland versus England football match, was hardly referred to by Japanese or Chinese users. Therefore, subtopic variance should be taken into consideration when developing topic-relevant methods for public figures and events.
+
+
+\section{Rhetoric and Global Polarity}
+
+In this section, we discuss how the occurrence of rhetoric devices affects tweet polarity. First, we conduct our investigation from a macroperspective, and then go to the microperspective.
+
+
+\subsection{Influence on Collective Sentiment}
+
+Much of the research in the field relies on the PN ratio to represent public mood regarding a certain object. Nonetheless, since the global polarity of a tweet is difficult to obtain, the word-level PN ratio is often used as a substitute for the tweet-level PN ratio \cite{Bollen11,Si13}. In this section, we verify whether this substitution is valid for use with our corpus and reveal the influence of components on collective sentiment.
+
+For ease of reference, we use WPN to denote the word-level sentiment ratio based on polarity lexicons (see Appendix D for the dictionaries that we used); SPN to denote the sentiment ratio based on hand-labeled emotional signals, which acts as an upper bound for WPN; and GPN to denote the sentiment ratio based on hand-labeled global polarity. Note that GPN is the same as the PN ratio. By counting how many positive or negative words or signals occur in a collection, we can arrive at values for WPN and SPN. More specifically, the WPN and SPN of object X for a collection are defined as
+\begin{gather}
+\text{WPN(X)} = \frac{\text{\#positive words of X in the collection}}{\text{\#negative words of X in the collection}} \\[1ex]
+\text{SPN(X)} = \frac{\text{\#positive signals of X in the collection}}{\text{\#negative signals of X in the collection}}
+\end{gather}
+
+
+\subsubsection{Similarities among WPN, SPN and GPN}
+
+Table \ref{comparison_wpn_spn_gpn} compares the three sentiment ratios. First, it shows that SPN has a stronger correlation and smaller gap (i.e., $r = 0.92$ on average, $\text{gap} = -0.19$ on average) with GPN than WPN does (i.e., $r = 0.76$ on average, $\text{gap} = -0.26$ on average) in all three languages; however, despite WPN being poorer than SPN, there is no statistically significant difference among GPN, SPN, and WPN (i.e., paired t-tests, all $p > 0.05$). In other words, SPN and WPN can both be possible substitutes for GPN, but SPN is more accurate. Therefore, it is acceptable to use WPN to represent public opinion in opinion-mining applications.
+
+\begin{table}[b]
+\caption{Comparison of WPN, SPN, and GPN, including the mean of WPN, SPN and GPN, correlation coefficient, and $p$-value of paired t-tests calculated over all 12 collections}
+\label{comparison_wpn_spn_gpn}
+\input{02table16.txt}
+\end{table}
+
+We also found that the correlation between WPN and SPN was relatively high and the gap between them was small (i.e., $r = 0.93$ on average, $\text{gap} = -0.07$ on average). Table \ref{word_signal_intersection} shows matching results of polarity words and emotional signals. Since emotional signals are allowed to be phrases (e.g., makes a...difference), we assume that if a polarity word hits any word of an emotional phrase, then it is a successful match.\footnote{If two or more polarity words hit the same phrase, we have one match for emotional signals and two or more matches for polarity words. Hence, the intersection numbers of polarity word-based matching can be slightly larger than those of emotional signal-based matching. The numbers for both situations are listed in Table \ref{word_signal_intersection}.} Further, the polarities of both sides should be identical, meaning that if a positive word hits a negative signal, it is not regarded as a successful match.
+
+\begin{table}[t]
+\hangcaption{Number of polarity words and their intersection with emotional signals per tweet, with the matching rate equal to sum of the number of positive and negative signal-based intersections divided by sum of the number of positive and negative signals (Table \ref{number_signals_and_modifiers}) and the mismatching rate equal to sum of the number of positive and negative word-based intersections devided by sum of the number of positive and negative words}
+\label{word_signal_intersection}
+\input{02table17.txt}
+\end{table}
+
+The gap between WPN and SPN occurs primarily for two reasons. First, there was a failure in detecting emotional signals using polarity dictionaries. Table \ref{word_signal_intersection} indicates that the average signal matching rates reached only 44.3\%, 33.4\%, and 33.2\% for English, Japanese, and Chinese, respectively. These mediocre results have occurred because many of the emotional phrases are composed of non-polarity words and some signals have not yet been registered in the polarity dictionaries. Second, many polarity words were mistaken as emotional signals. From Table \ref{word_signal_intersection}, we observe that the average word mismatching rates were 53.6\%, 83.0\%, and 73.3\% for English, Japanese, and Chinese, respectively, all of which are more than half. Here, the polarity words are not necessarily evaluating the objects, but rather can be narrative or off-topic, which accounts for the extremely high word mismatching rates for Scottish Independence in Chinese and Japanese, since both collections have a limited number of non-neutral tweets (Table \ref{polarity_distribution}).
+
+Incorrectly registered non-opinionated words in polarity dictionaries can also further worsen the problem, since solutions to both problems above require high-quality polarity dictionaries. In our experience, WPN changes largely from dictionary to dictionary.\footnote{Low-quality dictionaries can generate rather meaningless results, so all three dictionaries we selected have been checked manually by their providers.} As for topic consistency, we regard it as an inherent gap between SPN and WPN, with WPN calculated only via simple counting, i.e., involving no topic-oriented technology. Finally, although there is plenty of room for improvement to use WPN as a proxy for GPN for all three languages, its adaptability in English is basically better than that in Japanese and Chinese.
+
+
+\subsubsection{Influence of Components on GPN--SPN}
+
+Because both GPN and SPN were calculated from the gold standard, the gap between them can be regarded as originating from the context of the tweets.\footnote{We ignore quantization error (e.g., two positive tweets and one negative tweet (GPN = 2) may have five positive and two negative signals (SPN = 2.5) since our collection is quite large.} Hence, we can use the gap between GPN and SPN (denoted GPN--SPN) to approximate context influence. If a particular type of context has no influence on global polarity, GPN--SPN will be similar regardless of whether it is present or not. We therefore conducted a one-way analysis of variance (ANOVA) to examine the influence of the presence or absence of certain types of components (i.e., independent variables), including degree modifiers and rhetoric devices, on GPN--SPN (i.e., a dependent variable).
+
+\begin{table}[b]
+\hangcaption{Difference of GPN--SPN and results of our ANOVA, showing the mean of GPN--SPN and the $p$-value of ANOVA calculated over all 12 collections}
+\label{difference_gpn_spn}
+\input{02table18.txt}
+\end{table}
+
+Table \ref{difference_gpn_spn} shows the GPN--SPN difference and the results of our ANOVA, showing that intensifiers and diminishers together (i.e., Modifiers--Negation) had little influence on the collective sentiment ratio (i.e., $p = 0.986 > 0.05$) and that their GPN--SPN difference was trivial (i.e., $-0.003$). Conversely, the influence of negation was significant (i.e., $p = 0.004 < 0.01$).\footnote{Some opinions were toward opposites of Scotland in Scottish Independence (e.g., England); we temporarily regarded these opposites as negation here.} Here, the GPN--SPN of the non-negation collection was small (i.e., 0.069), while it was large (i.e., $-0.579$) for the negation collection. For rhetorical phenomena, we found that sarcasm had the same influence as negation on collective sentiment (i.e., $p = 0.001 < 0.01$); although other rhetoric devices (i.e., Rhetoric--Sarcasm) were not statistically significant (i.e., $p = 0.639 > 0.05$), their overall GPN--SPN difference was not trivial (i.e., $-0.302$).
+ 
+\begin{table}[b]
+\hangcaption{Results of ANOVA by Language. $p$-value of ANOVA are calculated over the 4 collections of each language.}
+\label{anova_result}
+\input{02table19.txt}
+\end{table}
+
+We performed similar ANOVA analyses for each language. Table \ref{anova_result} details the results here by language. The table indicates that Modifiers--Negation did not have a significant influence on collective sentiment for all three languages (i.e., $p > 0.05$), as expected. Surprisingly, the influence of Negation was significant for Japanese and Chinese (i.e., $p = 0.042$ and 0.017, respectively), but not for English (i.e., $p = 0.739$). This occurred perhaps because other contexts offset the influence of negation in English. For rhetoric devices, it appears that there was a significant difference for both Chinese and English (i.e., $p = 0.032$ and 0.022, respectively), but not for Japanese (i.e., $p = 0.664$).\footnote{However, for some cases in which low rhetoric occurrences appear in Table \ref{number_rhetoric_devices}, their GPN--SPN values (Presence) are somehow less reliable.}
+
+In addition, we also conducted a two-way ANOVA to see how negation, rhetoric, and their interaction affect collective sentiment throughout the corpus. Results show that the interaction between negation and rhetoric had little influence on GPN--SPN (i.e., $p = 0.496 > 0.05$), while GPN--SPN was significantly different in terms of the presence of both negation (i.e., $p = 0.000 < 0.001$) and rhetoric (i.e., $p = 0.013 < 0.05$). From the above analyses, it indicates that we cannot deny that either of negation and rhetoric has influence on collective sentiment.
+
+
+\subsection{Content Analysis of Rhetoric Devices and Their Characteristics}
+
+Wiegand et al.\ \citeyear{Wiegand10} summarized the influence of negation on sentiment in English, but little effort has been focused on discussing the role of rhetoric devices in opinion mining. Rhetoric is typically sparse in traditional long texts and it is not necessarily alter the polarity of the long text containing it even if it appears; however, for short (i.e., no longer than 140 characters) but complete opinion pieces like tweets, the presence of a rhetoric device may entirely change the polarity of a tweet; consider here the cross-sentence sarcasm context in tweet (1) described in Section 4.3 above. Further, Table 9 shows that rhetorical tweets accounted for more than 20\% of the corpus, indicating that rhetoric can no longer be neglected in social media. Therefore, it is necessary to inspect the structure of each rhetoric device and clarify rhetoric influence on sentiment.
+
+
+\subsubsection{Metaphor}
+
+Metaphor is a figure of speech in which an entity that ordinarily designates one thing (i.e., the source entity) is used to designate another (i.e., the target entity) in a different domain \cite{Lakoff80,Martin88}. A body of work exists on metaphor identification, but its use for analyzing sentiment is limited. Kozareva \citeyear{Kozareva13} proposed an N-gram method and a lexicon-based method to classify the sentiment of metaphorical sentences in political text, but both methods are heavily dependent on the hand-labeled interpretation of metaphor entities (i.e., sources and targets), which is unavailable in general applications.
+
+\begin{table}[b]
+\caption{Contingency table of metaphor * polarity}
+\label{contingency_metaphor}
+\input{02table20.txt}
+\end{table}
+
+Table \ref{contingency_metaphor} presents the contingency table for metaphor and polarity, showing that the difference between the polarity distributions of metaphorical and non-metaphorical tweets is significant*** (i.e., $\chi^2$ test, $p < 0.001$). Further, metaphor tweets only account for 2\% of the entire corpus and most of them (i.e., 95.4\%) are subjective tweets.
+
+Table \ref{example_metaphor} lists typical examples of metaphor tweets and their inherent structures in the three given languages. Based on these examples, the underlined linguistic clues (i.e., metaphor context) can be used for typical metaphor detection (i.e., detecting source and target entity). The polarity of the target entity (e.g., aspects of the evaluation object) depends on the polarity of the source entity. Therefore, to understand the emotion in a metaphor, the polarity of the source object must be known beforehand (e.g., from other resources).
+
+\begin{table}[b]
+\caption{Examples of tweets containing metaphors}
+\label{example_metaphor}
+\input{02table21.txt}
+\end{table}
+
+Moreover, apart from typical metaphors, there are atypical ones. In tweet (16) below, a human knows that ``tracking device'' is the source entity of a metaphor for iPhone 6, but it is extremely difficult for a system to recognize this metaphor due to a lack of explicit linguistic clues. To solve this challenge, further efforts are needed.
+\begin{enumerate}
+\item[{\bf (16)}] {\bf The government invented a \underline{tracking device} that every Human being will pay for \& carry around at all times. Even pay a monthly fee. \#iPhone6}
+\end{enumerate}
+
+Further, sometimes tweets with explicit metaphor indicators are not necessarily metaphorical. In tweet (17) below, although there are words such as ``like,'' the sense here is more of an equal comparison between Putin and Hitler rather than a metaphor. We provided the annotators with a brief introduction of rhetoric devices, but such subtle difference is intuitively distinguished by the annotators. In practice, tweet (17) was tagged as comparison by all three annotators. Compared with the typical metaphorical tweets shown in Table \ref{example_metaphor}, we found that when two entities with comparable properties are in the same domain, the relation between them is probably an equal comparison.
+\begin{enumerate}
+\item[{\bf (17)}] {\bf With each ramped up aggressive speech \#Putin looks more and more \underline{like} Hitler. His speeches against contrived enemies are identical}
+\end{enumerate}
+
+
+\subsubsection{Comparison}
+
+Compared with metaphor, comparison is used far more often in tweets. In our corpus, a tweet having a comparative relation (i.e., superior, inferior, or equal) is identified as a comparison tweet regardless of whether there is an explicit comparative expression, such as ``than.'' In particular, contrast is regarded as a form of comparison in our annotation scheme.
+
+Table \ref{contingency_comparison} presents the contingency table for comparison and polarity, showing that the difference between the polarity distributions of comparative and non-comparative tweets is significant*** (i.e., $\chi^2$ test, $p < 0.001$). Comparison tweets account for 10\% of the entire corpus and most of them (i.e., 92.9\%) are subjective tweets.
+
+\begin{table}[b]
+\caption{Contingency table of comparison * polarity}
+\label{contingency_comparison}
+\input{02table22.txt}
+\end{table}
+\begin{table}[b]
+\caption{Examples of tweets containing comparisons}
+\label{example_comparison}
+\input{02table23.txt}
+\end{table}
+
+Table \ref{example_comparison} lists typical examples of comparison tweets and their inherent structures in the three given languages. Shown in the table as underlined text, the typical comparison context is not difficult to detect. In general, the polarity of the evaluation object (i.e., comparison base) in a typical comparison can be decided by its status relative to the comparison object. In principle, superior status means positive polarity, inferior status means negative polarity, and equal status means neutral polarity.
+
+Ganapathibhotla and Liu \citeyear{Ganapathibhotla08} proposed a rule-based method for product reviews to identify preferred entities at the sentence level. Their rules are carefully designed and can be directly applied to the typical examples shown in Table \ref{example_comparison}; however, their rules are constrained to comparative patterns containing comparatives and superlatives (e.g., better and best). Atypical comparisons, for example, the past versus present comparison in tweet (18) are not addressed by their approach.
+\begin{enumerate}
+\item[{\bf (18)}] {\bf It feels like my life got restarted just the version has been \underline{changed from} \#xp \underline{to} \#Windows8}  \includegraphics{24-2ia2p40.eps}\includegraphics{24-2ia2p40.eps}\includegraphics{24-2ia2p40.eps}
+\end{enumerate}
+
+Further, contrast relations that span multiple sentences, e.g., ``Obama vs. Putin'' in tweet (19) below call for deeper methods, such as discourse analysis, since tweet polarity is not a simple sum of sentence polarities.
+\begin{enumerate}
+\item[{\bf (19)}] {\bf \#Obama is quite a good orator, at the beginning of his presidency especially so. \underline{But} \#Putin is a COMMUNICATOR. Putin can speak AT LENGTH.}
+\end{enumerate}
+
+
+\subsubsection{Sarcasm}
+
+Sarcasm conveys the opposite of the given surface meaning (Macmillan Dictionary\footnote{http://www.macmillandictionary.com/ (Accessed: October 10, 2016)}). Unlike the other three rhetoric devices, sarcasm has been studied to some degree in Twitter sentiment analysis \cite{Davidov10,Roberto11,Reyes13,Tungthamthiti15}. This is partly driven by the prevalence of hashtags, such as \#sarcasm, making it relatively easy to collect sarcastic tweets in English (Section 2.2).
+
+Table \ref{contingency_sarcasm} presents the contingency table for sarcasm and polarity, showing that the difference between the polarity distributions of sarcastic and non-sarcastic tweets is significant*** (i.e., $\chi^2$ test, $p < 0.001$). Sarcastic tweets account for 3.7\% of the entire corpus, all of which are subjective;\footnote{The only neutral tweet is a mixed one (half positive, half negative).} most of them are negative (i.e., 82.9\%). Only a small portion of sarcastic tweets are positive because the criticizing targets of sarcasm are not necessarily the evaluation objects. As an example, in tweet (20) below, the target of sarcasm is ``the media,'' which in turn expresses supportive emotion for Putin.
+\begin{enumerate}
+\item[{\bf (20)}] {\bf We're back into \#Putin bashing! Great to see such a gross manipulation from \underline{the media}...never give the full picture ;-)}
+\end{enumerate}
+
+\begin{table}[t]
+\caption{Contingency table of sarcasm * polarity}
+\label{contingency_sarcasm}
+\input{02table24.txt}
+\end{table}
+\begin{table}[t]
+\caption{Examples of tweets containing sarcasm}
+\label{example_sarcasm}
+\input{02table25.txt}
+\end{table}
+
+Table \ref{example_sarcasm} lists typical examples of sarcastic tweets and their inherent structures in the three given languages. Observing these sarcastic tweets, we found that all of them contain contradictory polarity pairs, suggesting that sarcasm can be recognized based on whether there is a contradictive pair of emotional signals inside a tweet. Further, linguistic hints like ``\includegraphics{24-2ia2p42.eps},'' ``w'' in Japanese tweets and short sentences ending with ``!'' (e.g., ``Creative!'') can be indicators of sarcasm. Note that not every tweet containing a pair of different polarities is sarcastic, because the contradictoriness can be resolved by having adversatives such as but and although.
+
+Typical sarcasm is relatively solvable because it can be explained by the tweets themselves. A much more difficult situation is when one polarity of the contradictive pair does not exist within the tweet. In tweet (21) below, even though there is only a positive signal ``humble'' and no contradictory pair, a human can supplement the other signal according to the unpopular behavior of Putin in the real world. This kind of sarcasm, which needs additional background knowledge, is extremely difficult to automatically detect.
+\begin{enumerate}
+\item[{\bf (21)}] {\bf \underline{Humble} \#Putin says it's too early to erect monuments to himself, claims those wanting to name streets after him do so out of good intentions}
+\end{enumerate}
+
+
+\subsubsection{Rhetorical Questions}
+
+Interrogatives are used to seek information (i.e., answers), whereas rhetorical questions are used to emphasize claims. There are two types of rhetorical questions, i.e., one that does not need an answer and the other that is answered by the questioner himself. Most previous research on rhetorical questions is limited to their identification \cite{Bhattasali15} and does not consider sentiment analysis.
+
+Table \ref{contingency_rhetorical_question} presents the contingency table for rhetorical questions and polarity, showing that the difference between the polarity distributions of rhetorical-question and non-rhetorical-question tweets is significant*** (i.e., $\chi^2$ test, $p < 0.001$). Rhetorical-question tweets account for 6.4\% of the entire corpus, with the majority of them being negative (i.e., 72\%).
+
+\begin{table}[b]
+\caption{Contingency table of rhetorical question * polarity}
+\label{contingency_rhetorical_question}
+\input{02table26.txt}
+\end{table}
+\begin{table}[b]
+\caption{Examples of tweets containing rhetorical question}
+\label{example_rhetorical_question}
+\input{02table27.txt}
+\end{table}
+
+Table \ref{example_rhetorical_question} lists typical rhetorical-question tweets and their inherent structures in the three given languages. These rhetorical questions simply emphasize the emotional signals that they contain. For a question, the key task is to determine whether it is rhetorical. Frequently used questioning patterns (e.g., ``Why not...?'' ``\UTFC{96be}道不...? (Isn't it...?)''), the position of the question in the tweet, and the context around the question (e.g., emotional signals immediately next to the question) all help with this identification.
+
+Apart from direct emphasis, rhetorical questions can also emphasize the opposite of the emotional signals. In tweet (22) below, three rhetorical questions express strong disagreement with what is being asked. It is clear that the direction of the emphasis should be taken into account when analyzing rhetorical questions for sentiment analysis.
+\begin{enumerate}
+\item[{\bf (22)}] {\bf Did \#Putin start \underline{unnecessary} continuous wars in Middle East?! Did Putin \underline{destroy} our \#Constitution?! Did Putin \underline{destroy} our economy?! WAKE UP}
+\end{enumerate}
+
+As discussed in Section 4.1, it is difficult to directly verify that different languages have similar sentiment-expressing models; thus, we paid close attention to the annotation process and corpus analysis to determine whether we could find any decisive evidence to contradict our hypothesis. We found that our annotation scheme fits into the three languages well during the independent annotation phase. Further, we did not find any special expression of feelings that occurred only in one language during the annotation-improvement phase; the content analysis in this section showed that rhetorical context occurred in a similar way in the three given languages. Of course, it may be too optimistic to say that we can accept the hypothesis, since our corpus did not cover all possible instances and the number of languages is limited to three; however, considering that the size of our corpus is rather large and the language families that it contains are varied, it is relatively reasonable to accept our hypothesis that different languages are likely to have similar sentiment-expressing models.
+
+
+\section{Individual Differences and Annotation Deficiencies}
+
+In Section 5.3, we explained how the PDC method improved inter-annotator agreement by eliminating both human and understanding errors. In this section, we list reasons for the disagreement caused by the individual differences of annotators. Finally, we state the deficiencies of our annotations.
+
+
+\subsection{Individual Differences of Annotators}
+
+Although the inter-annotator agreement was substantially improved, there still were some ambiguous tweets with polarities varying from individual to individual, and even from time to time for the same individual. For these tweets, the annotation disagreement is not from errors but from the individual differences of annotators, i.e., their changing interpretation of tweets with intrinsic ambiguities. We present below different types of ambiguities and differences that may cause disagreement.
+\begin{enumerate}
+\item Subjectivity Ambiguities\\
+Some tweets were just on the borderline between subjective and objective. As an example, some annotators viewed tweet (23) below as an objective statement, whereas others viewed it as implying an opinion.
+\begin{enumerate}
+\item[{\bf (23)}] {\bf Bottom line. Until the BBC is brought onboard or booted out Scotland will not gain independence Huge audience believes all that is broadcast}
+\end{enumerate}
+\item Relevance Ambiguities\\
+Some tweets can be either relevant or irrelevant. One could consider tweet (24) below to be about problems with YouTube. Conversely, it could also be interpreted as stating that iPhone 6 gave rise to the troubles with YouTube.
+\begin{enumerate}
+\item[{\bf (24)}] {\bf Can someone explain to me why YouTube videos can't run fluidly anymore?? Grr, what is this! \#iPhone6}
+\end{enumerate}
+\item Understanding Differences\\
+Some signals can be interpreted in multiple ways. As an example, ``new born baby'' in tweet (25) below could refer to preciousness and fragility at the same time.
+\begin{enumerate}
+\item[{\bf (25)}] {\bf When Someone hands you an I phone whiteout a case it feels like your handling a new born baby \#iPhone6}
+\end{enumerate}
+\item Thinking Differences\\
+Different ways annotators think may lead to deviations in understanding. In general, tweet (26) below is considered positive because iPhone 6 makes the author feel ``cool''; however, one of the annotators thought that a phone being used as a means to show off was sad; thus, he or she classified tweet (26) as negative instead.
+\begin{enumerate}
+\item[{\bf (26)}] {\bf Think I want to buy an \#iPhone6 . not because I like them.. but because apparently it makes me cool.. and I just wanna be cool.. that's all}
+\end{enumerate}
+\item Cultural Differences\\
+The background of an annotator might influence his or her understanding of the given tweets. For tweet (27) below, Western people tended to think of ``communist'' in a negative sense, whereas Asian annotators may just think of it as a neutral political conception.
+\begin{enumerate}
+\item[{\bf (27)}] {\bf haters am throwin deuces yeah its peace ,coz am chilled lyk a buddhist long live \#putin u tha last communist}
+\end{enumerate}
+\item Rhetorical Ambiguities\\
+Rhetoric devices, especially sarcasm and rhetorical questions, rely heavily on the subjective interpretation of the annotators. To illustrate this, tweet (28) below can be understood in either a sarcastic or non-sarcastic way, and tweet (29) below can be a rhetorical or non-rhetorical question according to how each annotator thinks.
+\begin{enumerate}
+\item[{\bf (28)}] {\bf I seriously love how huge my phone is. When I talk on it, it takes the whole side of my face. Every time its like getting a hug. \#iPhone6}
+\end{enumerate}
+\begin{enumerate}
+\item[{\bf (29)}] {\bf what if \#Putin is doing all this just to make sure no one is stupid enough to want to clean up after him in the next term?}
+\end{enumerate}
+\item Weight Ambiguities\\
+For tweets containing both positive and negative signals, annotators may have different preferences. In tweet (30) below, some argued that the positive points dominated, whereas others insisted that ``pointless'' was the overall conclusion.
+\begin{enumerate}
+\item[{\bf (30)}] {\bf Performance and Safety feel, Of course the proud feel is awesome for \#iPhone6. Still phone without charge in it is pointless}
+\end{enumerate}
+\end{enumerate}
+
+
+\subsection{Annotation Deficiencies}
+
+In this section, we summarize deficiencies in our annotation work. We aim to improve upon the following issues in our future work.
+\begin{enumerate}
+\item Net Slang and Abbreviation Understanding\\
+Net slang and abbreviations have become increasingly prevalent in social media. It is sometimes difficult even for native annotators to interpret their meanings. As an example, ``is the shit'' in tweet (31) below means great or awesome rather than bad. In addition, the meaning of ``UA'' in tweet (32) below is somewhat blurred, since ``UA'' is an abbreviation for many different objects. To alleviate this understanding issue, we allowed annotators to access the Internet as required; however, problems still remain owing to overall working time limits, causing annotators to not be able to search as much as they would like to.
+\begin{enumerate}
+\item[{\bf (31)}] {\bf You know technology is the shit when someone's granddad be looking to by an \#Iphone6 and I ain't talking about Boondocks}
+\item[{\bf (32)}] {\bf @ArianaGicPerry Apparently, \#Putin said he left early it was a long flight and he needed more sleep, etc, and and no one is upset over UA!}
+\end{enumerate}
+\item Undefined Expression Patterns\\
+Although we designed different types of tags to record the information related to emotional expressions in tweets, which worked well for most of the tweets we encountered, there were still some tweets that were unable to be represented by our annotation frame because their pattern of expression is beyond the scope of our definitions. We describe two subcategories below.
+\begin{enumerate}
+\item Judging Other Opinions\\
+Toward the end of tweet (33) below, the author judges the opinion of others. This judgment relates to the author's attitude toward iPhone 6, but the signals like ``\includegraphics{24-2ia2p47-1.eps}'' and ``dumb'' are not its direct evaluations. To infer the author's attitude, an opinion/judgment pair frame is desirable here. Similarly, for other new patterns, specific representation frames should be designed.
+\begin{enumerate}
+\item[{\bf (33)}] {\bf People talking shit bout \#iPhone6 bending and shit. Mines is perfectly straight \includegraphics{24-2ia2p47-2.eps}\includegraphics{24-2ia2p47-3.eps}\includegraphics{24-2ia2p47-4.eps} been having it for a month  \includegraphics{24-2ia2p47-1.eps} so stfu only dumb people}
+\end{enumerate}
+\item Literary expressions\\
+In tweet (34) below, there is only one negative signal, i.e., ``perversion,'' and no other signals or rhetorical context; however, we can still, in a way, attribute a positive attitude to the author. Such literary expression involving common knowledge may be beyond our annotation scheme; a more comprehensive scheme based on other sentiment-oriented theories is needed here.
+\begin{enumerate}
+\item[{\bf (34)}] {\bf Any version of Scotland whose finances are guaranteed by English banks is a perversion of independence.}
+\end{enumerate}
+\end{enumerate}
+\item Absence of Predefined Rules\\
+Confusing patterns of tweets popped up repeatedly during our annotation work. As an example, how do we decide the global polarity of tweet (35) below, which simultaneously includes an issue and a solution? Similarly, how do we decide the global polarity of tweet (36) below in which the author hates part of the object but loves as a whole? The same annotator chose different answers for the same pattern from time to time due to a lack of suitable rules, which erodes the inter-annotator agreement. We handled this issue by resorting to onsite discussions; however, predefined rules in the coding manual are preferable.
+\begin{enumerate}
+\item[{\bf (35)}] {\bf Finally got the \#iPhone6 talking again... But it still won't let me delete texts w/o jumping thru hoops! But it works again!! :)}
+\item[{\bf (36)}] {\bf While I do like my \#iPhone6, I really do not like the new location of the hold button to the side vs. on top. Move it back to the top!}
+\end{enumerate}
+\end{enumerate}
+
+
+\section{Conclusion and Future Work}
+\vspace{-0.3\Cvs}
+
+In this paper, we described the construction of a multilingual annotated corpus for deeper sentiment understanding in social media; our corpus consists of 12 collections of tweets (i.e., three languages times four objects), with a total of 5,422 tweets. We initially put forth an annotation scheme that separates emotional signals and rhetorical context for Twitter sentiment annotation as well as our PDC method to improve inter-annotator agreement. Observations and analysis of our resulting corpus lead us to the following three conclusions: (1) languages differ in terms of their use of emotional signals and rhetoric devices, and the idea that cultures have different opinions about the same objects is reconfirmed; (2) each rhetoric device has its own characteristics, influences global polarity in its own way, and has an inherent structure that helps model the sentiment it represents; and (3) models of expressions of feelings in different languages are most likely similar, suggesting the possibility of unifying multilingual opinion mining at the sentiment level.
+
+Returning to tweet (1)\footnote{{\bf (1) Wow, with \#iPhone6, you can send a message just by talking! In any voice you like. So can my mom's old rotary dial.}} from Section 1, we recognize that it is difficult to engineer the features of rhetorical context, which poses challenges to traditional machine-learning methods. To solve this problem, in our future work, we plan to develop and evaluate a specific Twitter sentiment analysis system based on the main findings of our paper and the rich information available in our corpus. This system is expected to be rhetoric-tolerant and multilanguage oriented.
+
+Further, we paid much attention to the agreement of global polarity in Section 5.3; given that the agreement of fine-grained components (i.e., emotional signals, degree modifiers, rhetorical context, and subtopics) involves so many situations (e.g., tag presence/absence, tag overlap, and tag category), we leave a detailed discussion about it for future work. Also, as discussed in Section 8.2, there is still much room for improvement in terms of our annotation; therefore, we will continue to refine our corpus as part of our future work. Finally, our gold-standard corpus will be distributed openly in a proper way to serve the various purposes of different researchers in various fields.
+
+
+\acknowledgment
+\vspace{-0.5\Cvs}
+
+This project was partly supported by Joint Research Fund 65A0522 from the Graduate School of Environment and Information Sciences, Yokohama National University. We thank the anonymous reviewers for their valuable comments and helpful suggestions.
+
+
+\nocite{*}
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Balahur \BBA\ Turchi}{Balahur \BBA\
+  Turchi}{2013}]{Balahur13}
+Balahur, A.\BBACOMMA\ \BBA\ Turchi, M. \BBOP 2013\BBCP.
+\newblock \BBOQ Improving Sentiment Analysis in Twitter Using Multilingual
+  Machine Translated Data.\BBCQ\
+\newblock In {\Bem Proceedings of Recent Advances in Natural Language
+  Processing}, \mbox{\BPGS\ 49--55}.
+
+\bibitem[\protect\BCAY{Basile \BBA\ Nissim}{Basile \BBA\
+  Nissim}{2013}]{Basile13}
+Basile, V.\BBACOMMA\ \BBA\ Nissim, M. \BBOP 2013\BBCP.
+\newblock \BBOQ Sentiment Analysis on Italian Tweets.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Workshop on Computational Approaches
+  to Subjectivity, Sentiment and Social Media Analysis}, \mbox{\BPGS\
+  100--107}.
+
+\bibitem[\protect\BCAY{Bhattasali, Cytryn, Feldman, \BBA\ Park}{Bhattasali
+  et~al.}{2015}]{Bhattasali15}
+Bhattasali, S., Cytryn, J., Feldman, E., \BBA\ Park, J. \BBOP 2015\BBCP.
+\newblock \BBOQ Automatic Identification of Rhetorical Questions.\BBCQ\
+\newblock In {\Bem Proceedings of the 53rd Annual Meeting of the Association
+  for Computational Linguistics and the 7th International Joint Conference on
+  Natural Language Processing}, \mbox{\BPGS\ 743--749}.
+
+\bibitem[\protect\BCAY{Bollen, Mao, \BBA\ Zeng}{Bollen et~al.}{2011}]{Bollen11}
+Bollen, J., Mao, H., \BBA\ Zeng, X. \BBOP 2011\BBCP.
+\newblock \BBOQ Annotating Expressions of Opinions and Emotions in
+  Language.\BBCQ\
+\newblock {\Bem Journal of Computational Science}, {\Bbf 2}  (1), \mbox{\BPGS\
+  1--8}.
+
+\bibitem[\protect\BCAY{Cheong \BBA\ Lee}{Cheong \BBA\ Lee}{2011}]{Cheong11}
+Cheong, M.\BBACOMMA\ \BBA\ Lee, V. C.~S. \BBOP 2011\BBCP.
+\newblock \BBOQ A Microblogging-Based Approach to Terrorism Informatics:
+  Exploration and Chronicling Civilian Sentiment and Response to Terrorism
+  Events via Twitter.\BBCQ\
+\newblock {\Bem Information Systems Frontiers}, {\Bbf 13}  (1), \mbox{\BPGS\
+  45--59}.
+
+\bibitem[\protect\BCAY{Davidov, Tsur, \BBA\ Rappoport}{Davidov
+  et~al.}{2010}]{Davidov10}
+Davidov, D., Tsur, O., \BBA\ Rappoport, A. \BBOP 2010\BBCP.
+\newblock \BBOQ Semi-Supervised Recognition of Sarcastic Sentences in Twitter
+  and Amazon.\BBCQ\
+\newblock In {\Bem Proceedings of the Fourteenth Conference on Computational
+  Natural Language Learning}, \mbox{\BPGS\ 107--116}.
+
+\bibitem[\protect\BCAY{dos Santos}{dos Santos}{2014}]{Santos14}
+dos Santos, C.~N. \BBOP 2014\BBCP.
+\newblock \BBOQ Think Positive: Towards Twitter Sentiment Analysis from
+  Scratch.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th International Workshop on Semantic
+  Evaluation (SemEval 2014)}, \mbox{\BPGS\ 647--651}.
+
+\bibitem[\protect\BCAY{Ganapathibhotla \BBA\ Liu}{Ganapathibhotla \BBA\
+  Liu}{2008}]{Ganapathibhotla08}
+Ganapathibhotla, M.\BBACOMMA\ \BBA\ Liu, B. \BBOP 2008\BBCP.
+\newblock \BBOQ Mining Opinions in Comparative Sentences.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics (COLING 2008)}, \mbox{\BPGS\ 241--248}.
+
+\bibitem[\protect\BCAY{Ghosh, Veale, Shutova, Barnden, Li, Rosso, \BBA\
+  Reyes}{Ghosh et~al.}{2015}]{Ghosh15}
+Ghosh, A., Veale, T., Shutova, E., Barnden, J., Li, G., Rosso, P., \BBA\ Reyes,
+  A. \BBOP 2015\BBCP.
+\newblock \BBOQ SemEval-2015 Task 11: Sentiment Analysis of Figurative Language
+  in Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th International Workshop on Semantic
+  Evaluation (SemEval 2015)}, \mbox{\BPGS\ 470--478}.
+
+\bibitem[\protect\BCAY{Go, Bhayani, \BBA\ Huang}{Go et~al.}{2009}]{Go09}
+Go, A., Bhayani, R., \BBA\ Huang, L. \BBOP 2009\BBCP.
+\newblock \BBOQ Twitter Sentiment Classification using Distant
+  Supervision.\BBCQ\
+\newblock {\Bem CS224N Project Report (Stanford)}, \mbox{\BPGS\ 1--6}.
+
+\bibitem[\protect\BCAY{Gonz{\'{a}}lez-Ib{\'{a}}{\~{n}}ez, Muresan, \BBA\
+  Wacholder}{Gonz{\'{a}}lez-Ib{\'{a}}{\~{n}}ez et~al.}{2011}]{Roberto11}
+Gonz{\'{a}}lez-Ib{\'{a}}{\~{n}}ez, R., Muresan, S., \BBA\ Wacholder, N. \BBOP
+  2011\BBCP.
+\newblock \BBOQ Identifying Sarcasm in Twitter: A Closer Look.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Short Papers (ACL '11)}, \mbox{\BPGS\
+  581--586}.
+
+\bibitem[\protect\BCAY{Hangyo, Kawahara, \BBA\ Kurohashi}{Hangyo
+  et~al.}{2014}]{Hangyo14}
+Hangyo, M., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2014\BBCP.
+\newblock \BBOQ Building and Analyzing a Diverse Document Leads Corpus
+  Annotated with Semantic Relations.\BBCQ\
+\newblock {\Bem Journal of Natural Language Processing}, {\Bbf 21}  (2),
+  \mbox{\BPGS\ 213--247}.
+
+\bibitem[\protect\BCAY{Hovy}{Hovy}{2015}]{Hovy15}
+Hovy, E.~H. \BBOP 2015\BBCP.
+\newblock \BBOQ What are Sentiment, Affect, and Emotion? Applying the
+  Methodology of Michael Zock to Sentiment Analysis.\BBCQ\
+\newblock In {\Bem Language Production, Cognition, and the Lexicon},
+  \mbox{\BPGS\ 13--24}. Springer International Publishing.
+
+\bibitem[\protect\BCAY{Jansen, Zhang, Sobel, \BBA\ Chowdury}{Jansen
+  et~al.}{2009}]{Jansen09}
+Jansen, B.~J., Zhang, M., Sobel, K., \BBA\ Chowdury, A. \BBOP 2009\BBCP.
+\newblock \BBOQ Twitter Power: Tweets as Electronic Word of Mouth.\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science and
+  Technology}, {\Bbf 60}  (11), \mbox{\BPGS\ 2169--2188}.
+
+\bibitem[\protect\BCAY{Kouloumpis, Wilson, \BBA\ Moore}{Kouloumpis
+  et~al.}{2011}]{Kouloumpis11}
+Kouloumpis, E., Wilson, T., \BBA\ Moore, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Twitter Sentiment Analysis: The Good the Bad and the OMG!\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Conference on Weblogs
+  and Social Media (ICWSM '11)}, \mbox{\BPGS\ 538--541}.
+
+\bibitem[\protect\BCAY{Kozareva}{Kozareva}{2013}]{Kozareva13}
+Kozareva, Z. \BBOP 2013\BBCP.
+\newblock \BBOQ Multilingual Affect Polarity and Valence Prediction in
+  Metaphor-Rich Texts.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (ACL '13)}, \mbox{\BPGS\ 682--691}.
+
+\bibitem[\protect\BCAY{Lakoff \BBA\ Johnson}{Lakoff \BBA\
+  Johnson}{1980}]{Lakoff80}
+Lakoff, G.\BBACOMMA\ \BBA\ Johnson, M. \BBOP 1980\BBCP.
+\newblock {\Bem Metaphors We Live By}.
+\newblock University of Chicago Press.
+
+\bibitem[\protect\BCAY{Liu}{Liu}{2012}]{Liu12}
+Liu, B. \BBOP 2012\BBCP.
+\newblock {\Bem Sentiment Analysis and Opinion Mining}.
+\newblock Morgan \& Claypool Publishers.
+
+\bibitem[\protect\BCAY{Liu, Hu, \BBA\ Cheng}{Liu et~al.}{2005}]{Liu05}
+Liu, B., Hu, M., \BBA\ Cheng, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Opinion Observer: Analyzing and Comparing Opinions on the
+  Web.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th international conference on World
+  Wide Web (WWW '05)}, \mbox{\BPGS\ 342--351}.
+
+\bibitem[\protect\BCAY{Lu, Guo, Sakamoto, Shibuki, \BBA\ Mori}{Lu
+  et~al.}{2015}]{Lu15}
+Lu, Y., Guo, J., Sakamoto, K., Shibuki, H., \BBA\ Mori, T. \BBOP 2015\BBCP.
+\newblock \BBOQ Predicting Sector Index Movement with Microblogging Public Mood
+  Time Series on Social Issues.\BBCQ\
+\newblock In {\Bem Proceeding of 29th Pacific Asia Conference on Language,
+  Information and Computation (PACLIC 2015)}, \mbox{\BPGS\ 563--571}.
+
+\bibitem[\protect\BCAY{Martin}{Martin}{1988}]{Martin88}
+Martin, J.~H. \BBOP 1988\BBCP.
+\newblock \BBOQ Representing Regularities in the Metaphoric Lexicon.\BBCQ\
+\newblock In {\Bem Proceedings of the 12th Conference on Computational
+  Linguistics (COLING '88)}, \mbox{\BPGS\ 396--401}.
+
+\bibitem[\protect\BCAY{Miyazaki \BBA\ Mori}{Miyazaki \BBA\
+  Mori}{2010}]{Miyazaki10}
+Miyazaki, R.\BBACOMMA\ \BBA\ Mori, T. \BBOP 2010\BBCP.
+\newblock \BBOQ Creation of Sentiment Corpus by Multiple Annotators with an
+  Annotation Tool that has a Function of Referring Example Annotations.\BBCQ\
+\newblock {\Bem Journal of Natural Language Processing}, {\Bbf 17}  (5),
+  \mbox{\BPGS\ 3--50}.
+
+\bibitem[\protect\BCAY{Mukherjee \BBA\ Bhattacharyya}{Mukherjee \BBA\
+  Bhattacharyya}{2012}]{Mukherjee12}
+Mukherjee, S.\BBACOMMA\ \BBA\ Bhattacharyya, P. \BBOP 2012\BBCP.
+\newblock \BBOQ Sentiment Analysis in Twitter with Lightweight Discourse
+  Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the 23th International Conference on
+  Computational Linguistics: Technical Papers (COLING 2012)}, \mbox{\BPGS\
+  1847--1864}.
+
+\bibitem[\protect\BCAY{Nakov, Rosenthal, Kozareva, Stoyanov, Ritter, \BBA\
+  Wilson}{Nakov et~al.}{2013}]{Nakov13}
+Nakov, P., Rosenthal, S., Kozareva, Z., Stoyanov, V., Ritter, A., \BBA\ Wilson,
+  T. \BBOP 2013\BBCP.
+\newblock \BBOQ SemEval-2013 Task 2: Sentiment Analysis in Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd Joint Conference on Lexical and
+  Computational Semantics (*SEM), Volume 2: Seventh International Workshop on
+  Semantic Evaluation (SemEval 2013)}, \mbox{\BPGS\ 312--320}.
+
+\bibitem[\protect\BCAY{Neubig \BBA\ Duh}{Neubig \BBA\ Duh}{2013}]{Neubig13}
+Neubig, G.\BBACOMMA\ \BBA\ Duh, K. \BBOP 2013\BBCP.
+\newblock \BBOQ How Much Is Said in a Tweet? A Multilingual,
+  Information-Theoretic Perspective.\BBCQ\
+\newblock {\Bem AAAI Spring Symposium}, \mbox{\BPGS\ 32--39}.
+
+\bibitem[\protect\BCAY{O'Connor, Balasubramanyan, Routledge, \BBA\
+  Smith}{O'Connor et~al.}{2010}]{Brendan10}
+O'Connor, B., Balasubramanyan, R., Routledge, B.~R., \BBA\ Smith, N.~A. \BBOP
+  2010\BBCP.
+\newblock \BBOQ From Tweets to Polls: Linking Text Sentiment to Public Opinion
+  Time Series.\BBCQ\
+\newblock In {\Bem Proceedings of the International AAAI Conference on Weblogs
+  and Social Media (ICWSM '10)}, \mbox{\BPGS\ 122--129}.
+
+\bibitem[\protect\BCAY{Pak \BBA\ Paroubek}{Pak \BBA\ Paroubek}{2010}]{Pak10}
+Pak, A.\BBACOMMA\ \BBA\ Paroubek, P. \BBOP 2010\BBCP.
+\newblock \BBOQ Twitter as a Corpus for Sentiment Analysis and Opinion
+  Mining.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th International Conference on Language
+  Resources and Evaluation (LREC '10)}, \mbox{\BPGS\ 1320--1326}.
+
+\bibitem[\protect\BCAY{Pang, Lee, \BBA\ Vaithyanathan}{Pang
+  et~al.}{2002}]{Pang02}
+Pang, B., Lee, L., \BBA\ Vaithyanathan, S. \BBOP 2002\BBCP.
+\newblock \BBOQ Thumbs up? Sentiment Classification using Machine Learning
+  Techniques.\BBCQ\
+\newblock In {\Bem Proceedings of Empirical Methods on Natural Language
+  Processing (EMNLP 2002)}, \mbox{\BPGS\ 79--86}.
+
+\bibitem[\protect\BCAY{Read}{Read}{2005}]{Read05}
+Read, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Using Emoticons to Reduce Dependency in Machine Learning
+  Techniques for Sentiment Classification.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Student Research Workshop},
+  \mbox{\BPGS\ 43--48}.
+
+\bibitem[\protect\BCAY{Reyes, Rosso, \BBA\ Buscaldi}{Reyes
+  et~al.}{2012}]{Reyes12}
+Reyes, A., Rosso, P., \BBA\ Buscaldi, D. \BBOP 2012\BBCP.
+\newblock \BBOQ From Humor Recognition to Irony Detection: The Figurative
+  Language of Social Media.\BBCQ\
+\newblock {\Bem Data and Knowledge Engineering}, {\Bbf 74}, \mbox{\BPGS\
+  1--12}.
+
+\bibitem[\protect\BCAY{Reyes, Rosso, \BBA\ Veal}{Reyes et~al.}{2013}]{Reyes13}
+Reyes, A., Rosso, P., \BBA\ Veal, T. \BBOP 2013\BBCP.
+\newblock \BBOQ A Multidimensional Approach for Detecting Irony in
+  Twitter.\BBCQ\
+\newblock {\Bem Language Resources and Evaluation}, {\Bbf 47}  (1),
+  \mbox{\BPGS\ 239--268}.
+
+\bibitem[\protect\BCAY{Rosenthal, Ritter, Nakov, \BBA\ Stoyanov}{Rosenthal
+  et~al.}{2014}]{Rosenthal14}
+Rosenthal, S., Ritter, A., Nakov, P., \BBA\ Stoyanov, V. \BBOP 2014\BBCP.
+\newblock \BBOQ SemEval-2014 Task 9: Sentiment Analysis in Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th International Workshop on Semantic
+  Evaluation (SemEval 2014)}, \mbox{\BPGS\ 73--80}.
+
+\bibitem[\protect\BCAY{Saif, Fernandez, He, \BBA\ Alani}{Saif
+  et~al.}{2013}]{Saif13}
+Saif, H., Fernandez, M., He, Y., \BBA\ Alani, H. \BBOP 2013\BBCP.
+\newblock \BBOQ Evaluation Datasets for Twitter Sentiment Analysis: A Survey
+  and a New Dataset, the STS-Gold.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st International Workshop on Emotion and
+  Sentiment in Social and Expressive Media (ESSEM 2013)}, Turin, Italy.
+
+\bibitem[\protect\BCAY{Sang \BBA\ Bos}{Sang \BBA\ Bos}{2012}]{Sang12}
+Sang, E. T.~K.\BBACOMMA\ \BBA\ Bos, J. \BBOP 2012\BBCP.
+\newblock \BBOQ Predicting the 2011 Dutch Senate Election Results with
+  Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 13th Conference of the European Chapter
+  of the Association for Computational Linguistics}, \mbox{\BPGS\ 53--60}.
+
+\bibitem[\protect\BCAY{Si, Mukherjee, Liu, Li, Li, \BBA\ Deng}{Si
+  et~al.}{2013}]{Si13}
+Si, J., Mukherjee, A., Liu, B., Li, Q., Li, H., \BBA\ Deng, X. \BBOP 2013\BBCP.
+\newblock \BBOQ Exploiting Topic Based Twitter Sentiment for Stock
+  Prediction.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (ACL '13)}, \mbox{\BPGS\ 24--29}.
+
+\bibitem[\protect\BCAY{Sidorenko, Sonntag, Stede, Kr{\"{u}}ger, \BBA\
+  Stieglitz}{Sidorenko et~al.}{2013}]{Sidorenko13}
+Sidorenko, W., Sonntag, J., Stede, M., Kr{\"{u}}ger, N., \BBA\ Stieglitz, S.
+  \BBOP 2013\BBCP.
+\newblock \BBOQ From Newspaper to Microblogging: What Does It Take to Find
+  Opinions?\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Workshop on Computational Approaches
+  to Subjectivity, Sentiment and Social Media Analysis}, \mbox{\BPGS\ 81--86}.
+
+\bibitem[\protect\BCAY{Steinberger, Lenkova, Kabadjov, Steinberger, \BBA\
+  van~der Goot}{Steinberger et~al.}{2011}]{Steinberger11}
+Steinberger, J., Lenkova, P., Kabadjov, M., Steinberger, R., \BBA\ van~der
+  Goot, E. \BBOP 2011\BBCP.
+\newblock \BBOQ Multilingual Entity-Centered Sentiment Analysis Evaluated by
+  Parallel Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of Recent Advances in Natural Language
+  Processing}, \mbox{\BPGS\ 770--775}.
+
+\bibitem[\protect\BCAY{Tang, Tan, \BBA\ Cheng}{Tang et~al.}{2009}]{Tang09}
+Tang, H., Tan, S., \BBA\ Cheng, X. \BBOP 2009\BBCP.
+\newblock \BBOQ A Survey on Sentiment Detection of Reviews.\BBCQ\
+\newblock {\Bem Expert Systems with Applications}, {\Bbf 36}  (7), \mbox{\BPGS\
+  10760--10773}.
+
+\bibitem[\protect\BCAY{Tang \BBA\ Chen}{Tang \BBA\ Chen}{2014}]{Tang14}
+Tang, Y.-J.\BBACOMMA\ \BBA\ Chen, H.-H. \BBOP 2014\BBCP.
+\newblock \BBOQ Chinese Irony Corpus Construction and Ironic Structure
+  Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the 25th International Conference on
+  Computational Linguistics: Technical Papers (COLING 2014)}, \mbox{\BPGS\
+  81--86}.
+
+\bibitem[\protect\BCAY{Tumasjan, Sprenger, Sandner, \BBA\ Welpe}{Tumasjan
+  et~al.}{2011}]{Tumasjan11}
+Tumasjan, A., Sprenger, T.~O., Sandner, P.~G., \BBA\ Welpe, I.~M. \BBOP
+  2011\BBCP.
+\newblock \BBOQ Election Forecasts with Twitter: How 140 Characters Reflect the
+  Political Landscape.\BBCQ\
+\newblock {\Bem Social Science Computer Review}, {\Bbf 29}  (4), \mbox{\BPGS\
+  402--418}.
+
+\bibitem[\protect\BCAY{Tungthamthiti, Santus, Xu, Huang, \BBA\
+  Shirai}{Tungthamthiti et~al.}{2015}]{Tungthamthiti15}
+Tungthamthiti, P., Santus, E., Xu, H., Huang, C.-R., \BBA\ Shirai, K. \BBOP
+  2015\BBCP.
+\newblock \BBOQ Sentiment Analyzer with Rich Features for Ironic and Sarcastic
+  Tweets.\BBCQ\
+\newblock In {\Bem Proceedings of the 29th Pacific Asia Conference on Language,
+  Information and Computation (PACLIC 2015)}, \mbox{\BPGS\ 178--187}.
+
+\bibitem[\protect\BCAY{Villena-Rom{\'{a}}n, Garc{\'{i}}a-Morera, Lana-Serrano,
+  \BBA\ Gonz{\'{a}}lez-Crist{\'{o}}ba}{Villena-Rom{\'{a}}n
+  et~al.}{2014}]{Villena14}
+Villena-Rom{\'{a}}n, J., Garc{\'{i}}a-Morera, J., Lana-Serrano, S., \BBA\
+  Gonz{\'{a}}lez-Crist{\'{o}}ba, J.~C. \BBOP 2014\BBCP.
+\newblock \BBOQ TASS 2013 - A Second Step in Reputation Analysis in
+  Spanish.\BBCQ\
+\newblock {\Bem Procesamiento del Lenguaje Natural}, {\Bbf 52}, \mbox{\BPGS\
+  37--44}.
+
+\bibitem[\protect\BCAY{Volkova, Wilson, \BBA\ Yarowsky}{Volkova
+  et~al.}{2013}]{Volkova13}
+Volkova, S., Wilson, T., \BBA\ Yarowsky, D. \BBOP 2013\BBCP.
+\newblock \BBOQ Exploring Demographic Language Variations to Improve
+  Multilingual Sentiment Analysis in Social Media.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2013)}, \mbox{\BPGS\ 1815--1827}.
+
+\bibitem[\protect\BCAY{Wiebe, Wilson, \BBA\ Cardie}{Wiebe
+  et~al.}{2005}]{Wiebe05}
+Wiebe, J., Wilson, T., \BBA\ Cardie, C. \BBOP 2005\BBCP.
+\newblock \BBOQ Annotating Expressions of Opinions and Emotions in
+  Language.\BBCQ\
+\newblock {\Bem Language Resources and Evaluation}, {\Bbf 39}  (2-3),
+  \mbox{\BPGS\ 165--210}.
+
+\bibitem[\protect\BCAY{Wiegand, Balahur, Roth, Klakow, \BBA\ Montoyo}{Wiegand
+  et~al.}{2010}]{Wiegand10}
+Wiegand, M., Balahur, A., Roth, B., Klakow, D., \BBA\ Montoyo, A. \BBOP
+  2010\BBCP.
+\newblock \BBOQ A Survey on the Role of Negation in Sentiment Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the Workshop on Negation and Speculation in
+  Natural Language Processing}, \mbox{\BPGS\ 60--68}.
+
+\bibitem[\protect\BCAY{Xiang \BBA\ Zhou}{Xiang \BBA\ Zhou}{2014}]{Xiang14}
+Xiang, B.\BBACOMMA\ \BBA\ Zhou, L. \BBOP 2014\BBCP.
+\newblock \BBOQ Improving Twitter Sentiment Analysis with Topic-Based Mixture
+  Modeling and Semi-Supervised Training.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics: Short Papers (ACL '14)}, \mbox{\BPGS\
+  434--439}.
+
+\bibitem[\protect\BCAY{Xie, Zhou, \BBA\ Sun}{Xie et~al.}{2012}]{Xie12}
+Xie, L., Zhou, M., \BBA\ Sun, M. \BBOP 2012\BBCP.
+\newblock \BBOQ Hierarchical Structure Based Hybrid Approach to Sentiment
+  Analysis of Chinese Micro Blog and Its Feature Extraction.\BBCQ\
+\newblock {\Bem Journal of Chinese Information Processing}, {\Bbf 26}  (1),
+  \mbox{\BPGS\ 73--83}.
+
+\end{thebibliography}
+
+
+\appendix
+
+
+\section{Detailed Statistics of Data Selection}
+
+\noindent Data collection spanned one year, but data selection was required before we made the data available to the annotators. Hence, the original dataset for data selection was only the first part of the collected tweets described in Table \ref{number_of_tweets}. However, we did not record data regarding the actual data selection process during the first run; thus, we obtained the data presented in Table \ref{detail_statistics} from a reimplementation of data selection after annotation was completed; as such, there may be minor differences between what we present here and the first run.
+
+\begin{table}[p]
+\hangcaption{Detail statistics for data selection. Original is the number of datasets for selection. RT is the number of tweets after the exclusion of retweets. Veto is the number of tweets after the exclusion of tweets containing any other pattern in Table 3. Length is the number of tweets selected based on the length threshold (i.e., byte count). Count is the number of tweets selected based on the count threshold. Final is the number of tweets selected from the top k tweets; here, if the size of the remaining set was large, not all of them needed to be checked during manual selection. Pct (\%) indicates the selection percentage of each stage.}
+\label{detail_statistics}
+\input{02table28.txt}
+\end{table}
+
+\noindent Example tweets that were removed during manual selection are listed below; note that this stage was primarily applied to Japanese and Chinese tweets.
+\begin{itemize}
+\item TheTIMESALE(ザ・タイムセール)は、お店の余剰商品・時間をムダなく有効活用できるサービスです。カフェやレストラン、サロンや癒し店を経営のみなさま、ぜひご活用ください！ \#アプリ \#サービス \#iPhone6 \#android \#集客 \#飲食店 \#マッサージ \#サロン \\
+{\sf \small [Ref: TheTIMESALE is a service to make full use of the redundant goods and time of your shops. People who are running cafes, restaurants, salons and healing shops, please use this freely. \#app \#service \#iPhone6 \#android \#attractingcustomers \#restaurant \#massage \#salon]} \\
+Type (2): This is a commercial tweet containing no opinion regarding iPhone 6.
+\item 不会\UTFC{5427}，\UTFC{8fd9}才几天\UTFC{554a}，\UTFC{8fd9}\UTFC{5e2e}明星\UTFC{4EEC}都用上iphone6了，\UTFC{5509}，\UTFC{8fd9}世界，富的真富，而那些乞丐……明星就不\UTFC{5e94}\UTFC{8be5}有\UTFC{8fd9}\UTFC{4e48}多的工\UTFC{8d44}，他\UTFC{4eec}有什\UTFC{4e48}\UTFC{8d21}献\UTFC{554a}，\UTFC{5bf9}世界\UTFC{5bf9}人民？ \\
+{\sf \small [Ref: No way, it's just been a few days. These stars are all using iPhone 6. Alas, what a world. The rich become richer, whereas the beggars... Those stars shouldn't get paid so much, what have they contributed to the world and the people?]} \\
+Type (3): This is a tweet ridiculing a social phenomenon instead of evaluating iPhone 6.
+\item イリーナ・ウラジーミロヴナ・プチナ（プーチン）「私をあまり怒らせない方がいいわよ……？」 （幼なじみは大統領） \\
+{\sf \small [Ref: Irina Vladimirovna Putina (Putin) ``you'd better not make me angry…?'' (My Girlfriend Is the President)]} \\
+Type (3): Note that this is a tweet that should have been removed, since it does not discuss the Russian President; however, it was neglected because the supervisor was not familiar with the given novel at the moment.
+
+\end{itemize}
+
+
+\section{Example of Annotation Result in XML}
+
+\begin{figure}[H]
+\vspace{-1.5\Cvs}
+\begin{center}
+\includegraphics{24-2ia2f5.eps}
+\end{center}
+\hangcaption{Example of annotation results in XML. Note that in this example, the sentence polarity of the sarcasm frame is tagged on the full stop of the locating sentence in that we did not perform sentence segmentation to reduce the burden on annotators.}
+\label{annotation_result}
+\end{figure}
+
+
+\section{Detail of Coding Manual}
+
+\noindent The following coding manual is included here to explain why and how to perform the annotation work to the annotators. As a guidebook, it is intended to standardize the procedure of annotation using the annotation support tool shown in Figure 2. Note that the special cases discussed in Section 7.2 were discovered while performing the analysis; thus, their corresponding annotation methods are not yet included in this manual.
+
+\vspace{1\Cvs}
+\noindent {\bf Background \& Purpose}
+
+\noindent ``What other people think'' has always been an important piece of information for most of us during the daily decision-making process. The emerging of social network, such as Twitter and Facebook, has now provided people enough material.
+
+\noindent Collecting opinions and mining out sentiment distribution or tendency from those social media automatically is an indispensable research field, which is generally called Sentiment Analysis. In this project, we will expand such analysis to a multilingual setting, including English, Japanese and Chinese.
+
+\noindent To have a good understanding of natural language texts and to construct a gold-standard corpus for system evaluation, manual annotation is carried out by most of the researchers. For these reasons, we are taking effort for building up such a multilingual tweet corpus.
+
+\vspace{1\Cvs}
+\noindent {\bf Points of Attention}
+\begin{enumerate}
+	\item Annotation is a process that needs carefulness. Please be concentrated and patient while working. 
+	\item Please work at a proper pace, and start/finish a working section (2 or 3 h) on time.
+	\item Download the latest tool and datasets before you start a new working section, and upload your result files when you finish.
+	\item Some of your annotation results will be checked afterward, and you may get feedback before the next working section.
+\end{enumerate}
+
+\vspace{1\Cvs}
+\noindent {\bf Task Description}
+
+\noindent You need to annotate the following items of the given tweets regarding an evaluation object. {\em *Attention: All the judgment and annotation are done for the evaluation objects. Please don't lose the focus.} 
+\begin{enumerate}
+\renewcommand{\labelenumii}{}
+	
+	{\bf \item Tag the words/phrases containing emotion and their degree modifiers}
+	\begin{enumerate}
+		\item Look from the start to the end of a tweet word by word (do not skip any word).
+		\item Recognize and tag the words containing positive, negative or neutral emotions.
+		\item The positive/negative words are especially important. After you tag them, they will also be displayed at the right of the tweet text editor. A positive/negative word can be any part of speech.
+		\item Recognize and tag the degree words (including intensifier, diminisher and negation) that modify those emotional words.
+		\item Intensifier, diminisher, and negation are also good indicators to distinguish the boundaries of emotional words.
+		\item Note that the emotions of positive/negative/neutral words are their emotions in general use (i.e., in a dictionary) or in social-network use (e.g., net slang). Particularly, non-emotional words (i.e., words containing no emotion in a dictionary) can become emotional according to the contexts. For example, the word ``joined'' in the following tweet can be tagged as ``positive'', because ``join'' expresses a preference to topic iPhone 6.
+                   
+			\begin{itemize}
+                    	\item[\CheckedBox] {\sffamily Just \underline{joined}{\boldsf (positive)} the \#iphone6 family. Gonna miss my HTC One I think but the camera is gonna be way better with iPhone. Time to take some photos!}
+                   \end{itemize}
+		\item When should we annotate an emotional word?
+		\begin{itemize}
+			\item We only annotate the words when they have an influence on global polarity (called as ``signal''). This means that the annotated words should be the clues or hints to global polarity (i.e., having a relation with global polarity). We attach importance to emotional signals rather than pure words.
+			\item If a word in a polarity lexicon is only a statement or narrative that has nothing to do with its evaluation object, there is no need to tag it. For example, ``want'' in the following tweet should not be tagged, since it has no influence on global polarity.
+				  
+				  \begin{itemize}
+				  	\item[\XBox] {\sf Biggest complaint with my \#iPhone6 is the gyroscope. Constantly shaking \& rotating to recognize I \underline{want}{\boldsf (positive)} my phone sideways. Text app specific}
+				  \end{itemize}
+			\item This judgment sometimes depends heavily on your interpretation of the context. 
+		\end{itemize}
+		\item Emotional words and their degree modifiers often appear in pairs (sometimes they are away from each other). The emotional words are at the center of the pair. For example, ``very well'' in the following tweet is such a pair.
+			
+			\begin{itemize}
+				\item[\CheckedBox] {\sf The \#iphone6 is a \underline{very}{\boldsf (intensifier)} \underline{well}{\boldsf (positive)} made phone..beautiful interface, fast processing sleek design, iv enjoyed the experience}
+			\end{itemize}
+		\begin{itemize}
+			\item Please avoid tagging degree modifiers alone in a sentence as follows.
+				
+				\begin{itemize}
+					\item[\XBox] {\sf I'm so \underline{not}{\boldsf (negation)} used to this big ass phone but finally I upgraded \& most importantly I got a new cellular device \#iPhone6}
+				\end{itemize}
+		\end{itemize}
+		\item If there is a phrase or an expression containing an emotion, such as ``brand new'' and ``get rid of,'' tag all its words together. If the phrase/expression is separated by other words, you can group them as follows. 
+			
+			\begin{itemize}
+				\item[\CheckedBox] {\sf I've been using \#Windows8 and 8.1 since May 2014 and have had nothing but trouble. \#Microsoft were insane to \underline{force} this \underline{upon}{\boldsf (negative)} their users.}
+			\end{itemize}
+		\item Note that the smallest unit to tag is word for English and character for Japanese and Chinese. When you tag a word, it becomes a signal. The attributes of signals are shown over the tweet text editor.
+		\item Note that each word only belongs to one category. For most cases, this rule works well. If there is a violation, please make a choice by the content (i.e., meaning, not the shape) of the word.
+		\item There is no need to tag the evaluation objects (they are already in bold).
+		\item Net slang and smileys need to be tagged. If you are not sure about their meaning, please google them.
+		\item There is no need to tag the full stops of the sentences unless they are sarcastic sentences or rhetorical questions (see more on this in (2)).
+		\item Some other language-specific points:
+		\begin{itemize}
+			\item Chinese
+			\begin{itemize}
+			\renewcommand{\labelitemii}{}
+				\item Texts like [心] are substitutes for graphic emoticons. Please regard them as words.
+				\item Pay attention to the segmentation of some words, such as ``不\UTFC{6ee1}意$\rightarrow$不 + \UTFC{6ee1}意'' and ``不好$\rightarrow$不 + 好.''
+			\end{itemize}
+			\item Japanese
+			\begin{itemize}
+			\renewcommand{\labelitemii}{}
+				\item Tag verbs with their conjugation (変格活用), such as [なくなりました][なくなった]。
+				\item Tag {\em suru} verbs (サ変動詞) as a whole, such as [肥大する].
+			\end{itemize}
+		\end{itemize}
+	\end{enumerate}
+	
+	{\bf \item Choose rhetoric devices in the tweets (if there is any)}
+
+	\noindent Rhetoric devices that tweets contain can cause difficulties for the proposed systems to classify the global polarities of tweets. This is what researchers are paying attention to. In linguistics, rhetoric has strict definitions and     				 many genres, while in our task, we only focus on highly frequent rhetoric devices, including metaphor, comparison, sarcasm, and rhetorical question. 
+
+\vspace{1\Cvs}
+	\noindent This is a multiple-choice question, with five choices. Please choose one or more rhetoric devices, if any exists.
+	\begin{itemize}
+		\item Non-rhetoric\\
+		Straightforward tweet. No rhetoric in the tweet.
+	\end{itemize}
+
+	\noindent If the tweet contains metaphor or comparison, please supplement the emotional information of their counterparts. 
+	\begin{itemize}
+		\item Metaphor
+		
+		\begin{itemize}
+			\item[\CheckedBox] {\sf As a \#Mac user, \#Windows8 is figuratively {\boldsf [}the bane of my existence{\boldsf ] (Metaphorically negative)}. Trying to do anything is nigh on impossible. }
+		\end{itemize}
+		\item Comparison
+		
+		\begin{itemize}
+			\item[\CheckedBox] {\sf Can now definitively say that \#Windows8 IS indeed faster and more stable than {\boldsf [}\#Windows7{\boldsf ](Comparatively inferior)} used both for a while now. Don't be afraid of 8 \#fb}
+		\end{itemize}
+	\end{itemize}
+	\noindent If the tweet contains sarcasm or rhetorical question, please supplement the sentence polarity at the full stops of the locating sentences (there is no full stops, a ``\$'' symbol can be added). 
+	\begin{itemize}
+		\item Sarcasm
+		
+		\begin{itemize}
+			\item[\CheckedBox] {\sf {\bf [}Every time I use \#Windows8, I become more impressed with how profoundly bad a UX it is.{\boldsf ](Sarcastically negative)[}Its an almost perfect \#antidesign{\boldsf ] (Sarcastically negative)}}
+		\end{itemize}
+		\item Rhetorical Question
+		
+		\begin{itemize}
+			\item[\CheckedBox] {\sf last \#windows8 update took more time than loading 20 \#c64 games with \#datasette ...{\boldsf [}what went wrong in 30 years?{\boldsf ](Rhetorically negative)}}
+		\end{itemize}
+	\end{itemize}
+	\noindent After you choose the rhetoric devices, please supplement the necessary information for each chosen rhetoric device.
+	
+	\noindent If a word has already been tagged as subtopic in the previous task, you need to change the previous tag to a rhetoric element, because rhetoric takes priority at any time.
+	
+	
+	{\bf \item Determine the Global Polarity of Tweets}
+
+	\noindent Global polarity is a vital information of a tweet, which is important for evaluating proposed systems. Please judge whether the author of the tweet is for (supportive) or against (non-supportive) the evaluation object, and 				 select the global polarity toward the evaluation object. 
+
+	\noindent Before you make the judgment, remember to clear up the old impression of the evaluation object in your brain first. The answer should be decided based on the tweet text and should not be affected by the annotator's own preference.
+
+\vspace{1\Cvs}
+	\noindent This is a single choice, and there are the four choices.
+	\begin{itemize}
+		\item Positive (supportive)
+		\item Negative (non-supportive)
+		\item Neutral
+		\begin{itemize}
+		\renewcommand{\labelitemii}{}
+			\item Mixed or undecided tweets
+			\item Non-comment tweets
+			\item Objective tweets, such as news, commercial
+			\item Irrelevant tweets
+		\end{itemize}
+		\item None (unreadable)\\
+		Choose this option only if the tweet is unable to be understood for reasons such as encoding problem, dialects. 
+	\end{itemize}
+	
+	{\bf \item Write down the Subtopics of the Tweets}
+
+	\noindent Subtopic information is not ignorable in order to observe the components of people's opinions. For each tweet, there is an evaluation object, which is also the main topic. Regarding the main topic, there could be many subtopics 			 that people are talking about in tweets, such as aspects and attributes.
+
+\vspace{1\Cvs}
+	\noindent You need to write down a couple of subtopics (at least 1) for each tweet. The form of subtopic can be word or phrase. Subtopics should be noun or gerund. 
+	\begin{itemize}
+		\item Please recognize and tag the subtopics from the tweet text (they are automatically added to the subtopic text editor, and their positions in the tweet are recorded). Pay close attention to nouns in the tweet.
+		\item If there is no any apparent subtopic text in the tweet, please summarize from the tweet. You can freely edit the picked-up subtopics in the subtopic text editor into good shape.
+	\end{itemize}
+\end{enumerate}
+\vspace{1\Cvs}
+\noindent {\bf Data Distribution}
+\begin{enumerate}
+	\item Each annotator only takes charge of one language (which is your native language).
+	\item Each annotator takes charge of two evaluation objects (one of the following combinations).
+	\begin{itemize}
+		\item iPhone 6 (product) + Putin (figure)
+		\item Windows 8 (product) + Scottish Independence (event)
+	\end{itemize}
+	\item The tweets for annotation will be distributed in order. A new set of tweets will be distributed after you have finished the previous one.
+\end{enumerate}
+
+
+\section{Lexicons Used for WPN Computation}
+
+The lexicons we used for computing WPN are as follows:
+\begin{itemize}
+\item Liu Bing's English Opinion Lexicon (2,006 positive/4,783 negative words)\\
+URL: http://www.cs.uic.edu/{\textasciitilde}liub/FBS/opinion-lexicon-English.rar
+\item Chinese Emotion Ontology Lexicon (11,229 positive/10,783 negative words)\\
+URL: http://ir.dlut.edu.cn/EmotionOntologyDownload
+\item Japanese Sentiment Polarity Lexicon (5,462 positive/8,129 negative words)\\
+URL: http://www.cl.ecei.tohoku.ac.jp/index.php?Open\%20Resources\%2FJapanese\%20Senti-
+ment\%20Polarity\%20Dictionary
+\item SentiStrength Emoticon Lookup Table (46 positive/58 negative emoticons)\\
+URL: http://Sentistrength.wlv.ac.uk/SentStrength\_Data\_Sept2011.zip
+\end{itemize}
+
+
+\begin{biography}
+
+\bioauthor[:]{Yujie Lu}{
+received his Bachelor's degree in Information Management and Information System and his Master's degree in Information Science from East China Normal University, China, in 2010 and 2013 respectively. He is currently a Ph.D. student in the Graduate School of Environment and Information Sciences, Yokohama National University. His research interests is NLP, especially sentiment analysis and its applications.
+}
+
+\bioauthor[:]{Kotaro Sakamoto}{
+received his Master's degree in Information Engineering from Yokohama National University in 2014. He is currently a Ph.D. student in the Graduate School of Environment and Information Sciences, Yokohama National University, and a research assistant at National Institute of Informatics. He was a visiting research scholar at Language Technologies Institute, Carnegie Mellon University, from August 2015 to August 2016. His research interest is NLP.
+}
+
+\bioauthor[:]{Hideyuki Shibuki}{
+received his B.Com. degree and M.Com. degree from Otaru University of Commerce in 1997 and 1999, respectively. He received his Ph.D. degree in Electronics and Information Engineering from Hokkaido University in 2002. He received his Ph.D. degree in Business Administration from Hokkai-Gakuen University in 2006. He is currently a Ph.D. researcher in the Graduate School of Environment and Information Sciences, Yokohama National University. His research interest is NLP. He is a member of the Association for Natural Language Processing, Information Processing Society of Japan, the Institute of Electronics, Information and Communication Engineers, and the Japanese Cognitive Science Society.
+}
+
+\bioauthor[:]{Tatsunori Mori}{
+received his B.E. degree in Information Engineering and Ph.D. degree in Electrical and Computer Engineering from Yokohama National University in 1986 and 1991, respectively. After being a research associate, a lecturer, and an associate professor in the Faculty of Engineering, he is currently a professor in the Graduate School of Environment and Information Sciences, Yokohama National University. He was a visiting scholar in the Center for the Study of Language and Information (CSLI), Stanford University, USA, from February to November 1998. He is a member of the Association for Natural Language Processing, Information Processing Society of Japan, the Institute of Electronics, Information and Communication Engineers, the Japanese Society for Artificial Intelligence, and ACM.
+}
+
+\end{biography}
+
+\biodate
+
+
+\end{document}

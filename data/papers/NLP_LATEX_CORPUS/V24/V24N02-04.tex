@@ -1,0 +1,450 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+
+\newcommand{\argmax}{}
+\def\vector#1{}
+
+\Volume{24}
+\Number{2}
+\Month{March}
+\Year{2017}
+
+\received{2016}{8}{22}
+\revised{2016}{11}{1}
+\accepted{2016}{12}{13}
+
+\setcounter{page}{297}
+
+\jtitle{文字列正規化パタンの獲得と崩れ表記正規化に基づく\\日本語形態素解析}
+\jauthor{斉藤いつみ\affiref{Author_1} \and 貞光　九月\affiref{Author_1}\and 浅野　久子\affiref{Author_1} \and 松尾　義博\affiref{Author_1}}
+\jabstract{
+ソーシャルメディア等の崩れた日本語の解析においては，形態素解析辞書に存在しない語が多く出現するため解析誤りが新聞等のテキストに比べ増加する．辞書に存在しない未知語の中でも，既知の辞書語からの派生に関しては，正規形を考慮しながら解析するという表記正規化との同時解析の有効性が確認されている．本研究では，これまで焦点があてられていなかった，文字列の正規化パタン獲得に着目し，アノテーションデータから文字列の正規化パタンを統計的に抽出する．統計的に抽出した文字列正規化パタンと文字種正規化を用いて辞書語の候補を拡張し形態素解析を行った結果，従来法よりも再現率，精度ともに高い解析結果を得ることができた．
+}
+\jkeywords{表記正規化，形態素解析，文字列アライメント}
+
+\etitle{Morphological Analysis for Japanese Noisy Text based on Extraction of Character Transformation Patterns and Lexical Normalization}
+\eauthor{Itsumi Saito\affiref{Author_1} \and Kugatsu Sadamitsu\affiref{Author_1} \and Hisako Asano\affiref{Author_1} \and \\ Yoshihiro Matsuo\affiref{Author_1}} 
+\eabstract{
+Social media texts are often written in a non-standard style and include many lexical variants such as insertions, phonetic substitutions, and abbreviations that mimic spoken language. The normalization of such a variety of non-standard tokens is one promising solution for handling noisy text. A normalization task is very difficult for the morphological analysis of Japanese text  because there are no explicit boundaries between words. To address this issue, we propose a novel method herein for normalizing and morphologically analyzing Japanese noisy text. First, we extract character-level transformation patterns based on a character alignment model using annotated data. Next, we generate both character-level and word-level normalization candidates using character transformation patterns and search for the optimal path based on a discriminative model. Experimental results show that the proposed method exceeds conventional rule-based system in both accuracy and recall for word segmentation and POS (Part of Speech)  tagging.
+}
+\ekeywords{Normalization, Morphological Analysis, Character Alignment}
+
+\headauthor{斉藤，貞光，浅野，松尾}
+\headtitle{文字列正規化パタンの抽出と崩れ表記正規化に基づく日本語形態素解析}
+
+
+\affilabel{Author_1}{NTTメディアインテリジェンス研究所}{NTT Media Intelligence Laboratories}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+近年Twitter等を代表とするマイクロブログが普及し，個人によって書かれたテキストを対象とした評判分析や要望抽出，興味推定に基づく情報提供など個人単位のマーケティングのニーズが高まっている．一方このようなマイクロブログ上のテキストでは口語調や小文字化，長音化，ひらがな化，カタカナ化など新聞等で用いられる標準的な表記から逸脱した崩れた表記（以下崩れ表記と呼ぶ）が多く出現し，新聞等の標準的な日本語に比べ形態素解析誤りが増加する．
+
+これらの崩れ表記に対し，辞書に存在する語にマッピングできるように入力表記を正規化して解析を行うという表記正規化の概念に基づく解析が複数提案され，有効性が確認されている\cite{Han2011,Han2012,liu2012}．日本語における表記正規化と形態素解析手法としては，大きく (1) ルールにもとづいて入力文字列の正規化候補を列挙しながら辞書引きを行う方法\cite{sasano-kurohashi-okumura2013IJCNLP,oka:2013,katsuki:2011}，(2) あらかじめ定めた崩れ表記に対し，適切な重みを推定するモデルを定義し，
+    そのモデルを用いて解析を行う方法 (Kaji and Kitsuregawa 2014; 工藤，市川，Talbot，賀沢2012)が存在する．\nocite{kaji-kitsuregawa:2014:EMNLP2014,kudo:2012}
+(1) では事前に定めた文字列レベルの正規化パタンに基づいて崩れた文字列に対し正規文字列を展開しながら解析するシンプルな方法が提案されている．(2) においては鍜治ら\cite{kaji-kitsuregawa:2014:EMNLP2014}は形態素正解データから識別モデルを学習し，崩れ表記を精度よく解析する方法を提案した．工藤ら\cite{kudo:2012}は崩れ表記の中でもひらがな化された語に着目し，教師なしでひらがな語の生成確率を求める手法を提案した．
+
+(1)，(2) いずれの手法においても，崩れ表記からの正規表記列挙に関しては人手によるルールやひらがな化などの自明な変換を用いているが，実際にWeb上で発生する崩れ表記は多様でありこれらの多様な候補も考慮するためには実際の崩れ表記を収集したデータを用いて正規化形態素解析に導入することが有効と考えられる．
+
+本研究では，基本的には従来法\cite{katsuki:2011,oka:2013}と同様の文字列正規化パタン（「ぅ→う」）等を用いて辞書引きを拡張するという考え方を用いるが，文字列正規化パタンを人手で作成するのではなく，正規表記と崩れ表記のアノテーションデータから自動的に推定される文字列アライメントから統計的に求める．また，文字列正規化パタンと，ひらがな化・カタカナ化などの異文字種展開を組み合わせることによって正規化の再現率を向上させる．さらに，今回の手法では可能性のある多数の正規化文字列を列挙するため，不要な候補も多く生成される．これらの不要な候補が解析結果に悪影響を及ぼさないようにするため，識別学習を用いて文字列正規化素性や文字種正規化素性，正規語言語モデルなどの多様な素性を考慮することにより，崩れ表記の正規化解析における再現率と精度の双方の向上を試みる．
+
+本研究の対象範囲は，音的な類似という点で特定のパタンが存在すると考えられる口語調の崩れ表記や，異表記（小文字化，同音異表記，ひらがな化，カタカナ化）とした．これらを対象とした理由は，\cite{saito-EtAl:2014:Coling,kaji-kitsuregawa:2014:EMNLP2014}などでも示されているように，音的な類似性のある崩れ表記が全体の中で占める割合が大きいとともに今回の提案手法で統一的に表現できる現象であったためである．
+
+
+\section{関連研究}
+
+日本語の正規化と形態素解析に関する研究は先に述べたように大きく2つ存在する．文字列正規パタンに基づいて入力文を動的に展開しながら解析する笹野らの手法\cite{sasano-kurohashi-okumura2013IJCNLP}では，小文字→大文字，長音→母音，促音→削除などのシンプルな正規化パタンを用いている．例えば，「すっごーい」という入力文に対し，促音と長音を削除した「すごい」も辞書引きの候補とする方法である．この手法はシンプルでありながら結果の有効性が示されているが，パタンは人手で作成され変換コストも一定値が用いられている．Web上には多様な表記揺れバリエーションが存在し，人手でカバーできる範囲には限界がある．また崩れ表記には生起しやすいパタンと生起しにくいパタンが存在するため，変換ルールを増やして精度を向上させる場合にはそれらの生起しやすさを適切に考慮する必要がある．
+コストを適切に推定する，という観点では，鍜治ら\cite{kaji-kitsuregawa:2014:EMNLP2014}，工藤ら\cite{kudo:2012}がそれぞれ教師あり学習の手法，教師なし学習の手法を示しており有効性が確認されているが，いずれも正規化パタンについては人手で設定しており，正規化パタンのバリエーションを拡張する検討はなされていない．
+これらの手法においても，どのように正規化パタンそのものを増やすかという問題はより高精度な正規化解析において検討すべき重要な課題である．また，崩れ表記のカバー率を増やすと同時に，正規化によるデグレードをできるだけ抑制することも形態素解析においては重要な観点となる．
+
+本研究では，正規化パタンのカバー率を向上させるため，Web上から崩れ表記を収集し各崩れ表記に対し正規表記をアノテーションしたペアデータを用いて文字列レベルの正規化パタンとその生起確率を計算する．そして，これらのパタンを用いて崩れ表記に対応する正規化候補を形態素ラティス内に拡張し正規語も含めた正解系列を推定することにより，崩れ表記の正規化解析における再現率と精度の双方の向上を試みる．
+
+
+\section{提案手法}
+
+\subsection{提案手法の全体像}
+
+本研究の全体構成を図\ref{fig:systemall}に示す．我々の提案手法は，まずWeb上から収集した崩れ表記に対し，正規表記のアノテーションを施したペアデータから自動的に文字列正規化パタンを抽出する．そして，その文字列正規化パタンに基づき辞書語の拡張を行い解析を行う．辞書語の拡張においては，計算量削減のため事前に展開可能なものは事前に正規化辞書として展開を行い，動的照合が必要なものに関しては入力文に対して動的に文字列を拡張させながら辞書引きを行うことで実現する．デコーディングに際しては，複数の素性を用いた識別モデルを用いて最適な表記，正規表記，品詞系列を選択する．以下，それぞれに関して詳細を記述する．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia4f1.eps}
+\end{center}
+\caption{提案手法の全体構成}
+\label{fig:systemall}
+\end{figure}
+
+
+\subsection{崩れ表記と正規表記の文字列アライメント}
+
+本研究では，文字列正規化パタンとその生起しやすさを推定するため，正規‐崩れ表記の正解ペアデータを用いる．英語における表記正規化の研究\cite{yang-eisenstein:2013:EMNLP}においては人手アノテーションをせずに単語区切りを利用して自動的に正規‐崩れ表記のペアを抽出する研究も存在するが，日本語の場合は単語区切りが不明であり，英語に対して提案されている手法を適用するのは困難なため正解データのアノテーションを行うこととした．
+
+正解ペアデータの作成に際しては，まず崩れ表記を含むテキスト（ブログやTwitter）から崩れ表記（例：おぃしーぃ）を人手で抽出する．そして，抽出した崩れ表記に対して人手で正規表記を付与する（おぃしーぃ→おいしい）．正解ペアの例を表1に示す．
+
+\begin{table}[t]
+\caption{崩れ表記抽出と正規表記付与の例}
+\input{04table01.txt}
+\end{table}
+
+これらのペアデータ（おぃしーぃ，おいしい）から文字列アライメントの推定に基づき文字列レベルの正規化パタンを統計的に抽出する（例：ー→null，ぃ→い）．
+
+本研究では，複数文字列のアライメントが扱えるJiampojamarnらの研究\cite{jiampojamarn-kondrak-sherif:2007:main}を参考に，ペア文字列間の最適系列を下記のように定式化する．
+\begin{equation}
+\mathbf{\hat{q}} = \argmax_{\mathbf{q} \in K(d)} \prod_{q \in \mathbf{q}}p(q)
+\end{equation}
+ここで，$d$は崩れ表記と正規表記のペアを表す変数である（例：かなぁーり，かなり）．$q$は$d$中の部分文字列アライメントを表し （``なぁー，な'' など），{\bf q}は$d$中のアライメント$q$の系列を表す（例えば図\ref{fig:dpmatch} 中の経路1の部分文字列アライメント系列 \{（``かな，かな''），（``ぁー，null''），（``り，り''）\}．$K(d)$は，$d$における部分文字列アライメント系列{\bf q}の可能な集合を表す．
+
+本研究では，$p(q)$を\cite{Bisani:2008} や\cite{kubo2011unconstrained} によって提案されたEMアルゴリズムを用いて求める．$p(q)$は下記の式(2)によって定められる．
+\begin{align}
+ p(q) &= \frac{\gamma(q)}{{\displaystyle \sum_{q' \in Q}}\gamma(q')} 
+	\label{eq:Estep} \\
+ \gamma(q) &= \sum_{d \in D}\sum_{\mathbf{q} \in K(d)} p(\mathbf{q}) {\displaystyle \sum_{\bar q \in \mathbf{q}}} \delta(\bar q = q) 
+=\sum_{d \in D}\sum_{\mathbf{q} \in K(d)}
+\frac{ {\displaystyle \prod_{q' \in \mathbf{q}}}{\bar p(q')}} 
+{{\displaystyle \sum_{\mathbf{q'} \in K(d)}} {\displaystyle \prod_{q' \in \mathbf{q'}} {\bar p(q')}}}
+{\displaystyle \sum_{\bar q \in \mathbf{q}}}\delta(\bar q = q), 
+ \nonumber
+\end{align}
+ここで，$D$は$d$の集合，$Q$は$q$の集合を表す．また，$\delta(\bar q = q)$は$\bar q = q$ のときに1となる変数であり，${\displaystyle \sum_{\bar q \in \mathbf{q}}}\delta(\bar q = q)$は$\mathbf{q}$における$q$の出現数を表す．${\bar p(q)}$は下記で示す繰り返し計算ステップにおける，前回の$p(q)$の計算結果を表す．部分文字列に関しては，崩れ表記の正規化においてできるだけ単語間で共通して起こる短い文字列のパタンを抽出したいという目的から，6文字以下のみのパタンを考慮することとした．また，本研究では，$K(d)$としてn-best解を用いた．
+
+\begin{enumerate}
+\item step1: 初期値設定 \\
+ EMアルゴリズムを用いた推定は初期値に大きく影響されるため，初期値としてまずあらかじめ定めたコストに基づいてアライメントを行い，その後式(2)に従ってアライメントを求めた．初期値として，同じ文字同士と同じ文字同士のひらがな・カタカナ変換（あ-ア，オ-お，など）の1文字変換のコストを0とし，複数文字アライメントに関しては文字列$a$, $b$の文字長$l_a$, $l_b$を用いて$l_a$ + $l_b$をアライメントのコストとした．ただし，同じ文字同士の複数文字のアライメントに関するコストは0とした（例：い-いいい）．これらの設定は，同じ文字同士のアライメント確率が高くなるような事前知識として導入した．
+\item step2: 期待値の計算 \\
+現在の確率値${\bar p(q)}$を用いて，各アライメント$q$の期待出現回数$\gamma(q)$を計算する．
+\item step3: 経路確率とアライメントの計算 \\
+step2で求めた$\gamma(q)$を用いて，各アライメントの確率値$p(q)$を更新する．
+\item step4: 繰り返し \\
+アライメントが収束するまでstep2，3を繰り返す．
+\end{enumerate}
+
+アライメントの具体例を図\ref{fig:dpmatch}に示す．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia4f2.eps}
+\end{center}
+\caption{正規表記と崩れ表記の文字列アライメント計算例}
+\label{fig:dpmatch}
+\end{figure}
+
+また，アライメントモデルからは非常に出現頻度が低い文字列正規化パタンも抽出されるため，抽出されたアライメントから正規化形態素解析に用いる文字列正規化パタンをフィルタリングした．フィルタに際しては，$\gamma(q)$ と$r(q)$を閾値として用いた．ここで，$q=(c_w, c_v)$とし，$c_w$を抽出された文字列正規化パタンにおける崩れ表記の部分文字列，$c_v$を正規表記の部分文字列と表すと，$r(c_w, c_v)$は$r(c_w, c_v)=\gamma(q)/n_{c_w}.$として計算した．ここで，$n_{c_w}$は$c_w$が学習コーパス中に出現する総出現数である．今回は， $\gamma_{\rm thres}= 0.5$，$r_{\rm thres}=0.0001$として閾値を設定し，$\gamma(q) < \gamma_{\rm thres}$または$r(c_w, c_v)<r_{\rm thres}$の場合は削除した．また，$r(c_w, c_v)$は3.5.2で述べる識別モデルの素性の一つとしても使用した．
+
+
+\subsection{文字列正規化パタンと文字種変換を用いた基本辞書の拡張}
+
+前項で示した文字列正規化パタンを形態素解析に組み込むにあたり，計算の効率化のため事前展開可能な候補についてはあらかじめ基本辞書に存在する辞書語に対し文字列変換を行って正規化辞書として事前展開する．ここで，基本辞書とは一般に配布されている形態素解析用の辞書のことを指す．具体的には，得られた文字列正規化パタンのうち，正規文字列の削除・置換パタンに関してはあらかじめ基本辞書の文字列を変換して崩れ表記化を行い，正規化辞書を作成した．崩れ文字列の挿入に関しては，正規単語のあらゆる箇所に挿入されることが考えられ，すべてのパタンを事前展開することは非効率的であるため，動的展開の文字列パタンとして用いた．さらに，Twitterなどのテキストでは，標準的な表記が漢字やカタカナの単語に関してひらがな表記される，あるいは標準的な表記が漢字やひらがなの単語がカタカナで表記される場合が多く存在する．これらの現象に関しては文字列正規化パタンから文字列単位で候補生成を行うことは非効率であるため，基本辞書の読みを利用して辞書を拡張する．これらを文字種正規化候補と呼ぶ．学習データが大量に存在すれば，このような文字種変換についても文字列正規化パタンとして獲得することが可能であるが，人手で作成する正解データの量は限られるため，あらゆる文字種変換を文字列レベルで効率よくカバーすることは難しい． 文字列正規化候補展開と文字種正規化候補展開を組み合わせることで，「カワィィ」→「かわいい」，「かぅんたー」→「カウンター」といった文字列アライメントだけではカバーできないより複雑な崩れ表記に対する正規化候補の展開も行うことが可能になる．
+
+\begin{table}[b]
+\caption{文字列アライメントを用いた崩れ表記事前生成の例}
+\label{tab:seisei}
+\input{04table02.txt}
+\end{table}
+
+事前生成の具体的な手順としては，まず基本辞書から読み情報を利用して，読みのひらがな表記，カタカナ表記の生成を行った．この際，カタカナ表記の生成に関しては一文字目から順に部分的にカタカナ化した表記も生成した．例えば，``うれしい''という表記に対しては，``ウれしい''，``ウレしい''，``ウレシい''，``ウレシイ''，というパタンを生成した．その後，獲得した文字列正規化パタンを用いて，崩れ表記の生成を行った．表2に事前生成の例を示す．表2からもわかるように，文字種と文字列正規化の双方を用いて多様な候補を生成することができる．この崩れ表記を基本辞書に追加して正規化辞書として用いる．ここで，今回は辞書サイズが不要に大きくなることを避けるため，文字列変換を行う際のシードとする形態素について，Twitterテキストで計算した正規表記の出現頻度が閾値以上となる形態素に限定し，さらに1形態素内での文字列正規化パタンの適用による文字変換を2回までとした．これらの制約によって，動的にすべての候補を考慮する場合に比べカバー率が下がる可能性があるが，あらゆる候補を考慮すると形態素ラティスが非常に大きくなり計算時間が増大するため，現実的に出現しやすい崩れ表記を効率良く列挙するための制約として用いた．これらの事前生成の結果，756,463エントリの基本辞書が9,754,196エントリに拡張された．また動的照合のためのルール（崩れ文字削除候補）は105パタンであった．
+
+
+\subsection{形態素ラティス生成}
+
+形態素ラティスの生成は，文字列正規化の動的照合と前項で述べた正規化辞書，基本辞書を用いて行う．この際，「っ」と「ー」の連続に関しては1文字まで縮約させた文字列，母音の連続に関しては3文字まで縮約させた文字列も照合の対象とした．これらの文字列については，任意個の文字挿入がありえるため，意味が変わらない範囲で正規化可能な処理として定めた．次に，3.3で述べたように正規‐崩れ文字列アライメントモデルで抽出された文字列正規化パタンのうち，正規表記が空文字となるパタンについては動的に展開を行い，展開された文字列に対して基本辞書と正規化辞書による辞書引きを行って形態素ラティスを生成した．
+これにより，事前展開しきれなかった候補についても動的展開と組み合わせることでより多様な崩れ表記に対して正規の辞書表記を列挙することが可能になる．
+
+
+\subsection{識別モデルによる表記正規化と形態素解析の定式化}
+
+3.4節で示したように文字列や文字種を拡張して形態素ラティスを生成する場合，不要な候補も多く生成されるため既存の形態素コストや品詞連接コストをそのまま用いると解析誤りが増加するなどの悪影響が考えられる．精度を向上させるためには生成した形態素ラティスに対し適切な重み付けを行うことが必要となる．本研究では文字列や文字種といった多様な崩れ表記を対象としているため，多様な素性を柔軟に考慮することができる構造化パーセプトロン\cite{Collins:2002}を用いて表現することにする．
+
+
+\subsubsection{目的関数}
+
+本研究では，入力文$s$に対し正しい表出表記系列$\vector{w}=(w_1, w_2, \ldots w_n)$，正規表記系列 $\vector{v}=(v_1, v_2, \ldots v_n)$，品詞系列$\vector{t}=(t_1, t_2, \ldots t_n)$を求める問題を考える．この問題は次のように定式化できる．
+\begin{equation}
+(\hat{\vector{w}}, \hat{\vector{v}}, \hat{\vector{t}})= \argmax_{(\vector{w}, \vector{v}, \vector{t}) \in L(s)} \mathbf{w} \cdot \mathbf{f}(\vector{w}, \vector{v}, \vector{t})
+\end{equation}
+ここで $(\hat{\vector{w}}, \hat{\vector{v}}, \hat{\vector{t}})$ は最適な系列， $L(s)$ は入力文$s$に対し構築される形態素ラティス（各ノードは表出表記，正規表記，品詞の3つ組情報を持つ）， $\mathbf{w} \cdot \mathbf{f}(\vector{w}, \vector{v}, \vector{t}) $ は重みベクトル $\mathbf{w}$ と素性ベクトル $\mathbf{f}(\vector{w}, \vector{v}, \vector{t}) $の内積を表す．最適系列は $\mathbf{w} \cdot \mathbf{f}(\vector{w}, \vector{v}, \vector{t}) $ の値にしたがって選択される．
+
+
+\subsubsection{素性}
+
+表3に本研究で使用した素性の一覧を示した．このうち，品詞連接素性$h(t_{i-1},t_i)$，正規語素性$h(w_i,t_i)$はMeCabで提供されている品詞連接コスト，形態素コストの推定値を用いた．ここで，$t_i$は$i$番目の品詞，$w_i$は$i$番目の単語を表す．正規語bi-gram素性$-\log p(w_i, t_i|w_{i-1}, t_{i-1})$は新聞，ブログの形態素正解が付与されていないラベルなしコーパスの自動解析結果を用いて計算した．文字列正規化素性については，3.2節の文字列アライメントモデルで述べた値を用いている．
+文字列言語モデル素性は文字列正規化の妥当性を表す素性であり，文字列正規化前と後の文字n-gramを用いて計算する．ここで，$s_{trans}$，$s_{org}$はそれぞれ文字列正規化した後の文字列，正規化する前の元の文字列を表し，$p(s_{trans})$，$p(s_{org})$はTwitterテキストから計算した文字5-gramモデルを用いて計算する．$c_j$は対象となる文字列の$j$文字目を表す．本研究では，不要な候補の増大を防ぐためラティス生成時に本素性を閾値として用い，形態素ラティスに追加する正規化候補をフィルタリングした．閾値は$\log p(s_{trans})- \log p(s_{org})$ $\geq -1.5$と定めた．
+ここで，$\phi_{trans_i}$，$\phi_{h_i}$，$\phi_{k_i}$はそれぞれ，注目ノード$i$が文字列正規化を用いて生成されたノード，ひらがな変換を用いて生成されたノード，カタカナ変換を用いて生成されたノードである場合に1，それ以外の場合は0となる変数である．変換処理を施したノードにのみに追加的にコストを付加することによってデグレードを抑える目的でこのような素性設計を行った．ひらがな正規化素性$\phi_{h_i}$とカタカナ正規化素性$\phi_{k_i}$については，それぞれ辞書からひらがな化，カタカナ化により生成したエントリに対して適用される素性である．
+
+\begin{table}[b]
+\caption{素性リスト}
+\input{04table03.txt}
+\end{table}
+
+崩れ形態素素性は，着目ノードが文字列変換を行って生成されたノードである場合に適用されるノードごとの素性である．この素性は，現在の着目ノードにおける表出表記，正規表記，品詞の組み合わせが$(w_i, v_i, t_i) = (w, v, t)$のときに1，それ以外に0となるバイナリ変数である．ただし，$w \in W$，$v \in V$，$t \in T$であり，$W$は全表出表記の集合，$V$は全正規表記の集合，$T$は全品詞の集合を表す．本素性では表出表記$w$，正規表記$v$，品詞$t$の組み合わせ数分のバイナリ素性を扱うため，組み合わせごとに異なるコストを付加することが可能となる．
+
+
+\subsubsection{学習}
+
+パラメータ推定は，平均化パーセプトロン学習に基づいて行う．平均化パーセプトロンでは，正解系列$(\vector{w}^\ast, \vector{v}^\ast, \vector{t}^\ast)$が付与されたN個の文が与えられたとき，現在のパラメータ$\mathbf{w}^i$に基づいて一文ずつ最適解$(\hat{\vector{w}}, \hat{\vector{v}}, \hat{\vector{t}})$を求め，もしこの系列が正解と異なる場合は次式で重みパラメータ$\mathbf{w}^{i+1}$を更新する．
+\begin{equation}
+\mathbf{w}^{i+1} = \mathbf{w}^{i} + \mathbf{f}(\vector{w}^\ast, \vector{v}^\ast, \vector{t}^\ast) - \mathbf{f}(\hat{\vector{w}}, \hat{\vector{v}}, \hat{\vector{t}})
+\end{equation}
+もし現在のパラメータに基づいて出力された最適解が正解と一致する場合にはパラメータの更新を行わない．最後に，文数と繰り返し回数の積で平均化した重みパラメータを計算する．\cite{Collins:2002}
+
+
+\section{実験}
+
+\subsection{実験データと文字アライメント結果}
+\label{sec:result}
+
+文字列正規化パタン推定に使用したデータは2008年のブログ8,023文から抽出した正規‐崩れ表記9,603ペアと，2011〜2012年のTwitter 4,805文から抽出した正規‐崩れ表記ペア3,610ペアである．本ペアデータを用いたアライメント計算の結果，得られた文字列正規化パタン数は3,127種類であった．表4に獲得された文字列正規化パタンの例を示す．「ない」や「たい」といった正規文字列に対しては特に多くのパタンが獲得できた．また，「ヴァ→バ」といった音の類似や「ぅ→う」（小文字化），「ー→う」（長音化）といった従来のルールベースで用いられている代表的なルールのほかにも，「もぉ→もう」，「っ→い」，「にゃ→な」，「ゎ→は」といった多様な崩れパタンが獲得できた．
+
+\begin{table}[t]
+\caption{獲得された文字列正規化パタン例}
+\label{tab:alignment}
+\input{04table04.txt}
+\end{table}
+
+形態素解析用識別モデルの素性として用いる正規語bi-gramモデルの構築には，ブログと新聞の形態素正解ラベルなしデータをMeCabを用いて自動解析した結果を使用した．また，形態素，正規語正解データはランダム抽出した2013〜2014年のTwitter 4,280文に対してアノテーションを行い，そのうち1,000文をテストデータ，3,280文を学習データに使用した．テストデータ中の崩れ表記は308形態素存在した．
+また，基本辞書としてMeCab-IPA辞書を使用した．
+
+
+\subsection{評価方法と比較手法}
+
+本研究では，テストデータに対し下記の条件で評価を行った．
+
+\begin{enumerate}
+ \item MeCab-IPA辞書として提供されている辞書と品詞連接コスト，形態素コストを用いて解析した場合（辞書や文字列の拡張なし，以下通常解析と呼ぶ）
+ \item 正規化候補展開に関して文字列正規化の従来手法 \cite{sasano2014} の小文字，長音に関するルール）を実装し，素性として品詞連接素性，正規語素性，文字列正規化素性（全候補で一定）を用いた場合．（以下，ルールベースと呼ぶ）．文字列正規化素性の重みは学習データから決定した．
+ \item 提案手法（全てを実装した場合 (all)，文字列正規化候補展開を除いた場合，各素性を1つずつ取り除いた場合を比較）
+\end{enumerate}
+(1) に関しては，文字列や文字種の正規化を一切行わない，通常の形態素解析手法との比較を行うための，ベースラインとして比較した．(2) は人手で確認されているシンプルなルールで崩れ表記をどこまでカバーできるかを確認するために比較した．(3) に関しては，今回提案した正規化文字列による候補展開や識別モデルの素性がそれぞれ精度にどの程度影響を与えるかを比較するために行った．評価は，形態素解析の再現率と精度，F値を用いて行った．
+
+
+\subsection{実験結果}
+
+\subsubsection{形態素解析の結果}
+
+表\ref{tab:result_mrph}には形態素解析の精度評価を示した．この集計結果より，提案手法 (all) が単語分割＋品詞の精度で最も良い結果となっている．(1) の通常解析に比べ，単語区切り，単語区切り＋品詞ともに約2ポイントの精度向上が確認できた．(2) の単純なルールを用いた場合と比較しても，約1.0ポイントの精度向上を確認した．
+また，ブートストラップ再サンプリング法でF値の検定を行ったところ，通常解析，ルールベースに比べ有意な差が確認できた ($\mathrm{p} < 0.01$)．
+
+\begin{table}[t]
+\caption{テストデータにおける各手法の性能比較} 
+\label{tab:result_mrph}
+\input{04table05.txt}
+\end{table}
+
+次に，今回提案した各素性の効果について考察する．文字列正規化を除いた場合，各素性を抜いた場合の比較より，単語+品詞の精度では提案手法 (all) が最も良い結果となった．また，各素性値を抜いた実験の結果においても，崩れ形態素素性なしを除いては単語分割＋品詞付与に関して提案手法 (all) とそれ以外で有意な差が確認できた ($\mathrm{p} < 0.01$)．特に，提案素性の中では文字列正規化素性を用いない場合最も精度が低下することが分かった．これより，文字列正規化素性の導入は過剰な正規化による解析悪化を抑制することができたと考えられる．他の条件に関しても提案手法が上回る結果となったが，文字列正規化素性に比べ影響は小さかった．特に文字列言語モデル素性については精度向上にほとんど影響がなかったが，これは今回の実験では計算量を減らすために，形態素ラティス生成時に文字列言語モデル素性で枝狩りを行ったため，その時点で当該素性の効果が反映されていると考えられる．また，単語分割のみ見ればひらがな・カタカナ正規化素性なしの精度がよいが，品詞も含めた精度ではすべて考慮した場合よりも精度が低い．これも，誤った正規化を行った結果単語分割は改善したが，品詞で悪影響が生じているといえる．これらの結果から，文字列，文字種などの多様な正規化候補を列挙し，かつ解析悪化を抑制しながら解析を行う場合，各正規化候補に対して適切なコストを付加することが重要であるということが明らかになった．
+
+
+\subsubsection{正規化に関する結果}
+
+\begin{table}[t]
+\caption{正規化候補列挙方法の違いによる正規化再現率の比較}
+\label{tab:rec_norm}
+\input{04table06.txt}
+\end{table}
+
+\begin{table}[t]
+\caption{正規化適合率の比較}
+\label{tab:prec_norm}
+\input{04table07.txt}
+\end{table}
+
+表\ref{tab:rec_norm}には，各正規化候補列挙手法のカバー率を確認するため，崩れ表記に限定した再現率比較を示した．
+提案手法は，ルールベースに比べ約2.2倍，文字列正規化なしに比べ約4倍の再現率を達成した．このことから，今回獲得した文字列正規化パタンが正規化の再現率向上への寄与が大きいことがわかる．一方で文字種正規化の影響も提案法で解析できた箇所全体の約25\%を占めているため，文字列正規化と文字種正規化を組み合わせることが再現率向上に有効であることがわかる．
+次に，表\ref{tab:prec_norm}に正規化の適合率を示す．表\ref{tab:prec_norm}の
+適合率（全体）とはシステムが正規化を行って出力した形態素のうち，表記，品詞，正規表記の全てが一致した形態素の数を表す．ここで，一致しなかった箇所が必ずしも解析悪化を起こしているとは限らないため，一致しなかった形態素のうち50箇所について，通常解析との比較を行い人手調査によって「悪化」と「その他」の内訳を分析した．ここで，悪化，その他の分類は笹野ら\cite{sasano2014}を参考とし，分割や品詞の優劣によって判断した．この結果，ルールベースの場合には不一致箇所における悪化の割合が8\%と副作用の割合が低いことがわかる．提案法においても，不一致箇所における悪化の割合が18\%とルールベースに比べて高くなっているものの，全体では改善が大きく上回っており副作用を抑制しながら解析を行えていることがわかる．提案法で悪化した例としては，たとえば「カープ/ねぇー（カープ/ない）」や，「うーん（うん）」などの誤った正規化が存在した．主に長音の削除や助詞・助動詞で副作用が数件見受けられ，このような例に関しては素性関数をより精緻にする，学習データを増やすなどして対応する必要があると考えられる．また，その他に分類されたものとしては下記（例1）〜（例3）のような例が存在した．
+
+\begin{itemize}
+  \item （例1）通常解析：ふみ/づき，提案法：ふみづき（文月）
+\item （例2）通常解析：だい/き，提案法：だいき（大樹）
+  \item （例3）通常解析：たら/ぁ/ー/いま/ぁ，提案法：たらぁーい（たらい）/まぁ
+\end{itemize}
+（例1），（例2）のように，主にもともと解析誤りを起こしていた部分に対し正規化を行った結果区切りや品詞が改善したものの正規表記が誤った例，（例3）のように，もともと間違っていた箇所に対し正規化を行った結果異なる誤り方をした例などが存在した．これらに関しては，固有名詞と崩れ表記を区別する仕組みや，崩れ表記の再現率をさらに上げる方法の検討が必要になると考えられる．
+
+
+\subsubsection{形態素解析結果の実例と考察}
+
+\begin{table}[b]
+\caption{システムの出力結果例}
+\label{tab:example}
+\input{04table08.txt}
+\end{table}
+
+表\ref{tab:example}には，提案システムの出力結果例を示す．``/''は単語区切りを表し，括弧内が正規表記を表す．太字で表している部分が解析が正解したもので，(1)〜(6) は提案手法によって解析が改善された例である．(7) は区切りが改善したが品詞・正規語が誤った例，(8)，(9) は通常解析でも提案手法でも改善されなかった例，(10) は提案手法によって悪化した例を示している．(1)〜(6) の例から，提案手法によって文字種，文字列の多様な崩れ表記が解析できていることがわかる．(7) に示した例は，固有名詞などでいくつかみられた例であるが，固有名詞の文字列を正規化した表記が辞書に存在し，正規化によって区切りが改善したが，正規語が誤った例である．この例の他にも，ふみづき→文月，ヤスダ→安田など，入力表記の漢字表記が辞書に存在し区切りや品詞が改善したが，正解データにおいては固有名詞の正規表記は入力表記のままにしたため正規語の不一致が生じた例も多く見られた（表\ref{tab:prec_norm}における「その他」の分類）．このような固有名詞については，正規表記を表記のままにするなどの処理を行うことで対応できると考えられる．(8) に示した例は，正解の候補展開ができなかった例（文字列正規化パタンが不足していた例）である．今回の手法では学習データ中に出現した文字列パタン以外の新しいパタンについては適応できないため，獲得したパタンからの類似パタン生成やアノテーションなしコーパスからの文字列正規化パタンの自動獲得などの手法を検討することで，このような誤りには対応できると考えられる．(9) の例に関しては，正解の系列は列挙できていたにも関わらず正しい系列を選択できなかった例である．このような例に関しては素性を工夫したり正解データを増強することで精度向上を図る必要がある．(10) に関してはデグレードしてしまった例である．この連接の場合，システムが推定した正規語系列の方が単語数が少なく正規語bigramからみても推定値は起こりやすい系列であるため，今回の目的関数や素性設計では推定値の方がもっともらしいと判断されてしまったと考えられる．
+この点に関しては，Twitterの単語連接の分布や単語ごとの崩れやすさの指標などを取り込む必要があると考えられる．
+
+
+\subsection{UniDic辞書との比較}
+
+IPA辞書以外で表記揺れに強い辞書としてUniDic (unidic-mecab) 辞書\cite{Unidic}があげられる．本研究では，広く用いられている辞書のひとつとしてMeCab-IPA辞書を用いて実験を行ったが，UniDic辞書による崩れ表記のカバー率を調べるため，1) テストデータ中の崩れ表記100個についてUniDic辞書で正しく解析可能な割合，2) システムが正解した崩れ表記100個についてUniDicで正しく解析できる割合，の2つについて人手で調査を行った．1) では，崩れ表記全体のどの程度をカバーできるか，2) では，提案法で解析できる表記のうちどの程度をカバーできるかを確認した．結果を表\ref{tab:UniDic}に示す．
+
+\begin{table}[t]
+\caption{UniDic辞書を用いた場合の崩れ表記正解割合}
+\label{tab:UniDic}
+\input{04table09.txt}
+\end{table}
+
+表\ref{tab:UniDic}に示すように，UniDic辞書はすでに崩れた表記が辞書に含まれている場合も多く，半数以上は辞書でカバーできている．表\ref{tab:rec_norm}で示した提案法のカバー率と比較しても高い値を示していることから，崩れた文に対してベースラインとしてMeCab-IPA辞書よりも頑健に動作することがわかる．ただし，UniDicでも解析できない崩れ表記が44\%存在した．また，提案法で解析が改善した例におけるUniDicのカバー率は53\%であった．たとえば，「センパイ（先輩）」「予定/でーす（予定/です）」といった崩れ表記に関してはUniDic辞書，提案法の双方で正しく解析できた．一方，「さてーーーっ（さて）」「走っ/て/まふ（走っ/て/ます）」といった崩れ表記に関しては提案法では正しく解析できたがUniDicでは正しく解析できなかった．UniDicのみで解析できた例としては，「ファンデ（ファンデーション）」「スカし（すかし）/て」などが存在した．このことから，IPA辞書を用いた場合に比べ提案法による効果は限定的と考えられるものの，UniDicのような崩れた表記に頑健な辞書を用いた場合であってもあらゆる崩れ表記をカバーできているわけではなく，提案手法と組み合わせることで崩れ表記のカバー率をさらに向上させられる可能性があると考えられる．
+
+
+\section{まとめと今後の課題}
+
+本研究では，Web上から収集した崩れ‐正規表記のペアから文字列レベルの正規化パタンを学習し，抽出したパタンを形態素解析に導入することにより崩れた日本語の解析精度が向上することを確認した．実験結果から個々の文字列正規化パタンごとに異なる生起しやすさの指標を素性として用いることで解析精度が向上することがわかり，現実の分布を反映することで解析精度の向上と再現率の向上に有効であることが確認できた．また，文字種正規化を組み合わせることによる再現率向上の効果も大きく，全体の約25\%を占めていることも明らかになった．
+
+課題としては，未知語に対して過剰に正規化を行ってしまうこと，未知の文字列正規化パタンに対応するためには正規‐崩れのアノテーションコストが必要となること，文字列正規化パタンや文字種正規化パタンよりも細かいレベルの素性関数を取り入れることなどがあげられる．これらについては今後の課題として取り組む予定である．
+
+
+\acknowledgment
+本研究の一部は，The 25th International Conference on Computational Linguistics (COLING 2014) で発表したものである (Saito, Sadamitsu, Asano, and Matsuo 2014)
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Bisani \BBA\ Ney}{Bisani \BBA\ Ney}{2008}]{Bisani:2008}
+Bisani, M.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2008\BBCP.
+\newblock \BBOQ Joint-sequence Models for Grapheme-to-phoneme Conversion.\BBCQ\
+\newblock {\Bem Speech Communication}, \mbox{\BPGS\ 434--451}.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{2002}]{Collins:2002}
+Collins, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Discriminative Training Methods for Hidden Markov Models:
+  Theory and Experiments with Perceptron Algorithms.\BBCQ\
+\newblock In {\Bem Proceedings of the 2002 Joint Conference on Empirical
+  Methods in Natural Language Processing}, \mbox{\BPGS\ 1--8}.
+
+\bibitem[\protect\BCAY{伝\JBA 小木曽\JBA 小椋}{伝 \Jetal }{2007}]{Unidic}
+伝康晴\JBA 小木曽智信\JBA 小椋秀樹 \BBOP 2007\BBCP.
+\newblock
+  コーパス日本語学のための言語資源—形態素解析用電子化辞書の開発とその応用（特集コーパス日本語学の射程）.\
+\newblock \Jem{日本語科学}, {\Bbf 22}, \mbox{\BPGS\ 101--123}.
+
+\bibitem[\protect\BCAY{Han \BBA\ Baldwin}{Han \BBA\ Baldwin}{2011}]{Han2011}
+Han, B.\BBACOMMA\ \BBA\ Baldwin, T. \BBOP 2011\BBCP.
+\newblock \BBOQ Lexical Normalisation of Short Text Messages: Makn Sens a
+  \#Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 368--378}.
+
+\bibitem[\protect\BCAY{Han, Cook, \BBA\ Baldwin}{Han et~al.}{2012}]{Han2012}
+Han, B., Cook, P., \BBA\ Baldwin, T. \BBOP 2012\BBCP.
+\newblock \BBOQ Automatically Constructing a Normalisation Dictionary for
+  Microblogs.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning}, \mbox{\BPGS\ 421--432}.
+
+\bibitem[\protect\BCAY{Jiampojamarn, Kondrak, \BBA\ Sherif}{Jiampojamarn
+  et~al.}{2007}]{jiampojamarn-kondrak-sherif:2007:main}
+Jiampojamarn, S., Kondrak, G., \BBA\ Sherif, T. \BBOP 2007\BBCP.
+\newblock \BBOQ Applying Many-to-Many Alignments and Hidden Markov Models to
+  Letter-to-Phoneme Conversion.\BBCQ\
+\newblock In {\Bem Proceedings of the 2007 Conference of the North American
+  Chapter of the Association for Computational Linguistics}, \mbox{\BPGS\
+  372--379}.
+
+\bibitem[\protect\BCAY{Kaji \BBA\ Kitsuregawa}{Kaji \BBA\
+  Kitsuregawa}{2014}]{kaji-kitsuregawa:2014:EMNLP2014}
+Kaji, N.\BBACOMMA\ \BBA\ Kitsuregawa, M. \BBOP 2014\BBCP.
+\newblock \BBOQ Accurate Word Segmentation and POS Tagging for Japanese
+  Microblogs: Corpus Annotation and Joint Modeling with Lexical
+  Normalization.\BBCQ\
+\newblock In {\Bem Proceedings of the 2014 Joint Conference on Empirical
+  Methods in Natural Language Processing}, \mbox{\BPGS\ 99--109}.
+
+\bibitem[\protect\BCAY{勝木\JBA 笹野\JBA 河原\JBA 黒橋}{勝木 \Jetal
+  }{2011}]{katsuki:2011}
+勝木健太\JBA 笹野遼平\JBA 河原大輔\JBA 黒橋禎夫 \BBOP 2011\BBCP.
+\newblock Web 上の多彩な言語表現バリエーションに対応した頑健な形態素解析.\
+\newblock \Jem{言語処理学会年次大会講演集}, \mbox{\BPGS\ 1003--1006}.
+
+\bibitem[\protect\BCAY{Kubo, Kawanami, Saruwatari, \BBA\ Shikano}{Kubo
+  et~al.}{2011}]{kubo2011unconstrained}
+Kubo, K., Kawanami, H., Saruwatari, H., \BBA\ Shikano, K. \BBOP 2011\BBCP.
+\newblock \BBOQ Unconstrained Many-to-Many Alignment for Automatic
+  Pronunciation Annotation.\BBCQ\
+\newblock In {\Bem Proceedings of APSIPA ASC}.
+
+\bibitem[\protect\BCAY{工藤\JBA 市川\JBA {David Talbot}\JBA 賀沢}{工藤 \Jetal
+  }{2012}]{kudo:2012}
+工藤拓\JBA 市川宙\JBA {David Talbot}\JBA 賀沢秀人 \BBOP 2012\BBCP.
+\newblock Web 上のひらがな交じり文に頑健な形態素解析.\
+\newblock \Jem{言語処理学会年次大会講演集}, \mbox{\BPGS\ 1272--1275}.
+
+\bibitem[\protect\BCAY{Li \BBA\ Liu}{Li \BBA\ Liu}{2012}]{liu2012}
+Li, C.\BBACOMMA\ \BBA\ Liu, Y. \BBOP 2012\BBCP.
+\newblock \BBOQ Improving Text Normalization using Character-Blocks Based
+  Models and System Combination.\BBCQ\
+\newblock In {\Bem Proceedings of the 24th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 1587--1602}.
+
+\bibitem[\protect\BCAY{岡\JBA 小町\JBA 小木曽\JBA 松本}{岡 \Jetal
+  }{2013}]{oka:2013}
+岡照晃\JBA 小町守\JBA 小木曽智信\JBA 松本裕治 \BBOP 2013\BBCP.
+\newblock 表記のバリエーションを考慮した近代日本語の形態素解析.\
+\newblock \Jem{人工知能学会全国大会講演集}, {\Bbf 27}, \mbox{\BPGS\ 1--4}.
+
+\bibitem[\protect\BCAY{Saito, Sadamitsu, Asano, \BBA\ Matsuo}{Saito
+  et~al.}{2014}]{saito-EtAl:2014:Coling}
+Saito, I., Sadamitsu, K., Asano, H., \BBA\ Matsuo, Y. \BBOP 2014\BBCP.
+\newblock \BBOQ Morphological Analysis for Japanese Noisy Text based on
+  Character-level and Word-level Normalization.\BBCQ\
+\newblock In {\Bem Proceedings of the 25th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 1773--1782}.
+
+\bibitem[\protect\BCAY{Sasano, Kurohashi, \BBA\ Okumura}{Sasano
+  et~al.}{2013}]{sasano-kurohashi-okumura2013IJCNLP}
+Sasano, R., Kurohashi, S., \BBA\ Okumura, M. \BBOP 2013\BBCP.
+\newblock \BBOQ A Simple Approach to Unknown Word Processing in Japanese
+  Morphological Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Joint Conference on
+  Natural Language Processing}, \mbox{\BPGS\ 162--170}.
+
+\bibitem[\protect\BCAY{笹野\JBA 黒橋\JBA 奥村}{笹野 \Jetal }{2014}]{sasano2014}
+笹野遼平\JBA 黒橋禎夫\JBA 奥村学 \BBOP 2014\BBCP.
+\newblock
+  日本語形態素解析における未知語処理の一手法—既知語から派生した表記と未知オノマトペの処理—.\
+\newblock \Jem{自然言語処理}, {\Bbf 21}  (6), \mbox{\BPGS\ 1183--1205}.
+
+\bibitem[\protect\BCAY{Yang \BBA\ Eisenstein}{Yang \BBA\
+  Eisenstein}{2013}]{yang-eisenstein:2013:EMNLP}
+Yang, Y.\BBACOMMA\ \BBA\ Eisenstein, J. \BBOP 2013\BBCP.
+\newblock \BBOQ A Log-Linear Model for Unsupervised Text Normalization.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 61--72}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{斉藤いつみ}{
+2010年早稲田大学理工学部社会環境工学科卒業，2012年東京大学大学院工学系研究科博士前期課程修了．同年，日本電信電話株式会社入社．自然言語処理に関する研究開発に従事．現在，NTTメディアインテリジェンス研究所研究員，情報処理学会，言語処理学会各会員．
+}
+\bioauthor{貞光　九月}{
+2004年筑波大・第三学群・情報学類卒．2009年同大大学院システム情報工学研究科 コンピュータサイエンス専攻了．同年，日本電信電話株式会社入社．
+自然言語処理の研究開発に従事．現在，NTTメディアインテリジェンス研究所研究主任．言語処理学会会員． 
+}
+\bioauthor{浅野　久子}{
+1991年横浜国立大学工学部卒業．同年，日本電信電話株式会社入社．
+現在，NTTメディアインテリジェンス研究所主幹研究員．
+自然言語処理に関する研究開発に従事．
+情報処理学会，言語処理学会各会員．
+}
+\bioauthor{松尾　義博}{
+1988年大阪大学理学部卒業，1990年同大学大学院理学研究科博士前期課程修了．
+同年，日本電信電話株式会社入社．現在，NTTメディアインテリジェンス研究所，音声言語メディアプロジェクト，音声・言語基盤技術グループリーダ．
+自然言語処理に関する研究開発に従事．情報処理学会，言語処理学会各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+
+\end{document}

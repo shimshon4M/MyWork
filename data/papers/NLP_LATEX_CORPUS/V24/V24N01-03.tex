@@ -1,0 +1,890 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+
+\newcommand{\argmax}{}
+\newcommand{\freq}{}
+\newcommand{\Dice}{}
+
+\Volume{24}
+\Number{1}
+\Month{February}
+\Year{2017}
+
+\received{2016}{5}{20}
+\revised{2016}{8}{3}
+\accepted{2016}{9}{15}
+
+\setcounter{page}{75}
+
+\jtitle{Bilingual KWIC—対訳表現抽出の可視化による翻訳支援}
+\jauthor{小川　泰弘\affiref{Author_1}\affiref{Author_2} \and 外山　勝彦\affiref{Author_1}\affiref{Author_2}}
+\jabstract{
+計算機による対訳表現抽出を可視化することにより，対訳辞書の構築や翻訳を支援するツール Bilingual KWIC を開発した．本ツールは，入力されたキーワードに対する対訳表現を自動的に推定し，それらを含む原言語文と対象言語文をそれぞれ KWIC 形式で表示することにより，ユーザの翻訳作業などを支援する．技術的には，形態素解析などを利用せずに文字列情報だけから対訳を抽出するため，どのような言語対にも適用可能であり，さらには単語以外の表現に対しても対訳を表示することが可能である．また対訳表現を KWIC 形式で表示することにより，システムの抽出誤りに対する修正を容易にするだけでなく，派生表現の獲得や複数の対訳表現の比較も可能としている．本稿では，Bilingual KWIC の特徴と開発経緯について述べる．
+}
+\jkeywords{翻訳支援，対訳辞書構築，バイリンガル・コンコーダンサ，Dice 係数}
+
+\etitle{Bilingual KWIC---GUI Translation Support Tool \\Based on Bilingual Expression Extraction}
+\eauthor{Yasuhiro Ogawa\affiref{Author_1}\affiref{Author_2} \and Katsuhiko Toyama\affiref{Author_1}\affiref{Author_2}} 
+\eabstract{
+This paper proposes a GUI support tool for bilingual dictionary compilation and translation, called ``Bilingual KWIC.'' Bilingual KWIC acquires bilingual expressions from a parallel corpus and displays the result in KWIC format. Displaying in KWIC format enables users to easily correct errors of word alignment and compare two or more types of equivalents. Since Bilingual KWIC does not use morphological information and uses only character-level information, it can deal with any language pairs and can acquire translation equivalents for any input other than words. In this paper, we introduce Bilingual KWIC and describe its features and development process.
+}
+\ekeywords{Translation Support Tool, Bilingual Dictionary Compilation, Bilingual 
+	\linebreak Concordancer, Dice Coefficient}
+
+\headauthor{小川，外山}
+\headtitle{Bilingual KWIC—対訳表現抽出の可視化による翻訳支援}
+
+\affilabel{Author_1}{名古屋大学情報基盤センター}{Information Technology Center, Nagoya University}
+\affilabel{Author_2}{名古屋大学大学院情報科学研究科}{Graduate School of Information Science, Nagoya University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{sec:introduction}
+
+機械翻訳システムの性能向上や大量のコーパスを伴なう翻訳メモリなどの
+導入により，機械支援翻訳(CAT)が広く行われるようになってきている．
+その一方で，
+翻訳の対象となる文書の内容が専門的である場合，
+その分野特有の専門用語や定型表現に関する対訳辞書が必要となる．
+そうした辞書を人手で作成することはコストが高いため，
+あらかじめ翻訳された対訳コーパスから専門用語や定型表現の
+対訳を自動抽出する研究が盛んである\cite{Matsumoto00}．
+しかし，自動抽出の結果は必ずしも正確ではなく，
+間違った対訳表現を抽出したり，
+対訳表現の一部だけを抽出する場合がある．
+また，一つの語に対して複数の対訳表現を抽出した場合には，
+訳し分けに関する知見が必要となる．
+
+そこで，
+対訳表現を抽出するだけでなく，対訳表現の各候補を，
+それが出現した文脈と一緒に表示することによって，
+ユーザによる対訳表現の選定を支援し，
+対訳辞書構築を支援するシステム Bilingual KWIC\textsuperscript{\textregistered}を開発した．
+Bilingual KWICは，対訳抽出の技術と
+KWIC (KeyWord In Context)表示\cite{luhn1960}を統合し，
+文単位で対応付けされた
+パラレル・コーパスから，与えられたキーワードとその対訳表現の候補を
+それぞれ文脈付きで表示する．
+
+Bilingual KWICの開発過程については\ref{sec:history}章において詳しく述べるが，
+最初は法律分野の対訳辞書構築を支援する目的で開発した．
+しかし，このシステムは対訳辞書構築だけでなく，翻訳支援にも有用であるため，
+その後に開発された法務省・日本法令外国語訳データベース・システム(JLT){\footnote{http://www.japaneselawtranslation.go.jp/} \cite{Toyama12}}においても
+採用されるに至った．
+JLTは，日本の主要法令とその英訳，
+法令用語日英標準対訳辞書，および日本法令の英訳に関する関連情報を
+インターネット上において無償で提供するウェブサイトである．
+また，Bilingual KWICは名古屋大学が開発した学内情報翻訳データベース 
+NUTRIAD\footnote{http://nutriad.provost.nagoya-u.ac.jp/} \cite{Fukuda}でも
+採用され，
+学内文書の英文化を支援し，大学の国際化に寄与している．
+NUTRIADのシステムは，九州大学・熊本大学・東北大学でも導入され，
+Bilingual KWICも同様に利用されている．
+
+Bilingual KWICの現在の目的は，
+対訳辞書のように
+あらかじめ登録された訳語と少数の用例を提示するのではなく，
+任意の入力キーワードに対して対訳表現を計算し，
+豊富なパラレル・コーパスからの情報を一緒に提示することにより，
+従来の対訳辞書や翻訳メモリとは異なるアプローチでの翻訳支援を
+実現することである．
+
+以下に本論文の構成を示す．
+まず\ref{sec:summary}章においてBilingual KWICの概要について述べ，
+\ref{sec:character}章においてその特徴を紹介する．
+\ref{sec:spec}章において，Bilingual KWICの技術的詳細を，
+\ref{sec:history}章においてその開発過程をそれぞれ述べる．
+\ref{sec:evaluation}章ではユーザによるBilingual KWICの評価について述べ，
+\ref{sec:compare}章では類似するシステムとの比較を行う．
+\ref{sec:conclusion}章は本論文のまとめである．
+
+
+\section{Bilingual KWICの概要}
+\label{sec:summary}
+
+Bilingual KWICの概観を図~\ref{fig:Bilingual KWIC}に示す．
+これは Bilingual KWICが「文脈検索」という名前で採用されている
+JLT版での画面である．
+なお，Bilingual KWIC自体はJLTに先立って開発されたものであり，
+以降の説明は，特に断わりがない限り，JLT版以外のBilingual KWICに
+共通するものである．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-1ia3f1.eps}
+\end{center}
+\caption{Bilingual KWICの概観}
+\label{fig:Bilingual KWIC}
+\end{figure}
+
+左上のキーワード入力欄にキーワードを入力し，その横の[検索]ボタンを
+押すと，左側に原言語，右側に対象言語で対応付けられた対訳文を表示する．
+その際，原言語ではキーワードを中心に，また，
+対象言語では自動的に推定したその対訳表現を中心に，
+それぞれKWIC形式で表示する．
+また，注目したい文をマウスでクリックすると，その文全体が下側に表示される．
+その際，コーパスが複数の文書から構成される場合には，
+注目文の出典である文書名を表示できる．
+
+右上の対訳表現入力欄には Bilingual KWICが推定した
+対訳表現が表示されるが，それが間違っていたときには，
+ユーザが自分で適切な対訳表現をここに入力し，[訳語再検索]ボタンを
+押すことにより再表示できる．
+それに加えて，この欄右の[▼]ボタンを押すと，
+Bilingual KWICが推定した他の対訳表現が表示され，
+ユーザは別の対訳表現を選択することができる．
+なお，キーワードおよび対訳表現ともにコーパス中における出現回数が
+それらのすぐ横に表示され，対訳表現選定の一助となっている．
+
+また，KWIC表示欄の上部にある[並び替え]と表示された部分を
+クリックすることにより，出力結果をソートすることが可能である．
+原言語欄もしくは対象言語欄の中心にある表現の
+左側・右側でそれぞれソートすることができる．
+これにより対訳表現や用例の比較が簡単に行える．
+図~\ref{fig:Bilingual KWIC}では，
+キーワード「専用利用権」の右側に続く語を基準にソートされている．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-1ia3f2.eps}
+\end{center}
+\caption{``negotiation''に対する実行結果}
+\label{fig:Bilingual KWIC 2}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+なお，図~\ref{fig:Bilingual KWIC}では，原言語が日本語，
+対象言語が英語となっているが，
+キーワード入力欄に英単語を入力すれば，図~\ref{fig:Bilingual KWIC 2}の
+ように原言語を英語，対象言語を日本語として対訳表現の
+自動抽出が行える．
+またキーワード・対訳表現ともに複合語を含め，
+任意の文字列を入力することができる．
+
+\clearpage
+
+\section{Bilingual KWICの特徴}
+\label{sec:character}
+
+Bilingual KWICは次のようなことが可能であるという特徴を持つ．
+\begin{enumerate}
+ \item 対訳表現の抽出における誤りの訂正
+ \item 派生表現の獲得
+ \item 訳し分けに関する知見の獲得
+ \item 対訳辞書との併用
+ \item 対訳表現の指定
+ \item 他の言語への応用
+\end{enumerate}
+
+以下，これらの特徴を詳しく述べる．
+
+
+\subsection{対訳表現の抽出における誤りの訂正}
+
+Bilingual KWICでは，自動対訳抽出における誤りをユーザが
+簡単に修正できる．
+図~\ref{fig:Bilingual KWIC}の例では，JLT版で
+公開されている日本法令の日英対訳コーパスを
+「専用利用権」をキーワードとして
+検索している．
+正しい対訳は，``exclusive exploitation right''であるが，
+自動対訳抽出の結果は
+``exclusive exploitation''となっている．
+しかし，図~\ref{fig:Bilingual KWIC}のKWIC形式で表示された
+英語文において``exclusive exploitation''の右側の文脈を見れば，
+``exclusive exploitation right''が対訳として正解であることが直観的に理解できる．
+
+
+\subsection{派生表現の獲得}
+
+Bilingual KWICでは，派生表現とその対訳を容易に獲得できる．
+図~\ref{fig:Bilingual KWIC}の例では，
+「専用利用権」``exclusive exploitation right''の
+下に続いて表示される用例から
+「専用利用権者」という派生語と，その対訳
+``holder of an exclusive exploitation right''を
+得ることができる．
+
+このような特徴は対訳表現の抽出を支援するときに有用であるが，
+対訳表現に加えて，実際の用例も表示されることから，
+Bilingual KWICは翻訳支援に対しても有用である．
+
+
+\subsection{訳し分けに関する知見の獲得}
+
+翻訳支援システムとして捉えたとき，
+Bilingual KWICは訳し分けに関する知見が容易に獲得できる点が優れている．
+図~\ref{fig:Bilingual KWIC 2}の例では，
+``negotiation''の対訳として，「譲渡」と「交渉」が表示されている．
+そのような場合には，
+前後の文脈から，対訳語がどのように使い分け
+られているかを
+比較することが容易であり，この例では
+``between''が後続する場合は「交渉」と翻訳するのが適当である
+といった知識を得ることができる．
+
+
+\subsection{対訳辞書との併用}
+
+Bilingual KWICでは，あらかじめ対訳辞書が用意されていれば，それを組み込んで
+併用することも可能である．
+辞書に対訳表現が登録されている場合は，その対訳を優先的に表示し，
+その後，自動的に推定した対訳表現を含む文を表示する．
+図~\ref{fig:Bilingual KWIC 2}の例では，
+「譲渡」がこれに該当し，
+辞書に登録されている対訳であることを示すために
+緑色で表示される．
+その下に続く「交渉」は自動推定された対訳であり，
+辞書に登録されているものと区別するために青色で表示される．
+
+JLTにおいては，「法令用語日英標準対訳辞書」が公開されており，
+JLT版Bilingual KWICに組み込まれている．
+
+\begin{figure}[b]
+\vspace{-1\Cvs}
+\begin{center}
+\includegraphics{24-1ia3f3.eps}
+\end{center}
+\caption{「検証」の訳語として``review''を指定した結果}
+\label{fig:Bilingual KWIC 3}
+\end{figure}
+
+
+\subsection{対訳表現の指定}
+
+Bilingual KWICでは，
+対訳表現の抽出に失敗した場合や，
+\pagebreak
+特定の対訳表現に注目したい場合は，
+対訳表現入力欄にそれを入力することにより，対訳を指定できる．
+図~\ref{fig:Bilingual KWIC 3}の例では，「検証」の訳語として
+少数ながら出現した``review''を入力することにより，
+その用例を表示している．
+なお，ユーザが指定した対訳表現は赤色で表示され，
+辞書にある対訳よりもさらに優先して表示される．
+
+\begin{figure}[b]
+\vspace{-1\Cvs}
+\begin{center}
+\includegraphics{24-1ia3f4.eps}
+\end{center}
+\caption{ベトナム語--英語コーパスへの適用}
+\label{fig:Bilingual KWIC v}
+\end{figure}
+
+
+\subsection{他の言語への応用}
+
+またBilingual KWICは，後述するように形態素解析を利用せず，
+文字レベルの情報だけを利用しているため，
+様々な言語対での利用が可能である．
+図~\ref{fig:Bilingual KWIC v}は，ベトナム語と英語の
+対訳コーパスを利用した例である\hspace{-0pt}\footnote{これはJLT版ではなく，別のウェブ・サーバ上で実行した例である．}．
+なお，この例のように，
+言語の種類の判定が入力文字列からでは容易でない
+言語対で利用する場合は，入力言語を切り替えるトグル・ボタンを
+キーワード入力欄の左に用意している．
+
+
+\section{Bilingual KWICの技術的詳細}
+\label{sec:spec}
+
+本章では，Bilingual KWICの技術的な詳細について述べる．
+まず，対訳表現の自動抽出手法について述べたあと，
+どのような文字列を対訳ペアの単位とするかについて述べる．
+
+
+\subsection{対訳表現の自動抽出}
+
+本節では，Bilingual KWICにおける対訳表現の自動抽出の手法について述べる．
+
+
+\subsubsection{Dice係数の利用}
+
+対訳コーパスから対訳表現を自動的に抽出する手法については，
+これまでも様々な手法が提案されている．
+
+基本的な手法は，対訳コーパスから統計的に得られる情報をもとに
+類似度を計算するものである．
+すなわち，対訳コーパスの中から対訳表現の候補を求め，
+入力語との類似度を計算して，もっとも類似したものを対訳表現として
+抽出する．
+類似度としては，
+Dice係数・相互情報量・$\phi^2$統計量・対数尤度比などが
+知られているが，これらに関しては文献~\cite{Matsumoto00}が詳しい．
+また，類似度として翻訳確率を利用するIBMモデル~\cite{IBMModel}と
+それをHMMに基づいて実装したGIZA++~\cite{GIZA++}
+も広く利用されている．
+IBMモデルの場合，与えられた入力語の対訳表現を求めるのではなく，
+原言語文中の各単語と対象言語文中の各単語の間に対応を付ける．
+さらに対応付けを単語の連続として表現されるフレーズに拡張したものとして，
+統計的機械翻訳システム Moses~\cite{Moses}が出力するフレーズ・テーブルも
+利用されている．
+GIZA++ や Moses は，出現回数がある一定以上の単語やフレーズに対しては
+高い精度で対応を付けることが可能である．
+その他，統計情報に加えて，既存の対訳辞書など，
+他の言語情報を利用する手法も提案されている~\cite{Kumano94,Izuha04}．
+
+Bilingual KWICにおいては，
+より多くの言語対に適用できるようにするため，
+言語情報はできるだけ利用せず，
+統計情報だけから対訳表現を求めることとした．
+この場合，高い精度をもつGIZA++やMosesの結果を利用することも考えられるが，
+GIZA++は単語，Mosesはフレーズを単位として対応を付けるため，
+単語の一部などのような単位にそぐわない表現に対しては
+対訳を推定することができない．
+Bilingual KWICでは，ユーザがキーワードを入力することを前提としており，
+特に日本語のように1単語の定義が曖昧な言語では，入力キーワードが
+システムが想定する単位に合致しない場合が発生しやすいと考えられる．
+
+
+そこで，どのようなキーワードに対しても対訳表現を計算できるよう，
+Bilingual KWICでは類似度を計算する手法を採用した．
+類似度にも複数の候補があるが，文献~\cite{Kitamura97}において，
+候補間の類似度を計算する手法として相互情報量と Dice 係数を比較し，
+Dice 係数の方が高い精度を出すことが示されている．
+これを参考にし，Bilingual KWICでも以下に示す Dice 係数を類似度として採用した．
+\begin{equation}
+\label{eq1}
+ \Dice(x,y) = \frac{2\times \freq(x,y)}{\freq(x) + \freq(y)}
+\end{equation}
+
+ここで $\freq(x)$と$\freq(y)$ は，入力キーワード$x$および
+対訳表現候補$y$がそれぞれ原言語コーパスおよび
+対象言語コーパス中に出現する回数であり，
+$\freq(x,y)$は，対応付けられた文に$x$と$y$が同時に出現する回数である．
+よって，$0 \leq \Dice(x,y) \leq 1$となる．
+実際に Bilingual KWICで使用する場合は，入力キーワード$x$を固定した上で，
+$\Dice(x,y)$が最大となる$y$を探すことになることから，以下の式を用いる．
+\begin{equation}
+\label{eq2}
+ \hat{y} = \argmax_{y} \frac{2\times \freq(x,y)}{\freq(x) + \freq(y)}
+\end{equation}
+
+実装においては，まずキーワード$x$が出現した文に対応する対訳文を集めて
+探索範囲とし，
+その中に出現するあらゆる候補$y$について上記の式(\ref{eq1})を計算し，
+最大となるものを求めている．
+
+
+\subsubsection{再帰的な対訳表現の抽出}
+\label{sec:recursive}
+
+上述の式(\ref{eq2})を使用した場合，$\hat{y}$は一つしか求められない．
+しかし，実際には同じ入力キーワードが複数の対訳表現をもつことがある．
+そこで，Bilingual KWICでは，下記に示す方法で複数の対訳表現を
+再帰的に抽出する．
+
+まず，最初の$\hat{y}$が求まった場合，探索範囲から
+$\hat{y}$を含んだ文を削除する．
+そして残った文を新たな探索範囲とし，式(\ref{eq2})を再度計算する
+ことにより，異なる対訳表現を求める．
+探索範囲に含まれる文数や，
+$\hat{y}$に対するDice係数の値が閾値
+以下になった場合は計算を終了し，そうでない場合は
+さらに対訳表現を再帰的に求める．
+
+単純にDice係数の値が大きな順に対訳候補とすると，
+最初に求めた表現の部分文字列などが含まれる場合があるが，
+既に抽出した対訳表現が出現しない文から
+対訳候補を求めることにより，
+最初の候補とは別の対訳表現を抽出できる．
+
+以上の方法により，図~\ref{fig:Bilingual KWIC 2}のように
+入力キーワードが複数の対訳表現をもつ場合に，それぞれを抽出できる．
+
+
+\subsection{文字レベルの情報のみの利用}
+
+GIZA++ や文献\cite{Kitamura97}を含め，先行研究では
+日本語・英語とも形態素解析を利用するものが多いが，
+Bilingual KWICでは，形態素解析を利用せずに
+文字レベルの情報だけを用いている．
+ここで文字レベルの情報とは，
+日本語の平仮名は対訳表現に含めない\hspace{0pt}\footnote{オプションで含めることも可能である．}，
+英語の単語は空白で区切られる，といった情報である．
+具体的には，日本語は文字 Nグラム，英語は単語 Nグラムを用いて，
+ある程度の長さNをもつ対訳表現の候補を求めている．
+なお，Nの最大値は言語ごとに指定できる．
+
+ところで，形態素解析を利用する利点として，対訳表現抽出の精度向上が期待できる
+点が挙げられる．
+特に動詞のように活用する語や，英語名詞の複数形などは，
+形態素解析を利用しないと，変化形が別の語として認識されてしまう．
+
+しかし，形態素解析の誤りは対訳抽出に影響を与える，
+他の言語に応用する場合はその言語に対応した形態素解析システムが
+必要といった問題もある．
+さらに，形態素解析システムの辞書にない単位では利用できないという問題がある．
+
+そうした点を考慮し，さらに対訳表現抽出の誤りを容易に修正できることから，
+Bilingual KWICでは形態素解析を利用しないこととした．
+それにより，語の一部だけをキーワードとして入力するなど，柔軟な入力も
+可能になった．
+ただし，単語の途中からを候補対象とすると，
+精度や速度の点で問題があるため，
+接頭語として含まれている場合だけを数え上げている．
+例えば，``search''の出現回数を数えるときには 
+``searches'',
+``searching'', ``searched'',
+``searcher''なども含めて数えている．
+これにより，動詞の活用形や名詞の複数形が規則変化する語については，
+形態素解析の利用なしでも，ある程度対処できている．
+
+
+
+
+\section{Bilingual KWICの開発}
+\label{sec:history}
+
+本章では，Bilingual KWICの開発について，その段階にそって述べる．
+
+
+\subsection{プロトタイプ版の開発}
+
+プロトタイプ版となる最初の Bilingual KWICの実装は，2003年に筆者が独自に行った．
+PC上でスタンドアロンで動作するように設計し，使用した言語は Ruby，GUI作成のために Tk のライブラリを利用した．
+Ruby はスクリプト言語であり，プログラム開発が容易である一方，実行速度が遅いという欠点がある．
+Bilingual KWICの実装においては，Dice係数の計算のために文字列の出現回数を高速に数え上げる必要がある．
+そこで，文字列検索の高速化のために，Suffix Array\cite{SuffixArray}の
+ライブラリである sary\footnote{http://sary.sourceforge.net/}
+を使用した．
+なお，今日では当然であるが，文字コードには UTF-8 を採用した．
+これにより，図~\ref{fig:Bilingual KWIC v}の例のように，各種言語に対応した．
+
+
+\subsection{対訳辞書作成支援版の開発}
+
+プロトタイプ版 Bilingual KWICは，JLT\cite{Toyama12}で公開される
+「法令用語日英標準対訳辞書」の
+構築において利用された\cite{Toyama08}．
+その際には，この標準対訳辞書に収録する対訳ペアの候補を収集することが
+必要になるため，Bilingual KWIC上から対訳ペアを候補として
+登録できるようにした．
+具体的には，登録したい単語を指定して右クリックすると
+図~\ref{fig:pop}に示すポップ・ウィンドウが表示されるようにした．
+このウィンドウ上で，必要に応じてデータを修正・追加して，登録できるようにした．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-1ia3f5.eps}
+\end{center}
+\caption{対訳ペア登録用ウィンドウ}
+\label{fig:pop}
+\end{figure}
+
+実際に，このシステムがインストールされたノートPCを作業担当者に配布することに
+より，標準対訳辞書に収録する対訳ペアの候補が収集された．
+この時点では，Bilingual KWICが利用する対訳コーパスの大きさは 39,560文であったが，ノートPC上で問題なく動作していた．
+
+なお，この対訳ペア登録機能は，対訳辞書の構築には有用であるが，
+翻訳支援の目的とは異なるため，次節のウェブ対応版では採用しなかった．
+
+
+\subsection{ウェブ対応版の開発}
+
+プロトタイプ版はスタンドアロンなPC上で起動するが，あらかじめ Ruby の処理系などを用意する必要があり，インストールは簡単ではなかった．
+また，利用者が各自で対訳コーパスを用意する必要があり，広く使用してもらうことができなかった．
+
+そこで多くのユーザに利用してもらうために，
+ウェブ・サーバ上で動作可能なバージョンを開発した．
+基本的なエンジンはプロトタイプ版と同じであるが，
+ウェブ・ブラウザを利用するためのGUI部分の開発は業者に委託した．
+この時点で，ユーザ・インターフェイスも含めて，Bilingual KWICは一通り完成した．
+
+なお，Bilingual KWICの完成後，日本法令外国語訳データベースシステム(JLT)
+の開発が始まったが，Bilingual KWICは翻訳支援における有用性も認められ，
+2009年のJLT開設当初から「文脈検索」の名前で採用されている．
+その際には，より多くのウェブ・ブラウザに対応させるなどの改良を施した．
+これにより多くの一般ユーザにBilingual KWICを利用してもらえるようになった．
+
+
+\subsection{高速化}
+\label{sec:high-speed}
+
+最初のプロトタイプ版では，対訳コーパスとして数万文程度のサイズを想定していた．
+しかし，JLT版では新しい対訳法令が次々に追加されるため，
+コーパスのサイズが10万文を超える段階において，
+実行速度の点で問題が発生した．
+特に入力キーワードの出現回数が1万を超えるような場合は，結果が表示されるまでに数十秒かかることもあった．
+
+この問題には2010年から取り組み，以下の二つの方法で対処した．
+この手法はJLT版には適用していないが，
+\ref{sec:introduction}章で述べたNUTRIAD版において適用している．
+
+
+\subsubsection{対訳表現抽出の高速化}
+
+実行速度が遅い原因の一つは，コーパスが大きくなると
+対訳表現抽出に時間が掛かるためである．
+式(\ref{eq2})においては，$\hat{y}$を求めるために，あらゆる対訳表現候補$y$について$\freq(y)$と$\freq(x,y)$の計算が必要となる．
+$y$は，上限（デフォルトは日本語で6文字，英語で4単語）までの
+あらゆるNグラムを候補とするため，
+入力キーワード$x$が出現する文数が大きくなると，
+$\freq(y)$と$\freq(x,y)$の計算回数がそれだけ多くなる．
+このうち$\freq(y)$の計算は，コーパスの並び替えとインデックス化を事前に行う Suffix Array を用いることにより，高速に実行できるため問題ない．
+しかし，$\freq(x,y)$に関しては，$y$の出現回数を数える探索範囲が$x$に依存して変化する．
+そのため，探索範囲を事前にインデックス化することが不可能であり，Suffix Array を用いた高速化ができない．
+そこでプロトタイプ版およびJLT版では，
+探索範囲内を順次Nグラムに分割し，その出現回数を数え上げていた．
+
+この$\freq(x,y)$の計算を高速化するため，コーパスの各文をあらかじめ一定サイズ以下のNグラムに分割したデータを別に保持し，それを数え上げることとした．
+すなわち，デフォルトでは日本語は8文字以下，
+英語は10単語以下のNグラム単位であらかじめ分割したデータを保持しておく．
+また実装においては，テキストデータ自体へのアクセスを高速化するために Tokyo Cabinet\footnote{http://fallabs.com/tokyocabinet/}を導入した．
+
+
+\subsubsection{表示の高速化}
+
+実際の利用の上では，表示速度においてもボトルネックがあった．
+入力キーワード$x$が出現する文が多くなると，ブラウザ側に負担が掛かり，
+表示が遅くなっていた．
+そのため，JLT版においては，デフォルトで100文を超える分は表示しないこととし，
+オプションとして表示できる文数の上限の設定を200，400，800と変更できるようにした．
+このため，入力キーワードを含むすべての
+対訳文を表示することができない場合があるが，
+通常の利用では，800文を表示できれば充分に比較ができると考えた．
+また，入力キーワードに文字列を付加したり，
+対訳表現を指定することにより，希望する対訳文を表示することができる．
+
+しかし，JLT版においては，別の問題があった．
+JLT版においては，表示結果のソートをブラウザ側で実現していた．
+しかし，これもブラウザに負担を掛け，表示が遅くなる結果となっていた．
+よってソート自体をサーバで実行し，その結果をブラウザ側に再送して
+再表示することにより，高速化を実現した．
+
+
+\subsubsection{高速化の効果}
+
+上述した二つの高速化手法の効果を測定するために，高速化を適用していないJLT版と，
+適用したNUTRIAD版とにおける表示速度を比較した．
+具体的には，出現回数が異なるキーワード50語を選び，そのキーワードを入力してから結果が表示されるまでの時間を測定した．
+時間の計測には，ウェブ・ブラウザを利用してウェブ・アプリケーションをテストするツールであるSelenium WebDriver{\footnote{http://www.seleniumhq.org/projects/webdriver/}}をRubyから使用した．
+表示する文数の上限はデフォルト値である100とした．
+また，組み込まれている対訳辞書を併用した場合，
+対訳表現の自動推定の一部が省略されて訳語推定の時間が異なってくるため，
+併用しない設定で測定した．
+その結果を図~{\ref{fig:time}}に示す．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-1ia3f6.eps}
+\end{center}
+\caption{出力時間の比較}
+\label{fig:time}
+\end{figure}
+
+この結果から分かるように，結果が表示されるまでの時間は
+出現回数が増えるに従って増加する傾向にあるが，単純に比例する訳ではない．
+これは再帰的な対訳表現の抽出が主な原因と考えられる．
+\ref{sec:recursive}節で述べたように，Bilingual KWICでは，最初の対訳表現を求めた後，それが含まれない残りの文から再帰的に対訳表現を求める．
+そのため，多くの対訳表現をもつキーワードほど，すべての対訳表現を
+抽出するまでの時間が長くなる．
+
+JLT版とNUTRIAD版では，
+サーバの性能や登録されているコーパスの量・内容，
+入力されるキーワードが異なるため，
+単純な数値の比較はできないが，高速化を施したNUTRIAD版の方が
+キーワードの出現回数が増えた場合でも，実行時間の増加が緩やかであり，
+高速化手法が有効であったことが分かる．
+
+
+\section{ユーザによる評価}
+\label{sec:evaluation}
+
+本章では，実際に利用したユーザに対するアンケートに基づく
+Bilingual KWICの評価について述べる．
+
+
+\subsection{アンケートの対象と内容}
+
+法学部の講義の一環として法令翻訳の課題が実施されており，
+受講生はBilingual KWICを利用して法律文を翻訳している．
+今回は，この講義の受講生にBilingual KWICの評価を依頼した．
+
+受講生は，まず初回の講義において，使用する道具に関する説明なしで
+与えられた法律文を翻訳した．
+それから，次の回の講義においてJLT版の
+Bilingual KWICである「文脈検索」の説明を受けた後，
+改めて別の法律文を翻訳した．
+なお，説明の内容は，キーワードを入力して結果が表示される例を
+示すという単純なものであり，
+一般のユーザがウェブサイトに辿り着いて
+キーワード入力を実行し，その動作を
+理解する場合と同程度と想定した．
+
+
+Bilingual KWICを使用しない場合と使用した場合の両方の翻訳を試みることにより，
+ Bilingual KWICが翻訳に有用であったかを評価してもらった．
+評価項目は，表示の見やすさ（視認性）・訳語の推定精度（推定精度）・表示速度・
+役に立ったか（有用性）に関する満足度であり，それぞれ5段階で評価してもらった．
+
+
+\subsection{評価結果}
+
+受講生49人に対するアンケートの集計結果を図~\ref{fig:enquete}に示す．
+視認性と訳語の推定精度に関しては，約5割が満足している一方で，
+表示速度に関しては4割以上が不満を感じている．
+JLT版のBilingual KWICには，\ref{sec:high-speed}節で述べた高速化が
+適用されていないため，その点も低い評価に繋っていると考えられる．
+しかし，有用性に関しては8割以上が肯定的な評価であり，
+Bilingual KWICが翻訳支援として役に立つことが示された．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-1ia3f7.eps}
+\end{center}
+\caption{ユーザによる評価結果}
+\label{fig:enquete}
+\end{figure}
+
+
+\section{関連研究}
+\label{sec:compare}
+
+コーパスに対して検索や分析を行うツールはコンコーダンサと呼ばれるが，これを2言語コーパスに拡張したものはバイリンガル・コンコーダンサもしくはパラレル・コンコーダンサと呼ばれる．
+Bilingual KWICはバイリンガル・コンコーダンサの一種であると言える．
+本章では，いくつかのバイリンガル・コンコーダンサについて紹介し，Bilingual KWICとの違いについて述べる．
+
+文献\cite{Uchiyama03b}における翻訳メモリの利用方法は
+バイリンガル・コンコーダンサといえる．
+ここでは，与えられたキーワードの日本語コーパスにおける出現をKWIC形式で表示し，
+コーパス中においてキーワードと良く共起した日本語単語と英語単語を提示する．
+ユーザが対訳候補となる英語単語を選ぶと，それに基づいた絞り込み検索を
+行い，対訳文のペアを別ウィンドウに表示する．
+ただし，別ウィンドウに表示される対訳文のペアでは，
+キーワードと対訳候補の部分がそれぞれ下線で明示されるが，
+中心に揃えて表示される訳ではない．
+Bilingual KWICでは，最初に対訳候補を自動的に決定する点，
+任意の対訳表現を指定できる点，
+原言語だけでなく対象言語も同時にKWIC形式で表示する点が異なる．
+
+TransSearch\footnote{http://www.tsrali.com/} \cite{Macklovitch} はオンラインのバイリンガル・コンコーダンサであり，原言語文と対象言語文を左右に並べて表示する．
+当初は原言語文中の入力キーワードがハイライトされるだけであり，対訳語はユーザが推測する必要があった．
+文献\cite{Bourdaillet10TS3MT}による改良により，対訳語の自動推定機能が追加され，
+対訳語はハイライトされるようになったが，KWIC形式の表示は導入されていない．
+一方で，単数形と複数形などのように類似した訳語をまとめるなど，Bilingual KWICにはない機能を備えている．
+
+Linear B\cite{Callison}
+はパラレル・コーパスを翻訳メモリとして捉え，検索できる翻訳メモリというコンセプトに基づくバイリンガル・コンコーダンサである．
+原言語文と対象言語文が上下交互に表示される形式であり，KWIC形式は導入されていない．
+対訳語は自動推定されるが，同じ対訳語を含む文が多数ある場合，その一部だけを表示し，複数の対訳語が同じ画面に表示されるようになっている点が
+Bilingual KWICとは異なる．
+
+なお，TransSearch および Linear B の自動推定は GIZA++ や Moses
+などで利用される単語やフレーズの対応付け技術を応用したものであり，キーワードが入力される前にあらかじめ推定している点が
+Bilingual KWICと異なる．
+よって，両者では対訳自動推定の精度をいかに向上させるかが重視されており，
+特に文献\cite{Bourdaillet10TS3MT}では様々な自動推定の方法が比較・検討されている．
+一方，Bilingual KWICでは表示方法を工夫することにより，
+ユーザが自動推定の誤りを訂正しやすくするというアプローチで，自動推定の誤りに対処している．
+
+原言語文と対象言語文の両者をKWIC形式で表示するバイリンガル・コンコーダンサとしては
+ParaConc\footnote{http://paraconc.com/} \cite{Barlow}が挙げられる．
+ただし，そのKWIC表示は半自動というべきものである．
+ユーザがキーワードを入力すると，原言語文は上ウィンドウにおいてKWIC形式で表示されるが，対象言語は下ウィンドウに通常の形式で表示される．
+その際，対訳語の候補が示されており，それをクリックすることにより KWIC形式での表示に変化する．
+ただし，原言語文と対象言語文が上下のウィンドウで完全に分割されており，例えば上ウィンドウの3文目に対応する文は下ウィンドウの3文目に表示されるといった具合であり，左右に並べて表示する
+Bilingual KWICと比べた場合，原言語文と対象言語文の対応は分かりにくい．
+なお，対訳語候補の選出方法は出現頻度に基づくものであり，Dice係数と類似したものと考えられるが，具体的な計算式が掲載されていないため，詳細は不明である．
+
+
+\section{まとめ}
+\label{sec:conclusion}
+
+本論文では，対訳表現抽出を可視化することで翻訳を支援する
+Bilingual KWICの開発について述べた．
+Bilingual KWICは，任意の入力キーワードに対して対訳表現を自動抽出し，
+パラレル・コーパス中での用例と一緒に提示することにより，
+ユーザの翻訳作業を支援する．
+
+本システムは，既に述べた通り，
+法務省・日本法令外国語訳データベースシステム(JLT)および
+名古屋大学・学内情報翻訳データベース 
+NUTRIADにおいて採用されている．
+
+現在，JLTでは36万文150~MB以上からなる対訳コーパスを用いて
+Bilingual KWICを運用している．
+出現回数の少ない入力キーワードに対しては問題なく動作しているが，
+\ref{sec:high-speed}節で述べた高速化が適用されていないため，
+出現回数が多いキーワード，特に出現回数が1万回を超えるような場合には
+結果が表示されるまでに数十秒かかることがある．
+また，高速化が適用されたNUTRIAD上の実装においても，
+出現回数が極端に多いキーワードに対しては応答に時間がかかっており，
+Bilingual KWICの一層の高速化が求められている．
+それに対しては，出現回数や入力頻度の多いキーワードに対する
+計算結果をキャッシュしておくなどの対応を検討している．
+さらには，Moses などを利用してフレーズ・テーブルをあらかじめ計算しておき，
+入力キーワードがフレーズ・テーブルにある場合はその結果を，
+そうでない場合はDice係数によりその場で計算するなどのハイブリッドな
+手法を導入することにより，
+高速化と高精度化を同時に実現する方法も検討している．
+
+\acknowledgment
+
+Bilingual KWICの開発にあたっては，ウェブ版インターフェイスの開発，
+高速化などにおいて株式会社リーガルアストレイに協力していただいた．
+ユーザによる評価実験においては，名古屋大学大学院法学研究科附属
+法情報研究センターの中村誠特任准教授と佐野智也特任講師に
+協力していただいた．
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Barlow}{Barlow}{2004}]{Barlow}
+Barlow, M. \BBOP 2004\BBCP.
+\newblock \BBOQ Parallel Concordancing and Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ASLIB Translating and the Computer},
+  \lowercase{\BVOL}~26.
+
+\bibitem[\protect\BCAY{Bourdaillet, Huet, Langlais, \BBA\ Lapalme}{Bourdaillet
+  et~al.}{2010}]{Bourdaillet10TS3MT}
+Bourdaillet, J., Huet, S., Langlais, P., \BBA\ Lapalme, G. \BBOP 2010\BBCP.
+\newblock \BBOQ TransSearch: from a Bilingual Concordancer to a Translation
+  Finder.\BBCQ\
+\newblock {\Bem Machine Translation}, {\Bbf 24}  (3--4), \mbox{\BPGS\
+  241--271}.
+
+\bibitem[\protect\BCAY{Brown, Pietra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{IBMModel}
+Brown, P.~F., Pietra, V. J.~D., Pietra, S. A.~D., \BBA\ Mercer, R.~L. \BBOP
+  1993\BBCP.
+\newblock \BBOQ The Mathematics of Statistical Machine Translation: Parameter
+  Estimation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  263--311}.
+
+\bibitem[\protect\BCAY{Callison-burch \BBA\ Bannard}{Callison-burch \BBA\
+  Bannard}{2005}]{Callison}
+Callison-burch, C.\BBACOMMA\ \BBA\ Bannard, C. \BBOP 2005\BBCP.
+\newblock \BBOQ A Compact Data Structure for Searchable Translation
+  Memories.\BBCQ\
+\newblock In {\Bem 10th EAMT Conference: Practical Applications of Machine
+  Translation}, \mbox{\BPGS\ 59--65}.
+
+\bibitem[\protect\BCAY{福田\JBA 外山\JBA 野田}{福田 \Jetal }{2013}]{Fukuda}
+福田薫\JBA 外山勝彦\JBA 野田昭彦 \BBOP 2013\BBCP.
+\newblock 学内情報翻訳データベースの構築と運用.\
+\newblock \Jem{大学 ICT 推進協議会 2013 年次大会論文集}, \mbox{\BPGS\
+  146--152}.
+
+\bibitem[\protect\BCAY{出羽}{出羽}{2004}]{Izuha04}
+出羽達也 \BBOP 2004\BBCP.
+\newblock 対訳文書から自動抽出した用語対訳による機械翻訳の訳語精度向上.\
+\newblock \Jem{電子情報通信学会論文誌. D-II, 情報・システム, II-パターン処理},
+  {\Bbf 87}  (6), \mbox{\BPGS\ 1244--1251}.
+
+\bibitem[\protect\BCAY{北村\JBA 松本}{北村\JBA 松本}{1997}]{Kitamura97}
+北村美穂子\JBA 松本裕治 \BBOP 1997\BBCP.
+\newblock 対訳コーパスを利用した対訳表現の自動抽出.\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 38}  (4), \mbox{\BPGS\ 727--736}.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{Moses}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the ACL on
+  Interactive Poster and Demonstration Sessions}, ACL '07, \mbox{\BPGS\
+  177--180}, Stroudsburg, PA, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{熊野\JBA 平川}{熊野\JBA 平川}{1994}]{Kumano94}
+熊野明\JBA 平川秀樹 \BBOP 1994\BBCP.
+\newblock 対訳文書からの機械翻訳専門用語辞書作成.\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 35}  (11), \mbox{\BPGS\ 2283--2290}.
+
+\bibitem[\protect\BCAY{Luhn}{Luhn}{1960}]{luhn1960}
+Luhn, H.~P. \BBOP 1960\BBCP.
+\newblock \BBOQ KeyWord-In-Context Index for Technical Literature (KWIC
+  Index).\BBCQ\
+\newblock {\Bem American Documentation}, {\Bbf 11}  (4), \mbox{\BPGS\
+  288--295}.
+
+\bibitem[\protect\BCAY{Macklovitch, Simard, \BBA\ Langlais}{Macklovitch
+  et~al.}{2000}]{Macklovitch}
+Macklovitch, E., Simard, M., \BBA\ Langlais, P. \BBOP 2000\BBCP.
+\newblock \BBOQ TransSearch: A Free Translation Memory on the World Wide
+  Web.\BBCQ\
+\newblock In {\Bem 2nd International Conference on Language Resources and
+  Evaluation (LREC)}, \mbox{\BPGS\ 1201--1208}.
+
+\bibitem[\protect\BCAY{Matsumoto \BBA\ Utsuro}{Matsumoto \BBA\
+  Utsuro}{2000}]{Matsumoto00}
+Matsumoto, Y.\BBACOMMA\ \BBA\ Utsuro, T. \BBOP 2000\BBCP.
+\newblock \BBOQ Lexical Knowledge Acquisition.\BBCQ\
+\newblock In Robert, D., Hermann, M., \BBA\ Harold, S.\BEDS, {\Bem Handbook of
+  Natural Language Processing}, \mbox{\BPGS\ 563--610}. Marcel Dekker.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{GIZA++}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Systematic Comparison of Various Statistical Alignment
+  Models.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{外山\JBA 小川}{外山\JBA 小川}{2008}]{Toyama08}
+外山勝彦\JBA 小川泰弘 \BBOP 2008\BBCP.
+\newblock 自然言語処理の応用に基づく法令外国語訳支援.\
+\newblock \Jem{人工知能学会誌}, {\Bbf 23}  (4), \mbox{\BPGS\ 521--528}.
+
+\bibitem[\protect\BCAY{外山\JBA 齋藤\JBA 関根\JBA 小川\JBA 角田\JBA 木村\JBA
+  松浦}{外山 \Jetal }{2012}]{Toyama12}
+外山勝彦\JBA 齋藤大地\JBA 関根康弘\JBA 小川泰弘\JBA 角田篤泰\JBA 木村垂穂\JBA
+  松浦好治 \BBOP 2012\BBCP.
+\newblock 日本法令外国語訳データベースシステムの設計と開発.\
+\newblock \Jem{情報ネットワーク・ローレビュー}, {\Bbf 11}, \mbox{\BPGS\
+  33--53}.
+
+\bibitem[\protect\BCAY{内山\JBA 井佐原}{内山\JBA 井佐原}{2003}]{Uchiyama03b}
+内山将夫\JBA 井佐原均 \BBOP 2003\BBCP.
+\newblock 日英新聞記事対応付けデータを用いた翻訳メモリと言語横断検索.\
+\newblock \Jem{情報処理学会全国大会講演論文集}, 65-5\JVOL, \mbox{\BPGS\
+  355--358}.
+
+\bibitem[\protect\BCAY{山下}{山下}{2000}]{SuffixArray}
+山下達雄 \BBOP 2000\BBCP.
+\newblock 用語解説「Suffix Array」.\
+\newblock \Jem{人工知能学会誌}, {\Bbf 15}  (6), \mbox{\BPG\ 1142}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{小川　泰弘}{
+1995年名古屋大学工学部情報工学科卒業．
+2000年同大学院工学研究科情報工学専攻博士課程後期課程修了．
+同工学研究科助手，同情報科学研究科助教を経て，
+2012年名古屋大学情報基盤センター准教授（同大学院情報科学研究科兼担）．
+現在に至る．
+博士（工学）．
+自然言語処理および法律情報処理に関する研究に従事．
+言語処理学会，情報処理学会，電子情報通信学会各会員．
+}
+\bioauthor{外山　勝彦}{
+1984年名古屋大学工学部電気学科卒業．
+1989年同大学院工学研究科情報工学専攻博士課程満了．
+同工学部助手，中京大学情報科学部講師，同助教授，
+名古屋大学大学院工学研究科助教授，同情報科学研究科助教授を経て，
+2013年名古屋大学情報基盤センター教授（同大学院情報科学研究科兼担）．現在に至る．
+工学博士．
+論理に基づく知識処理，自然言語処理に関する研究に従事．
+近年は法制執務支援や法令翻訳支援に関心を持つ．
+言語処理学会，電子情報通信学会，情報処理学会，人工知能学会，日本認知科学会，ACL 各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

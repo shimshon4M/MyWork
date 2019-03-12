@@ -1,0 +1,863 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{hangcaption_jnlp}
+
+\usepackage{url}
+\usepackage{amsmath,amssymb}
+
+
+\Volume{23}
+\Number{4}
+\Month{September}
+\Year{2016}
+
+\received{2015}{9}{11}
+\revised{2015}{12}{3}
+\rerevised{2016}{3}{14}
+\accepted{2016}{4}{8}
+
+\setcounter{page}{327}
+
+\etitle{Unsupervised Word Alignment Using Frequency Constraint in Posterior Regularized EM}
+\eauthor{Hidetaka Kamigaito\affiref{titech} \and Taro Watanabe\affiref{google} \and Hiroya Takamura\affiref{seiken} \and \\ Manabu Okumura\affiref{seiken} \and Eiichiro Sumita \affiref{nict}} 
+\eabstract{
+Generative word alignment models, such as IBM Models, are restricted to one-to-many alignment, and cannot explicitly represent many-to-many relationships in bilingual texts.
+The problem is partially solved either by introducing heuristics or by agreement constraints such that two directional word alignments agree with each other.
+However, this constraint cannot take into account the grammatical difference of language pairs.
+In particular, function words are not trivial to align for grammatically different language pairs, such as Japanese and English.
+In this paper, we focus on the posterior regularization framework \cite{ganchev2010posterior}  that can force two directional word alignment models to agree with each other during training,
+and propose new constraints that can take into account the difference between function words and content words.
+We discriminate a function word and a content word using word frequency in the same way as done by 
+    \citeA{setiawan2007ordering}.
+Experimental results show that our proposed constraints achieved better alignment qualities on the French-English Hansard task and the Japanese-English Kyoto free translation task (KFTT) measured by AER and F-measure.
+In translation evaluations, we achieved statistically significant gains in BLEU scores in the Japanese-English NTCIR10 task and Spanish-English WMT06 task.
+}
+\ekeywords{Statistical Machine Translation, Unsupervised Word Alignment, Posterior Regularization Framework, Constrained EM}
+
+\headauthor{Kamigaito, Watanabe, Takamura, Okumura, Sumita}
+\headtitle{Unsupervised Word Alignment}
+
+\affilabel{titech}{}{Department of Computational Intelligence and Systems Science, Interdisciplinary Graduate School of Science and Engineering, Tokyo Institute of Technology}
+\affilabel{google}{}{Google Inc. This work was mostly done while the second author was affiliated with National Institute of Information and Communications Technology}
+\affilabel{seiken}{}{Tokyo Institute of Technology, Precision and Intelligence Laboratory}
+\affilabel{nict}{}{National Institute of Information and Communication Technology}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\label{intro}
+
+Word alignment is an important component in statistical machine translation (SMT).
+For instance phrase-based SMT \cite{koehn2003statistical} is based on the concept of phrase pairs from bilingual data with word alignment annotation.
+Similarly, the  model for hierarchical phrase-based SMT is built from exhaustively extracted phrases that are, in turn, heavily reliant on word alignment.
+
+The Generative word alignment models, such as the IBM Models \cite{brown1993mathematics} and HMM \cite{vogel1996hmm}, are popular methods for automatically aligning bilingual texts. However, they  are restricted to represent one-to-many  correspondence of each word.
+To resolve this weakness, various symmetrization methods are proposed.
+Och and Ney (2003) and Koehn et al. (2003) propose various heuristic methods to combine two directional models to represent many-to-many relationships. 
+As an alternative to heuristic methods, filtering methods employ a threshold to control the trade-off between precision and recall based on a score estimated from the posterior probabilities from two directional models.
+    \citeA{matusov-zens-ney:2004:COLING} 
+proposed arithmetic means of two models as a score for the filtering, 
+    whereas \citeA{liang-taskar-klein:2006:HLT-NAACL06-Main} 
+reported better results using geometric means.
+The joint training method \cite{liang-taskar-klein:2006:HLT-NAACL06-Main} enforces agreement between two directional models.
+Posterior regularization \cite{ganchev2010posterior} is an alternative agreement method which directly encodes agreement  during training.
+DeNero and Macherey (2011) and 
+    \citeA{chang2014constrained} 
+also enforce agreement during inference, not training.
+However, these agreement models do not take into account the difference in language pairs, which is crucial for linguistically different language pairs, such as Japanese and English: although content words may be aligned with each other by introducing some agreement constraints, function words are difficult to align.
+This is because the function words have many roles in a single word.
+    \citeA{C12-1120} 
+reported larger gains against a heuristic baseline by a special treatment for function words.
+However their method relied on dependency analysis for  discriminating function words.
+
+We focus on the posterior regularization framework and improve upon the previous work by proposing new constraint functions that take into account the difference in languages in terms of content words and function words.
+In particular, we concentrate on a method which does not rely on deeper syntactic analysis and differentiate content words and function words by the frequency in bilingual data,
+following Setiawan et al. (2007).
+In this work, content words and function words are discriminated based on the frequency on a given data by treating high frequent words as function words and low frequent words as content words.
+The difference of a function word and a content word is directly reflected by our proposed three constraints:
+\textit{f2f}  constraint rewards posterior probability of alignments between a function word and a function word,
+\textit{c2c}  constraint rewards posterior probability of alignments between two content words,
+\textit{f2c}  constraint penalize posterior probability of alignments between a function word and a content word.
+These three fine grained agreement constraints are used as a symmetric constraint for the posterior regularization framework \cite{ganchev2010posterior}. 
+
+Experimental results show that the proposed methods achieved better alignment qualities on the French-English Hansard data and the Japanese-English Kyoto free translation task (KFTT) measured by AER and F-measure.
+In translation evaluations, we achieved statistically significant gains in BLEU scores in the NTCIR10 Japanese-English task and WMT06 Spanish-English task.
+
+The remainder of this paper is organized as follows.
+Section \ref{sec:related} describes the related work of one-directional and bidirectional word alignment.
+Section \ref{sec:agreement} describes the summary of Posterior Regularization Framework and Ganchev's symmetric constraint.
+Section \ref{sec:proposed} describes our proposed two constraint functions, matching and mismatching constraint functions.
+Section \ref{sec:experiment} describes the comparison between previous symmetric function and our proposed constraint functions against various language pairs.
+Section \ref{sec:analysis} describes the analysis and discussion of the results of Experiments.
+Section \ref{sec:conclusion} describes the conclusion and future work.
+This paper is an extension of our prior work with more details and experiments \cite{kamigaitounsupervised}.
+
+
+\section{Related Work}
+\label{sec:related}
+
+IBM Models \cite{brown1993mathematics}  and HMM  \cite{vogel1996hmm}  are popular generative models for representing word alignment in bilingual texts.
+One of the shortcomings of these models is the one-to-many restriction, in which each target word can be aligned to just a single source word.
+As a result, Och and Ney (2003) and Koehn et al. (2003) presented various symmetrization methods in which  Viterbi alignments from  two directional models are heuristically combined to yield many-to-many alignments.
+Their heuristic methods work mostly fine though they cannot clearly take into account the posterior probability of word alignments on various granularities.
+
+Some generative models can directly induce phrasal structures without one-to-many word alignment constraints \cite{D08-1033,P11-1064}.
+These methods can learn compact phrase pairs with comparative translation quality against heuristic extraction methods.
+However these methods take long time for inference.
+From these reasons, heuristic extractions are still used in various NLP tasks.
+
+As an alternative to heuristic methods, filtering methods employ a threshold to control the trade-off between precision and recall based on a score estimated from the posterior probabilities from two directional models.
+Matusov et al. (2004) proposed arithmetic means of two models as a score for the filtering, whereas Liang et al. (2006) reported better results using geometric means.
+Both methods can generate bidirectional alignments based on posterior probability with various granularities.
+However, these models still separately learning the two directional alignment models.
+For this reason, both models sometimes misalign the bidirectional alignments.
+
+Instead of training two models independently, Liang et al. (2006) propose simultaneous training of two models, in a parallel manner, by maximizing the product of the two models during the M-step in the EM-algorithm.
+The E-step is intractable even with a simpler variant of IBM Models, since summing over all possible alignment space involves enumeration of all bidirectional alignment sets.
+To solve the problem, they use a heuristic approximation by simply considering the product of two models.
+Model-Based Aligner Combination \cite{denero2011model} enforces agreement during the inference step.
+Since the inference over two directional models is intractable, they employ dual decomposition as an approximated inference.
+Constrained Viterbi Relaxation \cite{chang2014constrained} allows even faster inference with guaranteed optimality.
+Ganchev et al. (2010) introduce a posterior regularization framework that involves regularization of posterior probabilities to match a certain constraint during the E-step in the EM-algorithm.
+Using the approximation through dual decomposition, this framework can use various constraints as a function to incorporate prior knowledge.
+They propose agreement constraints, or features, of two word alignment models, which can correct the posterior probability of a word alignment during training.
+
+Ganchev et al. (2010) and DeNero and Macherey (2011) are similar in the spirit of generating bidirectionally agreed word alignment.
+However, they differ in that Ganchev et al. (2010) enforces agreement of two directional models using dual decomposition in the training step, whereas that of DeNero and Macherey (2011) is in the inference step.
+
+    \citeA{C12-1120} 
+proposed a method to improve word alignment accuracies by differentiating function words using dependency trees.
+However, their method strongly relies on the accuracies of dependency trees and such trees may not be available to under-resourced languages.
+
+
+\section{Statistical Word Alignment with Posterior Regularization Framework}
+\label{sec:agreement}
+
+\subsection{Overview}
+
+Posterior regularization framework is an instance of constrained EM algorithm in which prior knowledge can be easily introduced as a soft constraint.
+In E-step of EM algorithm, posterior regularization framework modify the posterior probability such that it may not violate a given constraint.
+In word alignment task, a symmetric constraint is used to enforce two independent directional alignment models to agree with each other by moving the posterior probabilities for every alignment between a source word and a target word.
+Figure \ref{fig:exalignment} shows an example of symmetric constraint under posterior regularization framework for a Japanese-English\footnote{This notation denotes that the source language is Japanese and the target language is English. The notation of Japanese-to-English is the same.} sentence pair, ``\textit{kuroi inu ga ni hiki ita.}''\footnote{Japanese words have kanij, hiragana, katakana and alphabet styles. For simple expression, in this paper, all Japanese words are written in italic roman style of its pronunciation.} and ``There were two black dogs.'' with each bar representing the posterior probability for each word alignment.
+The mass in the top left are the posterior probabilities for English-to-Japanese alignment model denoted as $\overrightarrow{p}$, and the mass in the top right are those for Japanese-to-English alignment model denoted as $\overleftarrow{p}$.
+The two distributions are transferred as new posterior probabilities after agreement under posterior regularization denoted by $q$.
+The probability of alignment between Japanese word ``\textit{hiki}'' and English word ``two'' is lower than that of Japanese word ``\textit{hiki}'' and English word ``dogs'' in Japanese-to-English alignment.
+On the other hand, the probability of alignment between Japanese word ``\textit{hiki}'' and English word ``two'' is lower than that of Japanese word ``\textit{hiki}'' and English word ``There'' in English-to-Japanese alignment.
+The symmetric constraint enforces weighted arithmetic means of the probability of both Japanese-to-English and English-to-Japanese alignments as a posterior probability of bidirectional alignment during training.
+Through the training with symmetric constraint, the probability of alignment between Japanese word ``\textit{hiki}'' and English word ``two'' is higher than that of ``\textit{hiki}'' and ``dogs'' and ``\textit{hiki}'' and ``There''  in the agreed bidirectional alignment.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-4ia1f1.eps}
+\end{center}
+\caption{Posterior probability of bidirectional agreed alignments}
+\label{fig:exalignment}
+\end{figure}
+
+
+
+\subsection{Symmetric Constraint}
+
+In this section, we explain the detail of symmetric constraint under posterior regularization framework.
+Given a bilingual sentence $\boldsymbol{x} = (\boldsymbol{x}^s,\boldsymbol{x}^t)$ where $\boldsymbol{x}^s$ and $\boldsymbol{x}^t$ denote a source and target sentence,
+respectively, and the bilingual sentence is aligned by a word alignment denoted by $\boldsymbol{y}$.
+In particular, $y_{i,j}=1$, if a source word $x^{s}_{i}$ is aligned to a target word $x^{t}_{j}$ (otherwise $y_{i,j}=0$) where we define the index of $\boldsymbol{x}^t$, $\boldsymbol{x}^s$ as $i,j$ $(1 \leq i \leq |\boldsymbol{x}^t|, 1 \leq j \leq |\boldsymbol{x}^s|)$.
+We represent posterior probabilities from two directional word alignment models as $\overrightarrow{p}_{\theta}(\boldsymbol{y}|\boldsymbol{x})$ and $\overleftarrow{p}_{\theta}(\boldsymbol{y}|\boldsymbol{x})$  with each arrow indicating a particular direction,
+and use $\theta$ to denote the parameters of the models.
+To explain the directional models, we additionally denote a directional word alignment as $\boldsymbol{a}$.
+Note that an alignment $a_{i}=j$ is equivalent to $y_{i,j}=1$.
+For instance, $\boldsymbol{a}$ is a set of the alignment from $\boldsymbol{x}^s$ to $\boldsymbol{x}^t$ under the model of  $p(\boldsymbol{x}^t, \boldsymbol{y} | \boldsymbol{x}^s)$ in which each target word is aligned with at most one source word.
+In the case of IBM Model 1, let $a_{i}$ is an alignment of target word $x^{t}_{i}$ and $p_{t}$ is a word translation probability, the model is represented as follows:
+\begin{equation}
+ \label{eqn:ibmmodel1e}
+ p(\boldsymbol{x}^t,\boldsymbol{y}|\boldsymbol{x}^s) = \prod_{i}\frac{1}{| \boldsymbol{x}^s | + 1}p_t(x^{t}_i|x^{s}_{a_i}).
+\end{equation}
+Note that Equation (\ref{eqn:ibmmodel1e}) assumes a special NULL symbol located at the 0th position in $\boldsymbol{x}^s$ denoted as $x_{0}^{s}$.
+The model for the inverse direction $p(\boldsymbol{x}^{s}, \boldsymbol{y} | \boldsymbol{x}^{t})$  is defined similarly using a special NULL symbol for $x_{0}^{t}$.
+The posterior probabilities are defined as follows:
+\begin{equation}
+ \label{eqn:ibmmodel1m}
+\overrightarrow{p}(\boldsymbol{y} | \boldsymbol{x}) = \prod_{i}\frac{p_t(x^{t}_{i} |x^{s}_{a_{i}}) }
+{\sum_{j'} p_t(x^{t}_{i}|x^{s}_{j'}) },
+\end{equation}
+where $j'$ $(0 \leq j' \leq |\boldsymbol{x}^s|)$ is an index of $\boldsymbol{x}^s$.
+We denote a set of alignments generated by a source-to-target model as $\overrightarrow{\boldsymbol{Y}}$ and by a target-to-source alignment model as $\overleftarrow{\boldsymbol{Y}}$.
+Herein, we assume that the posterior probability for both directional alignment is zero (i.e.,  $\overrightarrow{p}(\boldsymbol{y} | \boldsymbol{x}) = 0$ for $\boldsymbol{y} \not \in \overrightarrow{\boldsymbol{Y}}$), in which an alignment may be possible in one direction, but not in the other due to the one-to-many restriction.
+Given the two directional models, we define a symmetric feature for each target/source position pair, $i,j$ as follows:
+\begin{equation}
+ \label{eqn:agrcons}
+ \phi_{i,j}(\boldsymbol{x},\boldsymbol{y}) = 
+ \left\{
+ \begin{tabular}{rl}
+  $+1$ & $\overleftarrow{Z}(i,j)$, \\
+  $-1$ & $\overrightarrow{Z}(i,j)$, \\
+  $0$  & \textit{otherwise},
+  \end{tabular}
+ \right.
+\end{equation}
+where $\overleftarrow{Z}(i,j)=(\boldsymbol{y} \in \overleftarrow{\boldsymbol{Y}}) \land (y_{i,j}=1)$ and $\overrightarrow{Z}(i,j)=(\boldsymbol{y} \in \overrightarrow{\boldsymbol{Y}}) \land (y_{i,j}=1)$.
+The feature assigns 1 to an alignment of $\overrightarrow{\boldsymbol{Y}}$, but assigns $-1$ to an element of $\overleftarrow{\boldsymbol{Y}}$.
+As a result,  if a word pair $i, j$ is aligned with equal posterior probabilities in two directions, 
+\pagebreak
+the expectation of the feature value will be zero.
+We define a joint model that combines two directional models by arithmetic means:
+\begin{equation}
+p_\theta (\boldsymbol{y} | \boldsymbol{x}) = \frac{1}{2} \overrightarrow{p}_{\theta} (\boldsymbol{y} | \boldsymbol{x}) + \frac{1}{2} \overleftarrow{p}_{\theta} (\boldsymbol{y} | \boldsymbol{x}).
+\end{equation}
+Under the posterior regularization framework, we instead use $q$
+parameterized by $\boldsymbol{\lambda}$ for each bilingual data $\boldsymbol{x}$  as follows \cite{ganchev2010posterior}:
+\begin{equation}
+ \label{eqn:agreqn}
+\begin{aligned}[t]
+ q_{\boldsymbol{\lambda}}(\boldsymbol{y}|\boldsymbol{x}) & =  
+	\frac{\overrightarrow{p}_{\theta}(\boldsymbol{y}|\boldsymbol{x}) + \overleftarrow{p}_{\theta}(\boldsymbol{y}|\boldsymbol{x})}{2} \cdot
+	\frac{exp\{- \boldsymbol{\lambda} \cdot \boldsymbol{\phi}(\boldsymbol{x},\boldsymbol{y}) \}}{Z} \\
+ &  = \frac{
+	\overrightarrow{q}(\boldsymbol{y}|\boldsymbol{x})
+	\frac{Z_{\overrightarrow{q}}}{\overrightarrow{p}_{\theta} (\boldsymbol{x})} + 
+	\overleftarrow{q}(\boldsymbol{y}|\boldsymbol{x})
+	\frac{Z_{\overleftarrow{q}}}{\overleftarrow{p}_{\theta} (\boldsymbol{x})}}{2Z}, \\
+ Z & = \small \frac{1}{2}(\frac{Z_{\overrightarrow{q}}}{\overrightarrow{p}_{\theta}(\boldsymbol{x})} 
+	+ \frac{Z_{\overleftarrow{q}}}{\overleftarrow{p}_{\theta}(\boldsymbol{x})}), \\ 
+	
+\overrightarrow{q}(\boldsymbol{y}|\boldsymbol{x}) & =  
+	\frac{1}{Z_{\overrightarrow{q}}}\overrightarrow{p}_{\theta}(\boldsymbol{y},\boldsymbol{x})exp\{- \boldsymbol{\lambda} 
+	\cdot \boldsymbol{\phi}(\boldsymbol{x},\boldsymbol{y}) \}, \\ 
+ Z_{\overrightarrow{q}} & = \sum_{\boldsymbol{y}}\overrightarrow{p}_{\theta}(\boldsymbol{y},\boldsymbol{x})exp\{- \boldsymbol{\lambda} 
+	\cdot \boldsymbol{\phi}(\boldsymbol{x},\boldsymbol{y})\}, \\
+ \overleftarrow{q}(\boldsymbol{y}|\boldsymbol{x}) & = 
+	 \frac{1}{Z_{\overleftarrow{q}}}\overleftarrow{p}_{\theta}(\boldsymbol{y},\boldsymbol{x})exp\{- \boldsymbol{\lambda} 
+	\cdot \boldsymbol{\phi(\boldsymbol{x},\boldsymbol{y})} \}, \\
+ Z_{\overleftarrow{q}} & = \sum_{\boldsymbol{y}}\overleftarrow{p}_{\theta}(\boldsymbol{y},\boldsymbol{x})exp\{- \boldsymbol{\lambda} 
+	\cdot \boldsymbol{\phi}(\boldsymbol{x},\boldsymbol{y})\},
+\end{aligned}
+\end{equation}
+to satisfy the following constraint:
+\begin{equation}
+\label{eq:constraint}
+\forall i, \forall j, \overrightarrow{q}_{\lambda_{i,j}}(y_{i,j} \!\! = \!\! 1|\boldsymbol{x}) - \overleftarrow{q}_{\lambda_{i,j}}(y_{i,j} \!\! = \!\! 1|\boldsymbol{x}) = 0.
+\end{equation}
+In the E-step of EM-algorithm, we employ $q_{\boldsymbol{\lambda}}$ instead of $p_{\theta}$ to accumulate fractional counts for its use in the M-step.
+$\boldsymbol{\lambda}$ in the $q_{\boldsymbol{\lambda}}$ controls the two directional posterior probabilities $\overrightarrow{p}_{\theta}$ and $\overleftarrow{p}_{\theta}$ for a symmetrical word alignment.
+For example, a large $\lambda_{i,j}$ increases $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ and decreases $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$.
+Conversely, a small $\lambda_{i,j}$ decreases $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ and increases $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$.
+When the constraint (\ref{eq:constraint}) is satisfied, $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ and $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ are symmetrical.
+$\boldsymbol{\lambda}$ is efficiently estimated by the gradient ascent for each bilingual sentence $\boldsymbol{x}$.
+Note that posterior regularization is performed during parameter estimation, and not during testing.
+
+
+\section{Posterior Regularization with Frequency Constraint}
+\label{sec:proposed}
+
+The symmetric constraint method represented in Equation (\ref{eqn:agrcons}) assumes a strong one-to-one relation for any word, and does not take into account the divergence in language pairs.
+For linguistically different language pairs, such as Japanese-English,  content words may be easily aligned one-to-one, but function words are not always aligned together.
+Figure \ref{fig:ex1} is an example of a wrong alignment between an English function word ``There'' to a Japanese content word ``\textit{hiki}''.
+Note that Japanese word ``\textit{hiki}'' is a counter word.
+These errors may impact the end-to-end tranlslation qualities.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-4ia1f2.eps}
+\end{center}
+  \caption{Example of a function-to-content wrong alingment}
+  \label{fig:ex1}
+\end{figure}
+
+In order to solve the problem, we improve Ganchev's symmetric constraint so that it can consider the difference between content words and function words in each language.
+In particular, we follow the frequency-based idea of Setiawan et al. (2007) that discriminates content words and function words by their frequencies.
+We propose constraint features that take into account the difference between content words and function words, determined by a frequency threshold.
+
+
+\subsection{Discriminating Content Words and Function Words}
+\label{subsec:discriminating}
+
+Setiawan et al. (2007) discriminated content words and function words by their frequency using a threshold, and successfully employed the knowledge for a better hierarchical grammar.
+Intuitively, the frequency for function words is high whereas that for content words is low.
+However, they employed a fixed constant as the threshold parameter, which is largely influenced by the data size.
+Bisazza and Federico (2012) solved this problem by introducing a threshold determined by the ratio of very frequent words.
+In particular, the threshold $th$ is determined as the maximum frequency that satisfies the following condition:
+\begin{equation}
+\label{eqn:w}
+\frac{\sum_{w \in (\mathit{freq}(w) > th)}{\mathit{freq}(w)}}{\sum_{w \in all}{\mathit{freq}(w)}} > r.
+\end{equation}
+Here, we empirically set $r = 0.5$.
+If a word has higher frequency than the threshold $th$, we treat the word as a function word, otherwise, we treat the word as a content word.
+
+
+\subsection{Mismatching Constraint}
+\label{subsec:mismatch}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-4ia1f3.eps}
+\end{center}
+  \caption{Posterior probability of bidirectional alignment generated by mismatching constraint}
+  \label{fig:ex2}
+\end{figure}
+
+First, we propose a mismatching constraint that penalizes word alignment between content words and function words by decreasing the corresponding posterior probabilities.
+This constraint function penalizes alignment for \textit{function to content} or \textit{content to function} word matching, namely \textit{f2c}.
+Figure \ref{fig:ex2} is an example of posterior probability of an alignment between an English function word ``There'' to a Japanese content word ``\textit{hiki}''.
+In this example, the posterior probability of Japanese-to-English direction is lower than the other, and thus the posterior probability is lowered for the bidirectional model under the mismatching constraint.
+Using functions $\overleftarrow{Z}(i,j)=(\boldsymbol{y} \in \overleftarrow{\boldsymbol{Y}}) \land (\overleftarrow{y}_{i,j}=1)$ and $\overrightarrow{Z}(i,j)=(\boldsymbol{y} \in \overrightarrow{\boldsymbol{Y}}) \land (\overrightarrow{y}_{i,j}=1)$ both defined in Equation (\ref{eqn:agrcons}), and  $\mathit{F2C}(x^t_i, x^s_j) = ((x^t_i \in \mathcal{F}^t \land x^s_j \in \mathcal{C}^s) \lor (x^t_i \in \mathcal{C}^t \land x^s_j \in \mathcal{F}^s))$,
+the \textit{f2c} constraint function for a word pair $(x^t_i, x^s_j)$ is formally defined as follows:
+\begin{equation}
+ \label{eqn:decrease}
+\phi^{\mathit{f2c}}_{i,j}(\boldsymbol{x},\boldsymbol{y}) = \left\{
+  \begin{tabular}{rl}
+  $+1$ & $\overleftarrow{Z}(i,j) \land \mathit{F2C}(x^t_i, x^s_j) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) < 0 )$, \\
+  $0$   & $\overleftarrow{Z}(i,j) \land \mathit{F2C}(x^t_i, x^s_j) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) > 0 ) $, \\
+  $0$   & $\overrightarrow{Z}(i,j) \land \mathit{F2C}(x^t_i, x^s_j) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) < 0 )$, \\
+  $-1$  & $\overrightarrow{Z}(i,j) \land \mathit{F2C}(x^t_i, x^s_j) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) > 0 )$, \\
+  $+1$ & $\overrightarrow{Z}(i,j) \land !(\mathit{F2C}(x^t_i, x^s_j)) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) < 0 )$, \\
+  $-1$  & $\overleftarrow{Z}(i,j) \land !(\mathit{F2C}(x^t_i, x^s_j)) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) > 0 ) $, \\
+  $0$   & \textit{otherwise}, \\
+  \end{tabular}
+ \right.
+\end{equation}
+where $\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) = \overrightarrow{p}_\theta(y_{i,j}=1 | \boldsymbol{x}) -  \overleftarrow{p}_\theta(y_{i,j}=1 | \boldsymbol{x}) $ is the difference in the posterior probabilities between the source-to-target and the target-to-source alignments.
+$\mathcal{C}^s$ and $\mathcal{C}^t$ represent content words in the source sentence and target  sentence, respectively.
+Similarly, $\mathcal{F}^s$ and $\mathcal{F}^t$ are function words in the source and target sentence, respectively.
+Intuitively, when there exists a mismatch in content word and function word for a word pair $(x^t_i, x^s_j)$, the constraint function returns a non-zero value for the model with the highest posterior probability.
+When coupled with the constraint such that the expectation of the feature value is zero, the constraint function decreases the posterior probability of the highest direction and discourages agreement with each other for matching with a content word and a function word.
+Similarly the symmetric constraint, $\boldsymbol{\lambda}$ controls the two directional posterior probabilities $\overrightarrow{q}_{\lambda}$ and $\overleftarrow{q}_{\lambda}$ for penalizing  word alignment between content words and function words.
+For example, when $(i,j)$ is a word pair between a content word and a function word, and $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ is larger than $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$, 
+the first and the third rules would fire such that increased $\lambda_{i,j}$ might penalize $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ until it reaches $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$.
+Similarly, the second and fourth rules would fire when $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ is larger than $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$, which might lead to decreased $\lambda_{i,j}$ to penalize $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$.
+If $y_{i,j}$ does not satisfy $\mathit{F2C}(x^t_i, x^s_j)$, our constraint $\phi^{\mathit{f2c}}_{i, j}$ operates similarly to $\phi^{\mathit{sym}}_{i, j}$ according to the last three rules. 
+
+
+\subsection{Matching Constraint}
+\label{subsec:match}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-4ia1f4.eps}
+\end{center}
+  \caption{Posterior probability of bidirectional alignment generated by matching constraint}
+  \label{fig:ex3}
+\end{figure}
+
+In contrast to the mismatching constraint,  our second constraint function rewards alignment for \textit{function to function} word matching, namely \textit{f2f} and for \textit{content to content} word matching, namely \textit{c2c}.
+\mbox{Figure} \ref{fig:ex3} is an example of posterior probability of an alignment between a English content word ``dogs'' to a Japanese content word ``\textit{inu}''.
+In this example, the posterior probability of English-to-Japanese direction is higher than the other; we prefer the English-to-Japanese direction as the posterior probability for the bidirectionally agreed model.
+Using functions $\overleftarrow{Z}(i,j)=(\boldsymbol{y} \in \overleftarrow{\boldsymbol{Y}}) \land (\overleftarrow{y}_{i,j}=1)$ and $\overrightarrow{Z}(i,j)=(\boldsymbol{y} \in \overrightarrow{\boldsymbol{Y}}) \land (\overrightarrow{y}_{i,j}=1)$ both defined in Equation (\ref{eqn:agrcons}), and $\mathit{C2C}(x^t_i, x^s_j) = (x^t_i \in \mathcal{C}^t \land x^s_j \in \mathcal{C}^s)$, the \textit{c2c}  constraint function for a word pair $(x^t_i, x^s_j)$ 
+\pagebreak
+is formally defined as follows:
+\begin{equation} 
+ \label{eqn:increase}
+ \phi^{\mathit{c2c}}_{i, j}(\boldsymbol{x},\boldsymbol{y}) = \left\{
+  \begin{tabular}{rl}
+  $0$ & \!\!\!\!\! $\overleftarrow{Z}(i,j)  \land \mathit{C2C}(x^t_i, x^s_j) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) < 0 ).$ \\
+  $+1$   & \!\!\!\!\! $\overleftarrow{Z}(i,j)  \land \mathit{C2C}(x^t_i, x^s_j) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) > 0 ),$ \\
+  $-1$   & \!\!\!\!\! $\overrightarrow{Z}(i,j) \land \mathit{C2C}(x^t_i, x^s_j) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) < 0 ),$ \\
+  $0$  & \!\!\!\!\! $\overrightarrow{Z}(i,j) \land \mathit{C2C}(x^t_i, x^s_j) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) > 0 ),$ \\
+  $+1$ & \!\!\!\!\! $\overleftarrow{Z}(i,j) \land !(\mathit{C2C}(x^t_i, x^s_j)) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) < 0 )$, \\
+  $-1$  & \!\!\!\!\! $\overrightarrow{Z}(i,j) \land !(\mathit{C2C}(x^t_i, x^s_j)) \land (\delta_{i,j}(\boldsymbol{x}, \boldsymbol{y}) > 0 ) $, \\
+  $0$   & \!\!\!\!\! \textit{otherwise}. \\
+  \end{tabular}
+ \right.
+\end{equation}
+This constraint function returns a non-zero value for a word pair $(x^t_i, x^s_j)$ when they are content words.
+As a result, pairs of content words are encouraged to agree with each other, but the other pairs.
+The \textit{function to function} word matching function \textit{f2f} can be defined similarly by replacing $\mathcal{C}^s$ and $\mathcal{C}^t$ by $\mathcal{F}^s$ and $\mathcal{F}^t$, respectively. 
+Likewise, the \textit{function to content} word matching function \textit{f2c} is defined by considering the  matching of content words and function words in two languages.
+Similarly the symmetric constraint, $\boldsymbol{\lambda}$ controls the two directional posterior probabilities $\overrightarrow{q}_{\lambda}$ and $\overleftarrow{q}_{\lambda}$ for encouraging  word alignment between content words and function words.
+For example, when $(i,j)$ is a word pair between a content word and a content word,
+and $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ is larger than $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$, 
+the first and the third rules would fire such that decreased $\lambda_{i,j}$
+might increase $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$
+until it reaches $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$.
+Similarly, the second and fourth rules would fire when $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$ is larger than $\overrightarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$, which might lead to increased $\lambda_{i,j}$ to increase $\overleftarrow{q}_{\lambda_{i,j}}(y_{i,j}=1|\boldsymbol{x})$.
+If $y_{i,j}$ does not satisfy $\mathit{C2C}(x^t_i, x^s_j)$, our constraint $\phi^{\mathit{c2c}}_{i, j}$ operates similarly to $\phi^{\mathit{sym}}_{i, j}$ according to the last three rules. 
+
+
+\section{Experiment}
+\label{sec:experiment}
+
+\subsection{Experimental Setup}
+
+We used French-English Hansard Corpus and Japanese-English Kyoto free translation task (KFTT) for word alignment evaluation.
+In the machine translation evaluation, we used the German-English, Spanish-English and French-English WMT06 with europarl-v7 training data set and Japanese-English NTCIR10.
+The KFTT \cite{neubig11kftt} is derived  from Japanese Wikipedia articles related to Kyoto, which is translated into English by expert translators.
+NTCIR10 comes from patent data  employed in a machine translation shared task \cite{goto2013overview}.
+The statistic of these data is presented in Table \ref{tb:corpus1} and \ref{tb:corpus2}.
+Sentences of over 40 words on both source and target sides are removed for training alignment models.
+We use cicada\footnote{https://github.com/tarowatanabe/cicada} for training the HMM and IBM Model 4 with our proposed methods.
+Training is bootstrapped from IBM Model 1, followed by HMM and IBM Model 4.
+In both word alignment and translation evaluation, we used filtering method \cite{liang-taskar-klein:2006:HLT-NAACL06-Main} with threshold parameter $0.1$ for detailed analysis.
+This threshold value were selected from $0.1$ to $0.9$ with interval $0.1$ through preliminary tests.
+
+\begin{table}[t]
+\caption{The statistics of the data sets used in word alignment evaluation}
+\label{tb:corpus1}
+\input{01table01.txt}
+\end{table}
+\begin{table}[t]
+\caption{The statistics of the data sets used in translation evaluation}
+\label{tb:corpus2}
+\input{01table02.txt}
+\end{table}
+
+
+\subsection{Word Alignment Evaluation}
+
+We measure the impact of our proposed methods on the quality of word alignment measured by AER \cite{och2003systematic} and F-measure.
+We used only sure alignment for calculating precision, recall and F-measure \cite{fraser2007measuring}.
+For the detailed analysis, we also evaluated word alignments by focusing on particular instances, i.e., function-to-function, content-to-content and other combinations (function-to-content and content-to-function).
+These evaluations were conducted for a subset of words in both reference and system output selected by POS.
+For example, in function-to-function evaluation, we used alignments between source side function words and target side function words.
+Content-to-content and function-to-content were evaluated in the same way as the function-to-function evaluation.
+In the function-to-content evaluation, we used not only alignments between source side function word and target side content words, but also used alignments between source side content words and target side function words.
+For descriminating function words from content words, we used the Stanford POS Tagger \cite{N03-1033} for French and English sentences,
+and used KyTea \cite{P11-2093} for Japanese sentences. 
+In French and English sentences, we treated a word with a label in a set \{CC, CD, TO, DT, UH, EX, IN, LS, WDT, MD, WP, WP\$, WRB, PDT, PRP, PRP, RP, SYM, TO, UH\} as a function word,
+and a set \{VB, VBD, VBG, JJ, VBN, JJR, VBP, JJS, VBZ, NN, NNS, NNP, NNPS, RB, RBR, RBS\} as a content word.
+In Japanese sentences, we treated a word with a label in a set \{代名詞 (pronoun), 接続詞 (conjunction), 感動詞 (interjection), 助動詞 (auxiliary verb), 助詞 (particle), 接頭辞 (prefix), 接尾辞 (postfix), 記号 (symbol), 補助記号 (diacritical mark) \} as a function word,
+and a set \{名詞 (noun), 連体詞 (pre-noun adjectival), 副詞 (adverb), 形容詞 (adjective), 形状詞 (adjective noun), 動詞 (verb) \} as a content word.
+When generating the final bidirectional word alignment,
+we used a grow-diag-final heuristic \cite{och2003systematic} for the Japanese-English task and an intersection heuristic for the French-English task,
+based on preliminary studies.
+
+\begin{table}[b]
+  \caption{Results of word alignment evaluation}
+ \label{kfttalign}
+\input{01table03.txt}
+\end{table}
+
+\begin{table}[b]
+  \caption{Results of evaluation against function-to-function word alignments}
+ \label{alignment:f2f}
+\input{01table04.txt}
+\end{table}
+
+Table \ref{kfttalign} summarizes our results against all word alignments in the references.
+The GDF in the tables denotes a heuristitc extraction method grow-diag-final, and Filtered denotes the filtering method \cite{liang-taskar-klein:2006:HLT-NAACL06-Main}.
+The baseline method is symmetric constraint \cite{ganchev2010posterior} shown in Table \ref{kfttalign}.
+The numbers in bold and in italics indicate the best score and the second best score, respectively.
+In terms of F-measure, it is clear that the \textit{f2f}  is the most effective constraint for Hansard while we achieved the best score for the \textit{f2c} in KFTT, and both methods exceed the original posterior regularized model of Ganchev et al. (2010).
+In terms of AER, our proposed \textit{f2c} constraint has little gain against baseline symmetric constraint.
+On the other hand, our proposed constraints have no gain against baseline in Hansard corpus.
+Table \ref{alignment:f2f}, \ref{alignment:c2c} and \ref{alignment:f2c} summarizes our results by differentiating word alignment types, i.e., function-to-function, content-to-content and others, respectively.
+From these results, we can observe that our proposed constraint functions are effective for function-to-function and function-to-content word alignments in Hansard, and function-to-function and content-to-content word alignments in KFTT.
+These results match with our expectation that the baseline symmetric constraint is difficult to align the function word pairs, compared with our proposed constraints, as discussed in the introduction section.
+Figure~\ref{fig:pr_kftt_hmm}--\ref{fig:pr_hansard_m4} are recall-precision graph for each combination of corpus and models.
+We plotted the recall and precision by changing the threshold value of filtering method \cite{liang-taskar-klein:2006:HLT-NAACL06-Main} on interval $0.01$.
+From Figure \ref{fig:pr_kftt_hmm}, the precision value of our proposed \textit{f2f}  constraint under HMM is better than that of the baseline symmetric constraint at low recall area.
+From Figure \ref{fig:pr_kftt_m4}, in contrast to the HMM, the precision values of \textit{f2f}  and \textit{f2c} constraints under IBM Model 4 are better than the baseline symmetric constraint at high recall area.
+However, from Figure \ref{fig:pr_hansard_hmm} and \ref{fig:pr_hansard_m4}, we observed unstable performance for Hansard task both on HMM and IBM Model 4 and it is hard to tell any significant difference with each other.
+These results may indicate that our proposed constraint is suitable for grammatically different language pairs, such as Japanese and English, under word alignment task.
+We will provide more details in Section \ref{sec:analysis}.
+
+\begin{table}[t]
+  \caption{Results of evaluation against content-to-content word alignments}
+ \label{alignment:c2c}
+\input{01table05.txt}
+\end{table}
+\begin{table}[t]
+  \caption{Results of evaluation against function-to-content and content-to-function word alignments}
+ \label{alignment:f2c}
+\input{01table06.txt}
+\end{table}
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{23-4ia1f5.eps}
+\end{center}
+    \caption{Recall-Precision graph of HMM in KFTT Japanese-English}
+    \label{fig:pr_kftt_hmm}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{23-4ia1f6.eps}
+\end{center}
+    \caption{Recall-Precision graph of IBM Model 4 in KFTT Japanese-English}
+    \label{fig:pr_kftt_m4}
+\end{figure}
+
+
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{23-4ia1f7.eps}
+\end{center}
+    \caption{Recall-Precision graph of HMM in Hansard French-English}
+    \label{fig:pr_hansard_hmm}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{23-4ia1f8.eps}
+\end{center}
+    \caption{Recall-Precision graph of IBM Model 4 in Hansard French-English}
+    \label{fig:pr_hansard_m4}
+\end{figure}
+
+
+\subsection{Translation Evaluation}
+
+Next, we performed  a translation evaluation, measured by BLEU \cite{papineni2002bleu}.
+We used the grow-diag-final and filtering method \cite{liang-taskar-klein:2006:HLT-NAACL06-Main} for creating phrase tables.
+The threshold for the filtering factor was set to $0.1$.
+From the English side of the training data, we trained a 5-gram language models with SRILM \cite{stolcke2002srilm}.
+``Moses'' toolkit was used as a phrase based decoder \cite{koehn2007moses} and the model parameters were tuned by k-best MIRA \cite{cherry2012batch}.
+We set the distortion-limit as $-1$ (infinite).
+We used other parameters with Moses default values.
+In order to avoid tuning instability, we evaluated the average of five runs \cite{hopkins2011tuning}.
+
+\begin{table}[b]
+\caption{Results of translation evaluation}
+\label{tb:bleu}
+\input{01table07.txt}
+\end{table}
+
+The results are summarized in Table \ref{tb:bleu}.
+The numbers in bold style are not significantly different from the best results (p-value $<$ 0.05).
+We used statistical bootstrapping method \cite{koehn:2004:EMNLP} for significance test.
+Our proposed constraints achieved significant improvement against baseline symmetric constraint in NTCIR10 task and europarl-v7 Spanish-English, but observed no gain in the other language pairs of europarl-v7.
+These results clearly show that our proposed constraints are effective on grammatically different language pairs as observed in the word alignment evaluation.
+The BLEU score of grow-diag-final is better than that of filtered method in NTCIR10, whereas the other language pairs have no difference.
+The BLEU scores of IBM Model4 and HMM are not different from each other except for NTCIR10.
+From these results, we can conclude that the IBM Model 4 combined with our proposed constraints under grow-diag-final is the most robust method to perform word alignment for grammatically different language pairs indicated by the end-to-end evaluation.
+
+
+\section{Analysis}
+\label{sec:analysis}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-4ia1f9.eps}
+\end{center}
+  \caption{An example of a sentence pair in KFTT aligned by IBM Model4 with and without \textit{f2f} constraints}
+  \label{fig:alignment1}
+\end{figure}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-4ia1f10.eps}
+\end{center}
+  \hangcaption{Another example of a sentence pair in KFTT aligned by IBM Model4 with and without \textit{f2f} constraints}
+  \label{fig:alignment2}
+\vspace{-1\Cvs}
+\end{figure}
+
+We found that our proposed methods were superior to the strong baseline in terms of recall-precision and AER for KFTT in the word alignment evaluations.
+However, in Hansard Fr-En, proposed constraints have little advantage against the baseline.
+Our \textit{f2f}, \textit{c2c}  and \textit{f2c} constraints can perform accurate word alignment either by rewarding or penalising certain pairings of function and content words.
+In a grammatically different language pairs, such as Japanese and English, function words and content words are sometimes misaligned due to the one-to-many limitation of generative models, As a result, the proposed constraints may work better on KFTT Japanese-English corpus.
+Figure \ref{fig:alignment1} and \ref{fig:alignment2} show examples of word alignment produced by IBM Model 4, in which circles and squares indicate word alignment with and without \textit{f2f} constraints, respectively.
+The circles and squares painted in black represent the difference between with and without \textit{f2f}  constraints.
+In Figure \ref{fig:alignment1}, Japanese words ``\textit{muromachi}'' and ``\textit{dai}'' should be correctly aligned to ``NULL'' and an English word ``the''.
+The baseline symmetric constraint misaligned ``\textit{muromachi}'' and ``the''.
+On the other hand, the \textit{f2f}  constraint correctly aligned ``\textit{dai}'' and ``the'' by rewarding the pair of highly frequent words.
+In Figure \ref{fig:alignment2}, Japanese words ``\textit{ninmei}'' and ``\textit{rare}'' should be correctly aligned to English words ``succeeded'' and ``were''.
+Although the Japanese word ``\textit{rare}'' and the English word ``were'' were correctly aligned under the \textit{f2f}  constraint, misalignment was observed for the Japanese word ``\textit{ninmei}'' and the English word ``post''.
+Since both ``\textit{rare}'' and ``were'' are function words and used for a passive voice, our proposed constraint can easily align the two words.
+However, at the alignment of ``\textit{ninmei sare}'' and ``succeeded'', ``\textit{ninmei sare}'' is a passive voice and ``succeeded'' is an active voice.
+Because of this, our proposed constraint cannot easily align these words.
+In addition to this difficulty, as the Japanese phrase ``\textit{kounin no kanrei niwa yoshimasa ga ninmei sare}'' are translated into English phrase ``yoshimasa succeeded to the post of kanrei'' by expert translators, our \textit{f2f}  constraint could not correct the missed alignment.
+In general, it is difficult to perform correct word alignment for those phraseological expressions especially when models are strongly restricted to one-to-many correspondence.
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+In this paper, we proposed new constraint functions under the posterior regularization framework. 
+Our constraint functions introduce fine-grained  agreement constraint considering the frequency of words,
+assuming that the high frequency words correspond to function words whereas the less frequent words may be treated as content words, based on the previous work  \cite{setiawan2007ordering}.
+Experiments on word alignment tasks showed better alignment qualities measured by F-measure and AER on KFTT.
+We also observed large gain in BLEU, 0.2 on average, when compared with the previous posterior regularization method under NTCIR10 task.
+From the analysis of our constraint,  we can conclued that considering phrase structure is necessary for better alignment and translation qualitiy.
+As our future work, we will investigate the phrase structure constraint, in reference to the previous many-to-many word alignment research, such as ITG based \cite{P11-1064} or syntactic tree based \cite{C12-1120} models.
+Our proposed constraints are based on feature functions, and these functions are used in a combinatorial manner on various NLP tasks.
+However, we used a single feature function for generating word alignments.
+We will also investigate the combinatory use of our proposed constraints for better alignment and translation qualitiy.
+
+
+\acknowledgment
+We would like to thank the reviewers for their detailed comments and suggestions, which are helpful to improve our manuscripts.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Bisazza \BBA\ Federico}{Bisazza \BBA\
+  Federico}{2012}]{bisazza2012cutting}
+Bisazza, A.\BBACOMMA\ \BBA\ Federico, M. \BBOP 2012\BBCP.
+\newblock \BBOQ Cutting the Long Tail: Hybrid Language Models for Translation
+  Style Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of the 13th Conference of the European Chapter
+  of the Association for Computational Linguistics}, \mbox{\BPGS\ 439--448},
+  Avignon, France. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Brown, Pietra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{brown1993mathematics}
+Brown, P.~F., Pietra, V. J.~D., Pietra, S. A.~D., \BBA\ Mercer, R.~L. \BBOP
+  1993\BBCP.
+\newblock \BBOQ The Mathematics of Statistical Machine Translation: Parameter
+  Estimation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  263--311}.
+
+\bibitem[\protect\BCAY{Chang, Rush, DeNero, \BBA\ Collins}{Chang
+  et~al.}{2014}]{chang2014constrained}
+Chang, Y.-W., Rush, A.~M., DeNero, J., \BBA\ Collins, M. \BBOP 2014\BBCP.
+\newblock \BBOQ A Constrained Viterbi Relaxation for Bidirectional Word
+  Alignment.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  1481--1490}, Baltimore, Maryland. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Cherry \BBA\ Foster}{Cherry \BBA\
+  Foster}{2012}]{cherry2012batch}
+Cherry, C.\BBACOMMA\ \BBA\ Foster, G. \BBOP 2012\BBCP.
+\newblock \BBOQ Batch Tuning Strategies for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies}, \mbox{\BPGS\ 427--436}, Montr{\'{e}}al, Canada. Association
+  for Computational Linguistics.
+
+\bibitem[\protect\BCAY{DeNero, Bouchard-C{\^{o}}t{\'{e}}, \BBA\ Klein}{DeNero
+  et~al.}{2008}]{D08-1033}
+DeNero, J., Bouchard-C{\^{o}}t{\'{e}}, A., \BBA\ Klein, D. \BBOP 2008\BBCP.
+\newblock \BBOQ Sampling Alignment Structure under a Bayesian Translation
+  Model.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 314--323}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{DeNero \BBA\ Macherey}{DeNero \BBA\
+  Macherey}{2011}]{denero2011model}
+DeNero, J.\BBACOMMA\ \BBA\ Macherey, K. \BBOP 2011\BBCP.
+\newblock \BBOQ Model-Based Aligner Combination Using Dual Decomposition.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  420--429}, Portland, Oregon, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Fraser \BBA\ Marcu}{Fraser \BBA\
+  Marcu}{2007}]{fraser2007measuring}
+Fraser, A.\BBACOMMA\ \BBA\ Marcu, D. \BBOP 2007\BBCP.
+\newblock \BBOQ Measuring Word Alignment Quality for Statistical Machine
+  Translation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 33}  (3), \mbox{\BPGS\
+  293--303}.
+
+\bibitem[\protect\BCAY{Ganchev, Graca, Gillenwater, \BBA\ Taskar}{Ganchev
+  et~al.}{2010}]{ganchev2010posterior}
+Ganchev, K., Graca, J., Gillenwater, J., \BBA\ Taskar, B. \BBOP 2010\BBCP.
+\newblock \BBOQ Posterior Regularization for Structured Latent Variable
+  Models.\BBCQ\
+\newblock {\Bem The Journal of Machine Learning Research}, {\Bbf 11},
+  \mbox{\BPGS\ 2001--2049}.
+
+\bibitem[\protect\BCAY{Goto, Chow, Lu, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2013}]{goto2013overview}
+Goto, I., Chow, K.~P., Lu, B., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2013\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at the NTCIR-10
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th NTCIR Workshop Meeting on Evaluation
+  of Information Access Technologies: Information Retrieval, Question Answering
+  and Cross-Lingual Information Access, NTCIR-10}, \mbox{\BPGS\ 260--286}.
+
+\bibitem[\protect\BCAY{Hopkins \BBA\ May}{Hopkins \BBA\
+  May}{2011}]{hopkins2011tuning}
+Hopkins, M.\BBACOMMA\ \BBA\ May, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Tuning as Ranking.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1352--1362}, Edinburgh, Scotland,
+  UK. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Kamigaito, Watanabe, Takamura, \BBA\ Okumura}{Kamigaito
+  et~al.}{2014}]{kamigaitounsupervised}
+Kamigaito, H., Watanabe, T., Takamura, H., \BBA\ Okumura, M. \BBOP 2014\BBCP.
+\newblock \BBOQ Unsupervised Word Alignment Using Frequency Constraint in
+  Posterior Regularized EM.\BBCQ\
+\newblock In {\Bem Proceedings of the 2014 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 153--158}, Doha, Qatar.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2004}]{koehn:2004:EMNLP}
+Koehn, P. \BBOP 2004\BBCP.
+\newblock \BBOQ Statistical Significance Tests for Machine Translation
+  Evaluation.\BBCQ\
+\newblock In Lin, D.\BBACOMMA\ \BBA\ Wu, D.\BEDS, {\Bem Proceedings of the 2004
+  Conference on Empirical Methods in Natural Language Processing}, \mbox{\BPGS\
+  388--395}, Barcelona, Spain. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{koehn2007moses}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association
+  for Computational Linguistics Companion Volume Proceedings of the Demo and
+  Poster Sessions}, \mbox{\BPGS\ 177--180}, Prague, Czech Republic. Association
+  for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Koehn, Och, \BBA\ Marcu}{Koehn
+  et~al.}{2003}]{koehn2003statistical}
+Koehn, P., Och, F.~J., \BBA\ Marcu, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Phrase-based Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2003 Conference of the North American
+  Chapter of the Association for Computational Linguistics on Human Language
+  Technology-Volume 1}, \mbox{\BPGS\ 48--54}. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Liang, Taskar, \BBA\ Klein}{Liang
+  et~al.}{2006}]{liang-taskar-klein:2006:HLT-NAACL06-Main}
+Liang, P., Taskar, B., \BBA\ Klein, D. \BBOP 2006\BBCP.
+\newblock \BBOQ Alignment by Agreement.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Main Conference}, \mbox{\BPGS\ 104--111}, New York City, USA.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Matusov, Zens, \BBA\ Ney}{Matusov
+  et~al.}{2004}]{matusov-zens-ney:2004:COLING}
+Matusov, E., Zens, R., \BBA\ Ney, H. \BBOP 2004\BBCP.
+\newblock \BBOQ Symmetric Word Alignments for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2004, the 20th International
+  Conference on Computational Linguistics}, \mbox{\BPGS\ 219--225}, Geneva,
+  Switzerland. COLING.
+
+\bibitem[\protect\BCAY{Nakazawa \BBA\ Kurohashi}{Nakazawa \BBA\
+  Kurohashi}{2012}]{C12-1120}
+Nakazawa, T.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2012\BBCP.
+\newblock \BBOQ Alignment by Bilingual Generation and Monolingual
+  Derivation.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2012, the 24th International
+  Conference on Computational Linguistics}, \mbox{\BPGS\ 1963--1978}. The
+  COLING 2012 Organizing Committee.
+
+\bibitem[\protect\BCAY{Neubig}{Neubig}{2011}]{neubig11kftt}
+Neubig, G. \BBOP 2011\BBCP.
+\newblock \BBOQ The Kyoto Free Translation Task.\BBCQ\
+\newblock http://www.phontron.com/kftt.
+
+\bibitem[\protect\BCAY{Neubig, Nakata, \BBA\ Mori}{Neubig
+  et~al.}{2011a}]{P11-2093}
+Neubig, G., Nakata, Y., \BBA\ Mori, S. \BBOP 2011a\BBCP.
+\newblock \BBOQ Pointwise Prediction for Robust, Adaptable Japanese
+  Morphological Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  529--533}. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Neubig, Watanabe, Sumita, Mori, \BBA\ Kawahara}{Neubig
+  et~al.}{2011b}]{P11-1064}
+Neubig, G., Watanabe, T., Sumita, E., Mori, S., \BBA\ Kawahara, T. \BBOP
+  2011b\BBCP.
+\newblock \BBOQ An Unsupervised Model for Joint Phrase Alignment and
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  632--641}. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{och2003systematic}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Systematic Comparison of Various Statistical Alignment
+  Models.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{papineni2002bleu}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ Bleu: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of 40th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 311--318}, Philadelphia,
+  Pennsylvania, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Setiawan, Kan, \BBA\ Li}{Setiawan
+  et~al.}{2007}]{setiawan2007ordering}
+Setiawan, H., Kan, M.-Y., \BBA\ Li, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Ordering Phrases with Function Words.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 712--719}, Prague, Czech Republic.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Stolcke}{Stolcke}{2002}]{stolcke2002srilm}
+Stolcke, A. \BBOP 2002\BBCP.
+\newblock \BBOQ SRILM---An Extensible Language Modeling Toolkit.\BBCQ\
+\newblock In {\Bem Proceedings of the International Conference on Spoken
+  Language Processing}, \mbox{\BPGS\ 257--286}.
+
+\bibitem[\protect\BCAY{Toutanova, Klein, D.~Manning, \BBA\ Singer}{Toutanova
+  et~al.}{2003}]{N03-1033}
+Toutanova, K., Klein, D., D.~Manning, C., \BBA\ Singer, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ Feature-Rich Part-of-Speech Tagging with a Cyclic Dependency
+  Network.\BBCQ\
+\newblock In {\Bem Proceedings of the 2003 Human Language Technology Conference
+  of the North American Chapter of the Association for Computational
+  Linguistics}, \mbox{\BPGS\ 173--180}.
+
+\bibitem[\protect\BCAY{Vogel, Ney, \BBA\ Tillmann}{Vogel
+  et~al.}{1996}]{vogel1996hmm}
+Vogel, S., Ney, H., \BBA\ Tillmann, C. \BBOP 1996\BBCP.
+\newblock \BBOQ HMM-based Word Alignment in Statistical Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 16th conference on Computational
+  Linguistics-Volume 2}, \mbox{\BPGS\ 836--841}. Association for Computational
+  Linguistics.
+
+\end{thebibliography}
+\nocite{*}
+
+
+\begin{biography}
+
+\bioauthor[:]{Hidetaka Kamigaito}{
+Hidetaka Kamigaito recieved B.E. and M.E. from Tokyo Institute of Technology in 2012 and 2014.
+He is currently a Ph.D. student of Department of Computational Intelligence and Systems Science,
+Interdisciplinary Graduate School of Science and Engineering, Tokyo Institute of Technology.
+His current research interests are statistical machine translation and constituent parsing.
+}
+
+\bioauthor[:]{Taro Watanabe}{
+Taro Watanabe received the B.E. and M.E. degrees in informaiton science from Kyoto Univ., Kyoto, Japan in 1994 and 1997, respectively, and obtained the Master of Science degree in language and information technologies from the School of Computer Science, Carnegie Mellon University in 2000.
+In 2004, he received the Ph.D. in informatics from Kyoto Univ., Kyoto, Japan.
+After working as a researcher at ATR, NTT and NICT, Dr. Watanabe is a software engineer at Google, Inc.
+His research interests include natural language processing, machine learning and statistical machine translation.
+}
+
+\bioauthor[:]{Hiroya Takamura}{
+Hiroya Takamura received B.E. and M.E. from the University of Tokyo in 1997 and 2000
+respectively (in 1999 he was a research student at Technische Universitaet von Wien).
+He received Dr. Eng. from Nara Institute of Science and Technology in 2003.
+He was an assistant professor at Tokyo Institute of Technology from 2003 to 2010.
+He is currently an associate professor at Tokyo Institute of Technology.
+His current research interest is computational linguistics.
+He is a member of the Information Processing Society of Japan and the Association for Computational Linguistics.
+}
+
+\bioauthor[:]{Manabu Okumura}{
+Manabu Okumura was born in 1962. He received B.E., M.E. and Dr. Eng.
+from Tokyo Institute of Technology in 1984, 1986 \mbox{and 1989}
+respectively. He was an assistant at the Department of Computer
+Science, Tokyo Institute of Technology from 1989 to 1992, and an
+associate professor at the School of Information Science, Japan
+Advanced Institute of Science and Technology from 1992 to 2000. He is
+currently a professor at Institute of Innovative Research, Tokyo
+Institute of Technology. His current research interests include
+natural language processing, especially text summarization, computer
+assisted language learning, sentiment analysis, and text data mining.
+}
+
+\bioauthor[:]{Eiichiro Sumita}{
+Dr. Eiichiro Sumita received his Ph.D. in Engineering from Kyoto University in 1999, and a Master's and Bachelor's in Computer Science from the University of Electro-Communications in 1982 and 1980, respectively. He is now in the National Institute of Information and Communication Technology (NICT) , its fellow and the associate director-general of Advanced Speech Translation Research and Development Promotion Center (ASTREC). His research interests cover Machine Translation and e-Learning. He is a co-recipient of the Maejima Hisoka Prize in 2013, the Commendation for Science and Technology by the Minister of Education, Culture, Sports, Science and Technology, Prizes for Science and Technology in 2010, and the AAMT Nagao Award in 2007.
+}
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

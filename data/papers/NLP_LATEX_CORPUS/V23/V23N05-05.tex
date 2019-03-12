@@ -1,0 +1,1002 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+
+\usepackage{bm}
+\usepackage{array} 
+\usepackage{multirow} 
+\makeatletter
+  \newcommand\footnoteref[1]{\protected@xdef\@thefnmark{\ref{#1}}\@footnotemark}
+\makeatother
+\newcommand{\asis}[1]{}
+\newcommand{\argmax}{}
+
+
+
+\Volume{23}
+\Number{5}
+\Month{December}
+\Year{2016}
+
+\received{2016}{5}{18}
+\revised{2016}{8}{31}
+\accepted{2016}{10}{12}
+
+\setcounter{page}{499}
+
+\jtitle{中間言語情報を記憶するピボット翻訳手法}
+\jauthor{三浦　明波\affiref{Author_1} \and Graham Neubig\affiref{Author_1} \affiref{Author_2} \and Sakriani Sakti\affiref{Author_1} \and 戸田　智基\affiref{Author_3} \and 中村　　哲\affiref{Author_1}}
+\jabstract{
+統計的機械翻訳において，特定の言語対で十分な文量の対訳コーパスが得られない場合，中間言語を用いたピボット翻訳が有効な手法の一つである．
+複数のピボット翻訳手法が考案されている中でも，特に中間言語を介して2つの翻訳モデルを合成するテーブル合成手法で高い翻訳精度を達成可能と報告されている．
+ところが，従来のテーブル合成手法では，フレーズ対応推定時に用いた中間言語の情報は消失し，翻訳時には利用できない問題が発生する．
+本論文では，合成時に用いた中間言語の情報も記憶し，中間言語モデルを追加の情報源として翻訳に利用する新たなテーブル合成手法を提案する．
+また，国連文書による多言語コーパスを用いた実験により，本手法で評価を行ったすべての言語の組み合わせで従来手法よりも有意に高い翻訳精度が得られた．
+}
+\jkeywords{統計的機械翻訳，多言語翻訳，ピボット翻訳，同期文脈自由文法，言語モデル，対訳コーパス}
+
+\etitle{Improving Pivot Translation by Remembering the Pivot}
+\eauthor{Akiva Miura\affiref{Author_1} \and Graham Neubig\affiref{Author_1} \affiref{Author_2} \and Sakriani Sakti\affiref{Author_1} \and Tomoki Toda\affiref{Author_3} \and \\
+	Satoshi Nakamura\affiref{Author_1}}
+\eabstract{
+In statistical machine translation, the pivot translation approach allows for translation of language pairs with little or no parallel data by introducing a third language for which data exists.
+In particular, the triangulation method, which translates by combining source-pivot and pivot-target translation models into a source-target model is known for its high translation accuracy.
+However, in the conventional triangulation method, information of pivot phrases is forgotten, and not used in the translation process.
+In this research, we propose a novel approach to remember the pivot phrases in the triangulation stage, and use a pivot language model as an additional information source at translation phase.
+Experimental results on the united nations parallel corpus showed significant improvements in all tested combinations of languages.
+}
+\ekeywords{Statistical Machine Translation, Multilinguality, Pivot Translation, Synchronous Context-Free Grammars, Language Models, Parallel Corpora}
+
+\headauthor{三浦，Neubig，Sakti, 戸田，中村}
+\headtitle{中間言語情報を記憶するピボット翻訳手法}
+
+\affilabel{Author_1}{奈良先端科学技術大学院大学情報科学研究科}{Graduate School of Information Science, Nara Institute of Science and Technology}
+\affilabel{Author_2}{カーネギーメロン大学言語技術研究所}{Language Technologies Institute, Carnegie Mellon University}
+\affilabel{Author_3}{名古屋大学情報基盤センター}{Information Technology Center, Nagoya University}
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{sec:intro}
+
+
+\subsection{研究背景}
+\label{sec:background}
+
+言語は，人間にとって主要なコミュニケーションの道具であると同時に，話者集団にとっては社会的背景に根付いたアイデンティティーでもある．
+母国語の異なる相手と意思疎通を取るためには，翻訳は必要不可欠な技術であるが，専門の知識が必要となるため，ソフトウェア的に代行できる機械翻訳の技術に期待が高まっている．
+英語と任意の言語間での翻訳で機械翻訳の実用化を目指す例が多いが，英語を含まない言語対においては翻訳精度がまだ実用的なレベルに達していないことが多く，英語を熟知していない利用者にとって様々な言語間で機械翻訳を支障なく利用できる状況とは言えない．
+
+人手で翻訳規則を記述するルールベース機械翻訳(Rule-Based Machine Translation; RBMT \cite{nirenburg89})では，対象の2言語に精通した専門家の知識が必要であり，多くの言語対において，多彩な表現を広くカバーすることも困難である．
+そのため，近年主流の機械翻訳方式であり，機械学習技術を用いて対訳コーパスから自動的に翻訳規則を獲得する統計的機械翻訳 (Statistical Machine Translation; SMT \cite{brown93})について本論文では議論を行う．
+対訳コーパスとは，2言語間で意味の対応する文や句を集めたデータのことを指すが，SMTでは学習に使用する対訳コーパスが大規模になるほど，翻訳結果の精度が向上すると報告されている\cite{dyer08}．
+しかし，英語を含まない言語対などを考慮すれば，多くの言語対において，大規模な対訳コーパスを直ちに取得することは困難と言える．
+このような，容易に対訳コーパスを取得できないような言語対においても，既存の言語資源を有効に用いて高精度な機械翻訳を実現できれば，機械翻訳の実用の幅が大きく広がることになる．
+
+特定の言語対で十分な文量の対訳コーパスが得られない場合，中間言語(\textit{Pvt})を用いたピボット翻訳が有効な手法の一つである\cite{gispert06,cohn07,zhu14}．
+中間言語を用いる方法も様々であるが，一方の目的言語と他方の原言語が一致するような2つの機械翻訳システムを利用できる場合，それらをパイプライン処理する逐次的ピボット翻訳(Cascade Translation \cite{gispert06})手法が容易に実現可能である．
+より高度なピボット翻訳の手法としては，原言語・中間言語(\textit{Src-Pvt})と中間言語・目的言語(\textit{Pvt-Trg})の2組の言語対のためにそれぞれ学習されたSMTシステムのモデルを合成し，新しく得られた原言語・目的言語(\textit{Src-Trg})のSMTシステムを用いて翻訳を行うテーブル合成手法(Triangulation \cite{cohn07})も提案されており，この手法で特に高い翻訳精度が得られたと報告されている\cite{utiyama07}．
+
+これらの手法は特に，今日広く用いられているSMTの枠組の一つであるフレーズベース機械翻訳(Phrase-Based Machine Translation; PBMT \cite{koehn03})について数多く提案され，検証されてきた．
+しかし，PBMTにおいて有効性が検証されたピボット翻訳手法が，異なるSMTの枠組でも同様に有効であるかどうかは明らかにされていない．
+例えば英語と日本語，英語と中国語といった語順の大きく異なる言語間の翻訳では，同期文脈自由文法(Synchronous Context-Free Grammar; SCFG \cite{chiang07})のような木構造ベースのSMTによって高度な単語並び替えに対応可能であり，PBMTよりも高い翻訳精度を達成できると報告されている．
+そのため，PBMTにおいて有効性の知られているピボット翻訳手法が，SCFGによる翻訳でも有効であるとすれば，並び替えの問題に高度に対応しつつ直接\textit{Src-Trg}の対訳コーパスを得られない状況にも対処可能となる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-5ia5f1.eps}
+\end{center}
+\caption{2組の単語対応から新しい単語対応を推定}
+\label{fig:align-estimation}
+\end{figure}
+
+また，テーブル合成手法では，\textit{Src-Pvt}フレーズ対応と\textit{Pvt-Trg}フレーズ対応から，正しい\textit{Src-Trg}フレーズ対応と確率スコアを推定する必要がある．
+図\ref{fig:align-estimation}に示す例では，個別に学習された(a)の日英翻訳および(b)の英伊翻訳における単語対応から，日伊翻訳における単語対応を推定したい場合，(c)のように単語対応を推定する候補は非常に多く，(d)のように正しい推定結果を得ることは困難である．
+その上，図\ref{fig:align-estimation}(c)のように推定された\textit{Src-Trg}の単語対応からは，原言語と目的言語の橋渡しをしていた中間言語の単語情報が分からないため，翻訳を行う上で重要な手がかりとなり得る情報を失ってしまうことになる．
+このように語義曖昧性や言語間の用語法の差異により，ピボット翻訳は通常の翻訳よりも本質的に多くの曖昧性の問題を抱えており，さらなる翻訳精度の向上には課題がある．
+
+
+\subsection{研究目的}
+\label{sec:purpose}
+
+本研究では，多言語機械翻訳，とりわけ対訳コーパスの取得が困難である少資源言語対における機械翻訳の高精度化を目指し，従来のピボット翻訳手法を調査，問題点を改善して翻訳精度を向上させることを目的とする．
+ピボット翻訳の精度向上に向けて，本論文では2段階の議論を行う．
+
+第1段階目では，従来のPBMTで有効性の知られているピボット翻訳手法が異なる枠組のSMTでも有効であるかどうかを調査する．
+\ref{sec:background}節で述べたように，PBMTによるピボット翻訳手法においては，テーブル合成手法で高い翻訳精度が確認されているため，木構造ベースのSMTであるSCFGによる翻訳で同等の処理を行うための応用手法を提案する．
+SCFGとテーブル合成手法によるピボット翻訳が，逐次的ピボット翻訳や，PBMTにおけるピボット翻訳手法よりも高い精度を得られるどうかを比較評価することで，次の段階への予備実験とする\footnote{\label{fn:papers}
+本稿の内容の一部は，情報処理学会自然言語処理研究会\cite{miura14nl12,miura15nl07}およびACL 2015: The 53rd Annual Meeting of the Association for Computational Linguistics \cite{miura15acl}で報告されている．本稿では，各手法・実験に関する詳細な説明，中国語やアラビア語など語族の異なる言語間での比較評価実験や品詞毎の翻訳精度に関する分析を追加している．
+}．
+
+第2段階目では，テーブル合成手法において発生する曖昧性の問題を解消し，翻訳精度を向上させるための新たな手法を提案する．
+従来のテーブル合成手法では，図\ref{fig:align-estimation}(c)に示したように，フレーズ対応の推定後には中間言語フレーズの情報が失われてしまうことを\ref{sec:background}節で述べた．
+この問題を克服するため，本論文では原言語と目的言語を結び付けていた中間言語フレーズの情報も翻訳モデル中に保存し，原言語から目的言語と中間言語へ同時に翻訳を行うための確率スコアを推定することによって翻訳を行う新しいテーブル合成手法を提案する．
+通常のSMTシステムでは，入力された原言語文から，目的言語における訳出候補を選出する際，文の自然性を評価し，適切な語彙選択を促すために目的言語の言語モデル（目的言語モデル）を利用する．
+一方，本手法で提案する翻訳モデルとSMTシステムでは，原言語文に対して目的言語文と中間言語文の翻訳を同時に行うため，目的言語モデルのみではなく，中間言語の言語モデル（中間言語モデル）も同時に考慮して訳出候補の探索を行う．
+本手法の利点は，英語のように中間言語として選ばれる言語は豊富な単言語資源を得られる傾向が強いため，このような追加の言語情報を翻訳システムに組み込み，精度向上に役立てられることにある\footnoteref{fn:papers}．
+
+
+\section{統計的機械翻訳}
+\label{sec:smt}
+
+本節では，SMTの基本的な動作原理となる対数線形モデル（\ref{sec:log-linear}節），SMTの中でも特に代表的な翻訳方式であるフレーズベース機械翻訳（PBMT, \ref{sec:pbmt}節）と木構造に基づく翻訳方式である同期文脈自由文法（SCFG, \ref{sec:scfg}節），SCFGを3言語以上に対応できるよう一般化して拡張された複数同期文脈自由文法（Multi-Synchronous Context-Free Grammar; MSCFG, \ref{sec:mscfg}節）について説明する．
+
+
+\subsection{対数線形モデル}
+\label{sec:log-linear}
+
+SMTの基本的なアイディアは，雑音のある通信路モデル\cite{shannon48}に基いている．
+ある原言語の文 $\bm{f}$ に対して，訳出候補となり得るすべての目的言語文の集合を $\mathcal{E}(\bm{f})$ とする．
+$\bm{f}$ が目的言語文 $\bm{e} \in \mathcal{E}(\bm{f})$ へと翻訳される確率 $Pr(\bm{e}|\bm{f})$ をすべての $\bm{e}$ について計算可能とする．
+SMTでは， $Pr(\bm{e}|\bm{f})$ を最大化する $\hat{\bm{e}} \in \mathcal{E}(\bm{f})$ を求める．
+\begin{align}
+\hat{\bm{e}} & = \argmax_{\bm{e} \in \mathcal{E}(\bm{f})} Pr(\bm{e}|\bm{f}) \label{eqn:decode} \\
+& = \argmax_{\bm{e} \in \mathcal{E}(\bm{f})} \frac{Pr(\bm{f}|\bm{e})Pr(\bm{e})}{Pr(\bm{f})} \\
+& = \argmax_{\bm{e} \in \mathcal{E}(\bm{f})} Pr(\bm{f}|\bm{e})P(\bm{e}) \label{eqn:bayes}
+\end{align}
+しかし，このままでは様々な素性を取り入れたモデルの構築が困難であるため，近年では以下のような対数線形モデルに基づく定式化を行うことが一般的である\cite{och03mert}．
+\begin{align}
+\hat{\bm{e}} & = \argmax_{\bm{e} \in \mathcal{E}(f)} Pr(\bm{e}|\bm{f}) \\
+& \approx \argmax_{\bm{e} \in \mathcal{E}(\bm{f})} \frac{\exp\left(\bm{w}^{\mathrm{T}} \bm{h}(\bm{f},\bm{e}\right)}{\sum_{e'}\limits \exp\left(\bm{w}^{\mathrm{T}}\bm{h}(\bm{f},\bm{e'})\right)} \\
+& = \argmax_{\bm{e} \in \mathcal{E}(\bm{f})} \bm{w}^{\mathrm{T}} \bm{h}(\bm{f},\bm{e}) \label{eqn:log-linear}
+\end{align}
+ここで，$\bm{h}$ は素性ベクトルであり，翻訳の枠組毎に定められた次元数を持ち，推定された対数確率スコア，導出に伴う単語並び替え，各種ペナルティなどを与える．
+素性ベクトル中のとりわけ重要な要素として，言語モデルと翻訳モデルが挙げられる．
+言語モデル $Pr(\bm{e})$ は，与えられた文の単語の並びが目的言語においてどの程度自然で流暢であるかを評価するために用いられる．
+翻訳モデル $Pr(\bm{f}|\bm{e})$ は，翻訳文の尤もらしさを規定するための統計モデルであり，対訳コーパスから学習を行う．
+翻訳モデルは SMT の枠組によって学習・推定方法が異なっており，次節以降で詳細を述べる．
+$\bm{w}$ は $\bm{h}$ と同じ次元を持っており，素性ベクトルの各要素に対する重み付けを行う．
+$\bm{w}$ の各要素を最適な値に調整するためには，対訳コーパスを学習用データや評価用データとは別に切り分けた，開発用データを利用し，原言語文の訳出と参照訳（目的言語側の正解訳）との類似度を評価するための自動評価尺度BLEU\cite{papineni02}などが最大となるようパラメータを求める\cite{och03mert}．
+\ref{sec:pbmt}節以降で説明する各種翻訳枠組も，この対数線形モデルに基いているが，用いる素性はそれぞれで異なる．
+
+
+\subsection{フレーズベース機械翻訳}
+\label{sec:pbmt}
+
+Koehn らによる フレーズベース機械翻訳(PBMT \cite{koehn03})はSMTで最も代表的な翻訳枠組である．
+PBMTの翻訳モデルを学習する際には，先ず対訳コーパスから単語アラインメント\cite{brown93}を学習し，アラインメント結果をもとに複数の単語からなるフレーズを抽出し，各フレーズ対応にスコア付けを行う．
+
+例えば，学習用対訳データから図\ref{fig:word-align}のような単語対応が得られたとする\footnote{日本語や中国語，タイ語のように，通常の文では単語をスペースで区切らないような言語では，先ず単語分割を行うツールを用いて分かち書きを行う必要がある．}．
+得られた単語対応からフレーズの対応を見つけ出して抽出を行う例を図\ref{fig:phrase-extraction}に示す．
+図のように，与えられた単語対応から抽出されるフレーズ対応の長さは一意に定まらず，複数の長さのフレーズ対応が抽出される．
+ただし，抽出されるフレーズ対応には，フレーズの内外を横断するような単語対応が存在しないという制約が課され，フレーズの最大長なども制限される．
+このようにして抽出されたフレーズ対の一覧を元に，フレーズ対や各フレーズの頻度を計算し，PBMTの翻訳モデルが学習される．
+
+\begin{figure}[b]
+\begin{minipage}[b]{0.45\hsize}
+\begin{center}
+\includegraphics{23-5ia5f2.eps}
+\end{center}
+\caption{英-日 単語アラインメント}
+\label{fig:word-align}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.45\hsize}
+\begin{center}
+\includegraphics{23-5ia5f3.eps}
+\end{center}
+\caption{英-日 フレーズ抽出}
+\label{fig:phrase-extraction}
+\end{minipage}
+\end{figure}
+
+PBMTの翻訳モデルは抽出されたフレーズを翻訳の基本単位とし，これによって効率的に慣用句のような連続する単語列の翻訳規則を学習し，質の高い翻訳が可能である．
+フレーズの区切り方によって，与えられた原言語文から，ある目的言語文へ翻訳されるための導出も複数の候補があり，それぞれの導出で用いられるフレーズ対の確率スコアや並び替えも考慮して最終的な翻訳確率を推定する．
+式(\ref{eqn:log-linear})の対数線形モデルによって確率スコア最大の翻訳候補を探索するが，素性関数として用いられるものには，双方向のフレーズ翻訳確率，双方向の語彙翻訳確率，単語ペナルティ，フレーズペナルティ，言語モデル，並び替えモデルなどがある．
+
+PBMTは，翻訳対象である2言語間の対訳コーパスさえ用意すれば，容易に学習し，高速な翻訳を行うことが可能であるため，多くの研究や実用システムで利用されている．
+しかし，文の構造を考慮しない手法であるため，単語の並び替えが効果的に行えない傾向にある．
+高度な並び替えモデルを導入することは可能であるが\cite{goto13acl}，長距離の並び替えは未だ困難であり，ピボット翻訳で用いることは容易ではない．
+
+
+\subsection{同期文脈自由文法}
+\label{sec:scfg}
+
+本節では，木構造に基づくSMTの枠組である同期文脈自由文法(SCFG \cite{chiang07})について説明する．
+SCFGは，階層的フレーズベース翻訳 (Hierarchical Phrase-Based Translation; Hiero \cite{chiang07})を代表とする様々な翻訳方式で用いられている．
+SCFGは，以下のような同期導出規則によって構成される．
+\begin{equation}
+X \longrightarrow \left<\overline{s},~ \overline{t}\right> \label{eqn:scfg}
+\end{equation}
+ここで，X は同期導出規則の親記号であり，$\overline{s}$ と $\overline{t}$ はそれぞれ原言語と目的言語における終端記号と非終端記号からなる記号列である．
+$\overline{s}$ と $\overline{t}$ にはそれぞれ同じ数の非終端記号が含まれ，対応する記号に対して同じインデックスが付与される．
+以下に日英翻訳における導出規則の例を示す．
+\begin{equation}
+X \longrightarrow \left<X_0 \text{~of~} X_1,~ X_1 \text{~の~} X_0\right>
+\end{equation}
+
+Hiero 翻訳モデルのための SCFG の学習手法では，先ずPBMTと同等のアイディアで，対訳コーパスから学習された単語アラインメントを元にフレーズを抽出する．
+そしてフレーズ対応中の部分フレーズ対応に対しては，非終端記号 $X_i$ で置き換えてよいというヒューリスティックを用いて，多くのSCFGルールが自動抽出される．
+例えば，図\ref{fig:word-align}の単語アラインメントを用いて，以下のような同期導出規則を得ることができる．
+\begin{align}
+X & \longrightarrow \left<X_0 \text{~hit~} X_1 \text{~.},~ X_0 \text{~は~} X_1 \text{~を 打 っ た 。}\right> \\
+X & \longrightarrow \left<\text{John},~ \text{ジョン}\right> \\
+X & \longrightarrow \left<\text{a ball},~ \text{ボール}\right>
+\end{align}
+
+また，初期非終端記号 $S$ と初期導出規則 $S \longrightarrow \left<X_0,~ X_0\right>$，抽出された上記の導出規則を用いて，以下のような導出が可能である．
+\begin{align}
+S & \Longrightarrow  \left<X_0,~ X_0\right> \\
+& \Longrightarrow \left<X_1 \text{~hit~} X_2 \text{~.},~ X_1 \text{~は~} X_2 \text{~を 打 っ た 。}\right> \\
+& \Longrightarrow \left<\text{John hit~} X_2 \text{~.},~ \text{ジョン は~} X_2 \text{~を 打 っ た 。}\right> \\
+& \Longrightarrow \left<\text{John hit a ball .},~ \text{ジョン は ボール を 打 っ た。}\right>
+\end{align}
+
+対訳文と単語アラインメントを元に自動的にSCFGルールが抽出される．
+抽出された各々のルールには，双方向のフレーズ翻訳確率 $\phi(\overline{s}|\overline{t})$，$\phi(\overline{t}|\overline{s})$，双方向の語彙翻訳確率 $\phi_{lex}(\overline{s}|\overline{t})$，$\phi_{lex}(\overline{t}|\overline{s})$，ワードペナルティ（$\overline{t}$ の終端記号数），フレーズペナルティ（定数1）の計6つのスコアが付与される．
+
+翻訳時には，導出に用いられるルールのスコアと，生成される目的言語文の言語モデルスコアの和を導出確率として最大化するよう探索を行う．
+言語モデルを考慮しない場合，CKY+法\cite{chappelier98}によって効率的な探索を行ってスコア最大の導出を得ることが可能である．
+言語モデルを考慮する場合には，キューブ枝狩り\cite{chiang07}などの近似法により探索空間を抑えつつ，目的言語モデルを考慮した探索が可能である．
+
+
+\subsection{複数同期文脈自由文法}
+\label{sec:mscfg}
+
+SCFGを複数の目的言語文の同時生成に対応できるように拡張した手法として，複数同期文脈自由文法(MSCFG \cite{neubig15naacl}) が提案されている．
+SCFG では導出規則中の目的言語記号列 $\overline{t}$ が単一であったが，MSCFG では以下のように $N$ 個の目的言語記号列を有する．
+\begin{equation}
+X \longrightarrow \left<\overline{s},~ \overline{t_1}, \cdots, \overline{t_N}\right>
+\end{equation}
+
+通常のMSCFG学習手法では，SCFG ルール抽出手法を一般化し，3言語以上の言語間で意味の対応する文を集めた多言語コーパスから多言語導出規則が抽出され，複数の目的言語を考慮したスコアが付与される．
+本手法の利点として，原言語に対して主要な目的言語が1つ存在する場合に，他の $N-1$ 言語のフレーズを補助的な言語情報として利用し，追加の目的言語モデルによって翻訳文の自然性評価を考慮した訳出を行うことで，結果的に主要な目的言語においても導出規則の選択が改善されて翻訳精度を向上可能なことが挙げられる．
+
+SCFG は対応するフレーズ間で同一のインデックス付き非終端記号を同期して導出させることで，翻訳と単語並び替えを同時に行えるという単純な規則から成り立つために，多言語間の翻訳モデルへの拡張も容易であった．
+PBMTはフレーズの翻訳と単語並び替えを個別の問題としてモデル化しているため，MSCFGと同様の方法で3言語以上のフレーズ対応を学習して複数の目的言語へ同時に翻訳を行うには，並び替え候補をどのように翻訳スコアに反映させるかなどを新たに検討する必要がある．
+例えば日本語と朝鮮語のように語順が似通っており，ほとんど単語並び替えが発生しない言語の組み合わせでは，並び替えをまったく行わない場合でも高い並び替え精度となるため，並び替え距離に応じたペナルティを与える単純な手法でも高精度となるが，例えば日本語・朝鮮語とは語順の大きく異なる英語を加えた3言語間で並び替えをモデル化することは容易ではなく，第二の目的言語の存在が悪影響を与える可能性もある．
+そのため，本稿ではPBMTの多言語拡張を行うことはせず，MSCFGに着目して議論を行う．
+
+
+\section{ピボット翻訳手法}
+\label{sec:pivot-methods}
+
+\ref{sec:smt}節では，SMTは対訳コーパスから自動的に翻訳規則を獲得し，統計に基づいたモデルによって翻訳確率スコアが最大となるような翻訳を行うことを述べてきた．
+統計モデルであるため，言語モデルの学習に用いる目的言語コーパスと翻訳モデルの学習に用いられる対訳コーパスが大規模になるほど確率推定の信頼性が向上し，精度の高い訳出が期待できる．
+言語モデルについては，目的言語の話者数やインターネット利用者数などの影響はあるものの，比較的取得が容易であるため問題になることは少ない．
+一方で対訳コーパスはSMTの要であり，学習データにカバーされていない単語や表現の翻訳は不可能なため，多くの対訳データ取得が望ましく，実用的なSMTシステムの構築には数百万文以上の対訳が必要と言われている．
+ところが英語を含まない言語対，例えば日本語とフランス語のような言語対を考えると，それぞれの言語では単言語コーパスが豊富に取得可能であるにも関わらず，100万文を超えるような大規模な対訳データを短時間で獲得することは困難である．
+このように，SMTの大前提である対訳コーパスは多くの言語対において十分な文量を直ちに取得できず，任意の言語対で翻訳を行うには課題がある．
+
+PBMT におけるピボット翻訳手法が数多く考案されており，本節では代表的なピボット翻訳手法について紹介する．
+また，\ref{sec:pivot-scfg}節では，PBMTで有効性の確認されたピボット翻訳手法であるテーブル合成手法をSCFGで応用するための手法を提案し，実験による比較評価と考察を述べる．
+本節では原言語を\textit{Src}，目的言語を \textit{Trg}，中間言語を \textit{Pvt} と表記し，これらの言語対を \textit{Src-Pvt, Src-Trg, Pvt-Trg}のように表記して説明を行うこととする．
+
+
+\subsection{逐次的ピボット翻訳手法}
+\label{sec:cascade}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia5f4.eps}
+\end{center}
+\caption{逐次的ピボット翻訳}
+\label{fig:pivot-cascade}
+\end{figure}
+
+\textbf{逐次的ピボット翻訳手法 (Cascade)} \cite{gispert06}によって \textit{Src} から \textit{Trg} へと翻訳を行う様子を図\ref{fig:pivot-cascade}に示す．
+この方式では先ず，\textit{Src-Pvt, Pvt-Trg} それぞれの言語対で，対訳コーパスを用いて翻訳システムを構築する．
+そして \textit{Src} の入力文を \textit{Pvt} へ翻訳し，\textit{Pvt} の訳文を \textit{Trg} に翻訳することで，結果的に \textit{Src} から \textit{Trg} への翻訳が可能となる．
+この手法は機械翻訳の入力と出力のみを利用するため，PBMTである必然性はなく，任意の機械翻訳システムを組み合わせることができる．
+優れた2つの機械翻訳システムがあれば，そのまま高精度なピボット翻訳が期待できることや，既存のシステムを使い回せること，実現が非常に容易であることが利点と言える．
+逆に，最初の翻訳システムの翻訳誤りが次のシステムに伝播し，加法性誤差によって精度が落ちることは欠点となる．
+\textit{Src-Pvt} 翻訳システムで確率スコアの高い上位 $n$ 文の訳出候補を出力し，\textit{Pvt-Trg} 翻訳における探索の幅を広げるマルチセンテンス方式も提案されている\cite{utiyama07}が，通常より $n$ 倍の探索時間が必要であり，大きな精度向上も報告されていない．
+
+
+\subsection{擬似対訳コーパス手法}
+
+擬似的に \textit{Src-Trg} 対訳コーパスを作成することで SMT システムを構築する\textbf{擬似対訳コーパス手法 (Synthetic)} \cite{gispert06}によって，\textit{Src-Trg} 翻訳を行う様子を図\ref{fig:pivot-corpus}に示す．
+この手法では先ず，\textit{Src-Pvt, Pvt-Trg}のうちの片側，図の例では\textit{Pvt-Trg}の対訳コーパスを用いてSMTシステムを構築する．
+そして \textit{Src-Pvt} 対訳コーパスの \textit{Pvt} 側の全文を \textit{Pvt-Trg} 翻訳にかけることで，\textit{Src-Trg} 擬似対訳コーパスが得られる．
+これによって得られた \textit{Src-Trg} 擬似対訳コーパスを用いて，SMTの翻訳モデルを学習することが可能となる．
+対訳コーパスの翻訳時に少しの翻訳誤りが含まれていても，統計モデルの学習に大きく影響しなければ，高精度な訳出が期待できる．
+既存のシステムから新しい学習データやシステムを作り直すことになるため，一度擬似対訳コーパスを作ってしまえば，それ以降は通常のSMTと同じ学習手法を用いられることは利点となる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia5f5.eps}
+\end{center}
+\caption{擬似対訳コーパス手法}
+\label{fig:pivot-corpus}
+\end{figure}
+
+De Gispert らは，スペイン語を中間言語としたカタルーニャ語と英語のピボット翻訳で，逐次的ピボット翻訳手法と擬似対訳コーパス手法によるピボット翻訳手法の比較実験\cite{gispert06}を行った．
+その結果，これらの手法間で有意な差は示されなかった．
+
+
+\subsection{テーブル合成手法}
+\label{sec:triangulation}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia5f6.eps}
+\end{center}
+\caption{テーブル合成手法}
+\label{fig:pivot-triangulation}
+\end{figure}
+
+PBMT，SCFGでは，対訳コーパスによってフレーズ対応を学習してスコア付けした翻訳モデルを，それぞれフレーズテーブル，ルールテーブルと呼ばれる形式で格納する．
+フレーズテーブルを合成することで \textit{Src-Trg} のピボット翻訳を行う様子を図\ref{fig:pivot-triangulation}に示す．
+Cohnらによる\textbf{テーブル合成手法 (Triangulation)} \cite{cohn07}では，先ず \textit{Src-Pvt} および \textit{Pvt-Trg} の翻訳モデルを対訳コーパスによって学習し，それぞれをフレーズテーブル $T_{SP}$, $T_{PT}$ として格納する．
+得られた $T_{SP}$, $T_{PT}$ から，\textit{Src-Trg} の翻訳確率を推定してフレーズテーブル $T_{ST}$ を合成する．
+$T_{ST}$ を作成するには，フレーズ翻訳確率 $\phi(\cdot)$ と語彙翻訳確率 $\phi_{lex}(\cdot)$ を用い，以下の数式に従って翻訳確率の推定を行う．
+\begin{align}
+\phi\left(\overline{t}|\overline{s}\right) & = \sum_{\overline{p} \in T_{SP} \cap T_{PT}} \phi\left(\overline{t}|\overline{p}\right) \phi\left(\overline{p}|\overline{s}\right) \label{eqn:triangulation-begin} \\
+\phi\left(\overline{s}|\overline{t}\right) & = \sum_{\overline{p} \in T_{SP} \cap T_{PT}} \phi\left(\overline{s}|\overline{p}\right) \phi\left(\overline{p}|\overline{t}\right) \\
+\phi_{lex}\left(\overline{t}|\overline{s}\right) & = \sum_{\overline{p} \in T_{SP} \cap T_{PT}} \phi_{lex}\left(\overline{t}|\overline{p}\right) \phi_{lex}\left(\overline{p}|\overline{s}\right) \\
+\phi_{lex}\left(\overline{s}|\overline{t}\right) & = \sum_{\overline{p} \in T_{SP} \cap T_{PT}} \phi_{lex}\left(\overline{s}|\overline{p}\right) \phi_{lex}\left(\overline{p}|\overline{t}\right) \label{eqn:triangulation-end}
+\end{align}
+ここで，$\overline{s}$, $\overline{p}$, $\overline{t}$ はそれぞれ \textit{Src, Pvt, Trg}のフレーズであり，$\overline{p} \in T_{SP} \cap T_{PT}$ はフレーズ $\overline{p}$ が $T_{SP}$, $T_{PT}$ の双方に含まれていることを示す．
+式(\ref{eqn:triangulation-begin})--(\ref{eqn:triangulation-end})は，以下のような条件を満たす無記憶通信路モデルに基づいている．
+\begin{align}
+\phi\left(\overline{t}|\overline{p},\overline{s}\right) & = \phi\left(\overline{t}|\overline{p}\right) \\
+\phi\left(\overline{s}|\overline{p},\overline{t}\right) & = \phi\left(\overline{s}|\overline{p}\right)
+\end{align}
+
+この手法では，翻訳確率の推定を行うために全フレーズ対応の組み合わせを求めて算出する必要があるため，大規模なテーブルの合成には長い時間を要するが，既存のモデルデータから精度の高い翻訳を期待できる．
+
+Utiyama らは，英語を中間言語とした複数の言語対で，逐次的ピボット翻訳手法とテーブル合成手法によるピボット翻訳で比較実験を行った\cite{utiyama07}．
+その結果，テーブル合成手法では，$n = 1$ の単純な逐次的ピボット翻訳や，$n = 15$ のマルチセンテンス方式よりも高い BLEU スコアが得られたと報告している．
+
+
+\section{同期文脈自由文法におけるテーブル合成手法の応用}
+\label{sec:pivot-scfg}
+
+\ref{sec:pivot-methods}節で説明したピボット翻訳手法のうち，逐次的ピボット翻訳および擬似対訳コーパス手法はSMTの枠組にとらわれない手法であるため，SCFGを用いるSMTでもそのまま適用可能であるが，テーブル合成手法は本来，PBMTのフレーズテーブルを合成するために提案されたものである．
+SCFGを用いる翻訳方式では，式(\ref{eqn:scfg})のように表現される同期導出規則をルールテーブルという形式で格納する．
+次節以降では，SCFGルールテーブルを合成することで，PBMTにおけるテーブル合成手法と同等のピボット翻訳を行うための手法について説明し，その後にPBMTおよびSCFGにおける複数のピボット翻訳手法による翻訳精度の差を実験によって比較評価し，考察を行う．
+
+
+\subsection{同期導出規則の合成}
+\label{sec:rule-triangulation}
+
+SCFGルールテーブル合成手法では，先ず \textit{Src-Pvt, Pvt-Trg} それぞれの言語対について，対訳コーパスを用いて同期導出規則を抽出し（\ref{sec:scfg}節），各規則の確率スコアなどの素性を算出してルールテーブルに格納する．
+その後，\textit{Src-Pvt, Pvt-Trg} ルールテーブル双方に共通の \textit{Pvt} 記号列を有する導出規則 $X \rightarrow \left<\overline{s},~ \overline{p}\right>$, $X \rightarrow \left<\overline{p},~ \overline{t}\right>$ をすべて見つけ出し，新しい導出規則 $X \rightarrow \left<\overline{s},~ \overline{t}\right>$ の翻訳確率を，式(\ref{eqn:triangulation-begin})--(\ref{eqn:triangulation-end})に従って推定する．
+PBMTにおいては $\overline{s}, \overline{p}, \overline{t}$ が各言語のフレーズ（単語列）を表しており，SCFGにおいては非終端記号を含む各言語の記号列を表す点で異なるが，計算式については同様である．
+また， $X \rightarrow \left<\overline{s},~ \overline{t}\right>$ のワードペナルティおよびフレーズペナルティは $X \rightarrow \left<\overline{p},~ \overline{t}\right>$ と同じ値に設定する．
+
+本節で提案したルールテーブル合成手法によるピボット翻訳が，他の手法や他の翻訳枠組と比較して有効であるかどうかを調査するため，後述する手順によって比較実験を行った．
+
+
+\subsection{実験設定}
+\label{sec:experiment-scfg}
+
+\ref{sec:pivot-methods}節で紹介したピボット翻訳手法のうち，実現が非常に容易で比較しやすい逐次的ピボット翻訳手法と，PBMTで高い実用性が示されたテーブル合成手法によるピボット翻訳を，PBMTおよびSCFGにおいて実施し，翻訳精度の比較評価を行った．
+
+本実験では，学習および評価に用いる対訳コーパスとして，国連文書を元にして作成された国連多言語コーパス\cite{ziemski16un}を用いて翻訳精度の比較評価を行った．
+本コーパスには，英語 (En)，アラビア語 (Ar)，スペイン語 (Es)，フランス語 (Fr)，ロシア語 (Ru)，中国語 (Zh) の6言語間で意味の対応する約1,100万文の対訳文が含まれている．
+これら6言語は複数の語族をカバーしているため，言語構造の違いにより複雑な単語並び替えが発生しやすく，SMTの枠組とピボット翻訳手法の組み合わせの影響を調査する目的に適している．
+現実的なピボット翻訳タスクを想定し，英語を中間言語として固定し，残りの5言語のすべての組み合わせでピボット翻訳を行った．
+ピボット翻訳では，\textit{Src-Pvt}，\textit{Pvt-Trg} のそれぞれの言語対の対訳を用いて\textit{Src-Trg}の翻訳を行うが，ピボット翻訳が必要となる場面では直接的な対訳はほとんど存在しないものと想定し，それぞれの対訳の \textit{Pvt} 側には共通の文が存在しない方が評価を行う上で望ましい．
+本コーパスのアーカイブには学習用データ (train) 約1,100万文，評価用データ (test) 4,000 文，パラメータ調整用データ (dev) 4,000 文が予め用意されているが，前処理として，それぞれのデータに対して重複して出現する英文を含む対訳文を取り除き，また，長い文は学習・評価時の計算効率上の妨げとなるため train に対して 60 単語，test, dev に対して 80 単語を超える文はすべて取り除いたところ，train は約 800 万文，test, dev はそれぞれ約 3,800 文が残った．
+しかし，評価対象となる組み合わせ数が膨大であるため，前処理後のデータサイズに比較すると小規模であるが，前処理後の train から\textit{Src-Pvt} の学習用に train1，\textit{Pvt-Trg} の学習用に train2 をそれぞれ10万文，英文の重複がないように取り出し，test，dev はそれぞれ 1,500 文ずつを実際の評価とパラメータ調整に用いた．
+
+複数の言語の組み合わせで PBMT，SCFG のそれぞれについて以下のようにSMTの学習と評価を行い，ピボット翻訳手法の違いによる翻訳精度を比較した．
+
+\begin{description}
+\item[Direct （直接翻訳）：]\mbox{}\\
+直接的な対訳を得られる理想的な状況下における翻訳精度を得て比較を行うため，\textit{Pvt} を用いず \textit{Src-Trg} の直接対訳コーパス train1，train2 を個別に用いて翻訳モデルを学習し評価．train1, train2 による翻訳スコアをそれぞれ 「Direct 1」，「Direct 2」 とし，まとめて「Direct 1 / 2」と表記
+\item[Cascade （逐次的ピボット翻訳）：]\mbox{}\\
+\textit{Src-Pvt, Pvt-Trg}それぞれの対訳 train1，train2 で学習された翻訳モデルでパイプライン処理を行い，\textit{Src-Trg} 翻訳を評価
+\item[Triangulation （テーブル合成手法）：]\mbox{}\\
+\textit{Src-Pvt, Pvt-Trg}それぞれの対訳 train1, train2 で学習された翻訳モデルから，翻訳確率の推定により \textit{Src-Trg} 翻訳モデルを合成し評価
+\end{description}
+
+\asis{
+コーパス中の中国語文は単語分割が行われていない状態であったため，KyTea \cite{neubig11-kytea} の中国語モデルを用いて単語分割を行った．
+PBMTモデルの構築にはMoses \cite{koehn07moses}，SCFG翻訳モデルの構築にはTravatar \cite{neubig13travatar}のHiero学習ツールを利用した．
+すべての翻訳システムでは KenLM \cite{heafield11} と train1+train2 の目的言語側20万文を用いて学習した 5-gram 言語モデルを訳出の自然性評価に用いている．
+また，翻訳結果の評価には，自動評価尺度 BLEU \cite{papineni02} を用い，各SMTシステムについて MERT \cite{och03mert}により，開発用データセットに対して BLEU スコアが最大となるようにパラメータ調整を行った．
+}
+
+
+\subsection{実験結果}
+\label{sec:pivot-result}
+
+様々な言語と機械翻訳方式の組み合わせについて Direct 1 / 2, Triangulation, Cascade の各ピボット翻訳手法で翻訳を行い評価した結果を表\ref{tab:pivot-pbmt-scfg}に示す．
+太字は言語と翻訳枠組の各組み合わせで精度の高いピボット翻訳手法を示す．
+先行研究では，PBMTのピボット翻訳手法においてTriangulationでCascadeよりも高い翻訳精度が示されており，このことは実験結果の表からも，すべての言語の組み合わせで確認できた．
+同様に，\ref{sec:rule-triangulation}節で提案したSCFGルールテーブルのTriangulationによっても，Cascadeより高い翻訳精度が示された．
+このことから，SMTの枠組によらず，Triangulation 手法を用いることで Cascade 手法よりも安定して高いピボット翻訳精度が得られるものと考えられる．
+また，Triangulation の翻訳精度を Direct と比較した場合，例えばスペイン語・フランス語の Hiero翻訳における Direct の平均BLEUスコアが 35.34 であるのに対し，Triangulation のBLEU スコアが 32.62 と，2.72 ポイントの大きな差が開いており，Direct 翻訳で高い精度が出る言語対では Triangulation 手法でも依然として精度が大きく低下する傾向が見られた．
+逆に，Direct 翻訳の BLEU スコアが 15 を下回っていて翻訳が困難な言語対では，Triangulation 手法でも大きな差は見られず，フランス語・中国語の Hiero 翻訳のように，Triangulation のスコアが僅かながら Direct のスコアを上回る例も少数見られたが，誤差の範囲であろう．
+
+\begin{table}[p]
+\caption{ピボット翻訳手法毎の翻訳精度比較}
+\label{tab:pivot-pbmt-scfg}
+\input{05table01.txt}
+\end{table}
+
+一方，翻訳精度を PBMT と Hiero で比較した場合，言語対によって優劣が異なっているものの，傾向としては中国語を含む言語対において Hiero の翻訳精度が PBMT を大きく上回っており，ロシア語を含む言語対では僅かに下回り，それ以外の言語対では僅かに上回る例が多く見られた．
+20 組の言語対のうち 14 組で Hiero における Triangulation のスコアが PBMT の場合を上回っており，平均して 0.5 ポイント以上の BLEU スコアが向上しているため，Hiero をピボット翻訳に応用する手法は総じて有効であると考えられる．
+
+
+\subsection{異なるデータを用いた場合の翻訳精度}
+\label{sec:pivot-europarl}
+
+\ref{sec:pivot-result}節までは，国連文書コーパスを用いた，複数の語族にまたがる言語間でのピボット翻訳を行った内容について説明し考察している．
+本研究の過程で，国連文書コーパスの他，欧州議会議事録を元にしたEuroparlコーパス\cite{koehn05europarl}を用いて\ref{sec:experiment-scfg}節と同様の実験も実施している．
+このコーパスは，欧州の諸言語を広くカバーしており，多言語翻訳タスクに多用されるが，語族がほとんど共通しており比較的似通った言語間での翻訳となる．
+この実験では英語を中間言語として固定し，欧州でも話者数の多いドイツ語，スペイン語，フランス語，イタリア語の4言語の組み合わせでピボット翻訳を行った．
+Europarlからも10万文の対訳で学習し，1,500文ずつの評価とパラメータ調整を行ったが，\textit{Src-Pvt}と\textit{Pvt-Trg}それぞれの翻訳モデルの学習にはすべて中間言語データが一致しているものを用い，直接的な翻訳と比較してどの程度精度に影響があるかも調査した．
+この実験結果から，\ref{sec:pivot-result}節の実験結果と同様に，PBMTとHieroの双方において，すべての言語対においてTriangulationがCascadeよりも高精度となることが確認された．
+また，2つの翻訳モデルの学習で中間言語側が共通のデータを用いているにも関わらず，Triangulationの精度はDirectと比較して大きく減少しており，この精度差が中間言語側の曖昧性の影響を強く受けて発生したものであると考えられる．
+一方，PBMTとHieroの精度を比較した場合には，精度差が言語対に依存するのも同様であり，大きな単語並び替えが発生しないような言語の組み合わせが多いため，計算コストが低く，標準設定でより長いフレーズ対応を学習できるPBMTの方が有利と考えられる点も多かった．
+
+
+\subsection{考察および関連研究}
+
+\ref{sec:pivot-methods}節では，PBMTで提案されてきた代表的なピボット翻訳手法について説明し，本節ではテーブル合成手法をSCFGのルールテーブルに適用するための手法について述べ，また言語対・機械翻訳方式・ピボット翻訳手法の組み合わせによって翻訳精度の影響を比較評価した．
+その結果，SCFGにおいてもテーブル合成手法によって高い翻訳精度を得られることが示され，また言語対や用いるデータによってはPBMTの場合よりも高い精度が得られることも分かった．
+ピボット翻訳におけるその他の関連研究は，PBMTのテーブル合成手法をベースに，さらに精度を上げるための議論が中心である．
+テーブル合成手法はピボット翻訳手法の中でも高い翻訳精度が報告されているが\cite{utiyama07}，\ref{sec:intro}節で述べたような中間言語側の表現力に起因する曖昧性の問題や，異なる言語対やデータセット上で推定された単語アラインメントから抽出されるフレーズの不一致によって，得られる翻訳規則数が減少する問題などがあり，直接的な対訳が得られる理想的な状況と比較すると翻訳精度が大きく下回ってしまう．
+これらの問題に対処するための関連研究として，翻訳確率推定の前にフレーズの共起頻度を推定することでサイズが不均衡なテーブルの合成を改善する手法\cite{zhu14}，単語の分散表現を用いて単語レベルの翻訳確率を補正する手法\cite{levinboim15}，複数の中間言語を用いる手法\cite{dabre15}などが挙げられ，曖昧性の解消には中間表現の工夫と信頼度の高い言語資源の有効利用が必要と言える．
+
+
+\section{中間言語情報を記憶するピボット翻訳手法の提案}
+\label{sec:triangulation-mscfg}
+
+\ref{sec:pivot-methods}節ではSMTで用いられているピボット翻訳手法について紹介し，\ref{sec:pivot-scfg}節では従来手法の中で高い翻訳精度が報告されているテーブル合成手法をSCFGで応用するための手順について説明した．
+また，比較評価実験により，SCFGにおいてもPBMTと同様，テーブル合成手法によって逐次的ピボット翻訳手法よりも高い精度が得られた．
+しかし，直接の対訳を用いて学習した場合と比較すると，翻訳精度の差は未だ大きいため，精度が損なわれてしまう原因を特定し，解消することができれば，さらなる翻訳精度の向上が期待できる．
+テーブル合成手法で翻訳精度が損なわれる原因の一つとして，翻訳時に重要な手がかりとなるはずの中間言語の情報はテーブル合成後には失われてしまい，不正確に推定された\textit{Src-Trg}のフレーズ対応と翻訳確率のみが残る点が挙げられる．
+本節では，従来では消失してしまう中間言語情報を記憶し，この追加の情報を翻訳時に用いることで精度向上に役立てる，新しいテーブル合成手法を提案する．
+
+
+\subsection{従来のテーブル合成手法の問題点}
+
+従来のテーブル合成手法の問題点について，1節中でも紹介したが，本節で改めて説明を行う．
+テーブル合成手法では，\textit{Src-Pvt, Pvt-Trg}それぞれの言語対におけるフレーズの対応と翻訳確率のスコアが与えられており，この情報を元に，\textit{Src-Trg}言語対におけるフレーズ対応と翻訳確率の推定を行う．
+ところが，語義曖昧性や言語間の用語法の差異により，\textit{Src-Trg}のフレーズ対応を正確に推定することは困難である．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia5f7.eps}
+\end{center}
+\caption{モデル学習に用いるフレーズ対応（日-英-伊）}
+\label{fig:pivot-align}
+\end{figure}
+
+図\ref{fig:pivot-align}はテーブル合成手法によって対応を推定するフレーズの例を示しており，図中では日本語とイタリア語それぞれにおける3つの単語が，語義曖昧性を持つ英単語「approach」に結び付いている．
+このような場合，\textit{Src-Trg}のフレーズ対応を求め，適切な翻訳確率推定を行うのは複雑な問題となってくる．
+その上，図\ref{fig:pivot-traditional}に示すように，従来のテーブル合成手法では，合成時に\textit{Src}と\textit{Trg}の橋渡しをしていた\textit{Pvt}フレーズの情報が，合成後には保存されず失われてしまう．
+現実の人手翻訳の場合を考えても，現在着目しているフレーズに関する追加の言語情報が与えられているなら，その言語を知る者にとって重要な手がかりとなって曖昧性解消などに用いることができる．
+そのため，\textit{Src-Trg}を結び付ける\textit{Pvt}フレーズは重要な言語情報であると考えられ，本研究では，この情報を保存することで機械翻訳にも役立てるための手法を提案する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia5f8.eps}
+\end{center}
+\caption{従来手法によって得られるフレーズ対応}
+\label{fig:pivot-traditional}
+\vspace{0.5\Cvs}
+\end{figure}
+
+
+\subsection{中間言語情報を記憶するテーブル合成手法}
+
+前節で述べた問題を克服するため，本研究では\textit{Src}と\textit{Trg}を結び付けていた\textit{Pvt}フレーズの情報も翻訳モデル中に保存し，\textit{Src}から\textit{Trg}と\textit{Pvt}への同時翻訳確率を推定することによって翻訳を行う新しいテーブル合成手法を提案する．
+図\ref{fig:pivot-proposed}に，本提案手法によって得られるフレーズ対応の例を示す．
+本手法の利点は，英語のように中間言語として選ばれる言語は豊富な単言語資源も得られる傾向が強いため，このような追加の言語情報を翻訳システムに組み込み，翻訳文の導出時に利用できることにある．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia5f9.eps}
+\end{center}
+\caption{提案手法によって得られるフレーズ対応}
+\label{fig:pivot-proposed}
+\end{figure}
+
+中間言語フレーズの情報を翻訳時に役立てるため，SCFG（\ref{sec:scfg}節）を複数の目的言語文の同時生成に対応できるよう拡張したMSCFG（\ref{sec:mscfg}節）を用いて翻訳モデルの合成を行う．
+MSCFGによる翻訳モデルを構築するためには，\textit{Src-Pvt, Pvt-Trg}のSCFG翻訳規則が格納されたルールテーブルを元に，SCFGルールテーブルとしてではなく，\textit{Src-Trg-Pvt}のMSCFGルールテーブルとして合成し，これによって\textit{Pvt}フレーズを記憶する．
+訳出候補の探索時には，生成文の自然性を評価し，適切な語彙選択を促すために言語モデルを用いるが，目的言語モデルのみでなく，中間言語モデルも同時に用いた探索を行う．
+次節から，SCFG翻訳モデルの同期導出規則からMSCFG翻訳モデルの複数同期導出規則を合成するための手順について説明する．
+
+
+\subsection{同期導出規則から複数同期導出規則への合成}
+
+\ref{sec:rule-triangulation}節では，SCFGの同期規則を合成するために，\textit{Src-Pvt, Pvt-Trg}ルールテーブル双方に共通の \textit{Pvt} 記号列を有する導出規則$X \rightarrow \left<\overline{s},~ \overline{p}\right>$, $X \rightarrow \left<\overline{p},~ \overline{t}\right>$ を見つけ出し，新しい導出規則 $X \rightarrow \left<\overline{s},~ \overline{t}\right>$ の翻訳確率を，式(\ref{eqn:triangulation-begin})--(\ref{eqn:triangulation-end})に従って確率周辺化を行い推定することを述べた．
+一方，中間言語情報を記憶するテーブル合成手法では $X \rightarrow \left<\overline{s},~ \overline{p}\right>$, $X \rightarrow \left<\overline{p},~ \overline{t}\right>$を元に，以下のように複数同期規則を合成する．
+\begin{equation}
+X \longrightarrow \left<\overline{s},~ \overline{t},~ \overline{p}\right>
+\end{equation}
+
+このような規則を用いて翻訳を行うことによって，同時生成される中間言語文を通じて中間言語モデルなどのような追加の素性を取り入れることが可能となる．
+式(\ref{eqn:triangulation-begin})--(\ref{eqn:triangulation-end})に加えて，\textit{Trg}と\textit{Pvt}を同時に考慮した翻訳確率 $\phi\left(\overline{t},\overline{p}|\overline{s}\right)$，$\phi\left(\overline{s}|\overline{p},\overline{t}\right)$を以下のように推定する．
+\begin{align}
+\phi\left(\overline{t},\overline{p}|\overline{s}\right) & = \phi\left(\overline{t}|\overline{p}\right) \phi\left(\overline{p}|\overline{s}\right) \\
+\phi\left(\overline{s}|\overline{p},\overline{t}\right) & = \phi\left(\overline{s}|\overline{p}\right)
+\end{align}
+\textit{Src-Pvt}の翻訳確率 $\phi\left(\overline{p}|\overline{s}\right)$，$\phi\left(\overline{s}|\overline{p}\right)$，$\phi_{lex}\left(\overline{p}|\overline{s}\right)$，$\phi_{lex}\left(\overline{s}|\overline{p}\right)$ はルールテーブル $T_{SP}$ のスコアをそのまま用いることが可能である．
+これら10個の翻訳確率 $\phi\left(\overline{t}|\overline{s}\right)$，$\phi\left(\overline{s}|\overline{t}\right)$，$\phi\left(\overline{p}|\overline{s}\right)$，$\phi\left(\overline{s}|\overline{p}\right)$，$\phi_{lex}\left(\overline{t}|\overline{s}\right)$，$\phi_{lex}\left(\overline{s}|\overline{t}\right)$，$\phi_{lex}\left(\overline{p}|\overline{s}\right)$，$\phi_{lex}\left(\overline{s}|\overline{p}\right)$，$\phi\left(\overline{t},\overline{p}|\overline{s}\right)$，$\phi\left(\overline{s}|\overline{p},\overline{t}\right)$に加えて，$\overline{t}$ と $\overline{p}$ に含まれる非終端記号数を2つのワードペナルティとし，定数1のフレーズペナルティの，合わせて13個のスコアがMSCFGルールにおける素性となる．
+
+
+\subsection{同期規則のフィルタリング}
+
+前節で説明した，中間言語情報を記憶するテーブル合成手法は，このままでは $\left<\overline{s},\overline{t}\right>$ ではなく，$\left<\overline{s},\overline{t},\overline{p}\right>$ の全組み合わせを記録するため，従来より大きなルールテーブルが合成されてしまう．
+計算資源を節約するためには，幾つかのフィルタリング手法が考えられる．
+Neubig らによると，主要な目的言語 $T_1$ と補助的な目的言語 $T_2$ で翻訳を行う際には，$T_1$-フィルタリング手法\cite{neubig15naacl}が効果的である．
+このフィルタリング手法を，提案するテーブル合成手法に当てはめると， $T_1 = Trg$，$T_2 = Pvt$ であり，原言語フレーズ $\overline{s}$ に対して，先ず $Trg$ において $\phi\left(\overline{t}|\overline{s}\right)$ が上位 $L$ 個までの $\overline{t}$ を残し，それぞれの $\overline{t}$ に対して $\phi\left(\overline{t},\overline{p}|\overline{s}\right)$ が最大となるような $\overline{p}$ を残す．
+
+
+\section{実験的評価}
+
+前節で提案した中間言語情報を記憶するテーブル合成手法の有効性を検証するため，多言語コーパスを用いたピボット翻訳の比較評価実験を実施した．
+
+
+\subsection{実験設定}
+
+\asis{
+用いたデータやツールは，\ref{sec:experiment-scfg}節の実験と大部分が共通しているため，差分を明らかにしつつ説明を行う．
+本実験では，\ref{sec:experiment-scfg}節の実験で得られた同じ対訳データを用いて各翻訳モデルの学習に用いた．
+すなわち，国連多言語コーパスを用いて，英語(En)を中間言語とするアラビア語 (Ar)，スペイン語(Es)，フランス語(Fr)，ロシア語 (Ru)，中国語 (Zh)の5言語の組み合わせでピボット翻訳の翻訳精度を比較し，それぞれの言語対について \textit{Src-Pvt} 翻訳モデルの学習用 (train1) に10万文，\textit{Pvt-Trg} 翻訳モデルの学習用 (train2) に10万文，評価 (test) とパラメータ調整用 (dev) にそれぞれ1,500文ずつを用いた．
+目的言語モデルの学習にも，\ref{sec:experiment-scfg}節と同様に train1+train2 の目的言語文20万文を用いている．
+また，多くの場合，英語においては大規模な単言語資源が取得可能であるため，最大500万文までのデータを用いて段階的に学習を行った複数の中間言語モデルを用意した．
+SCFGおよびMSCFGを用いるデコーダとして Travatar \cite{neubig13travatar} を用い，付属の Hiero ルール抽出プログラムを用いて SCFG 翻訳モデルの学習を行った．
+翻訳結果の比較には，自動評価尺度 BLEU \cite{papineni02} を用い，各翻訳モデルは MERT \cite{och03mert}により，開発用データに対して BLEU スコアが最大となるようにパラメータ調整を行った．
+提案手法のテーブル合成手法によって得られた MSCFG ルールテーブルは，$L = 20$ の$T_1$-フィルタリング手法によって枝刈りを行った．
+本実験では先ず，以下の6つの翻訳手法を比較評価する．
+}
+
+\begin{description}
+\item[Cascade （逐次的ピボット翻訳）：]\mbox{}\\
+\textit{Src-Pvt}および\textit{Pvt-Trg}のSCFG翻訳モデルで逐次的ピボット翻訳（\ref{sec:cascade}節）．
+「w/ PvtLM 200k/5M」は\textit{Src-Pvt}翻訳時にそれぞれ20万文，500万文で学習した中間言語モデルを用いることを示す
+\item[Tri. SCFG （SCFGルールテーブル合成手法）：]\mbox{}\\
+\textit{Src-Pvt}および\textit{Pvt-Trg}のSCFGモデルを合成し，\textit{Src-Trg}のSCFGモデルによって合成（\ref{sec:triangulation}節，ベースライン）
+\item[Tri. MSCFG （MSCFGルールテーブル合成手法）：]\mbox{}\\
+\textit{Src-Pvt}および\textit{Pvt-Trg}のSCFGモデルを合成し，\textit{Src-Trg-Pvt}のMSCFGモデルによって翻訳（\ref{sec:triangulation-mscfg}節）．
+「w/o PvtLM」は中間言語モデルを用いないことを示し，「w/ PvtLM 200k/5M」はそれぞれ20万文，500万文で学習した中間言語モデルを用いることを示す
+\end{description}
+
+
+\subsection{翻訳精度の比較}
+
+表\ref{tab:scores-euro}に，英語を介したすべての言語対におけるピボット翻訳の結果を示す．
+実験で得られた結果は，ブートストラップ・リサンプリング法\cite{koehn04bootstrap}により統計的有意差を検証した．
+それぞれの言語対において，太字は従来手法Tri. SCFGよりもBLEUスコアが高いことを示し，下線は最高スコアを示す．
+短剣符は各ピボット翻訳手法の翻訳精度がTri. SCFGよりも統計的有意に高いことを示す ($\dagger: p < 0.05, \ddagger: p < 0.01$)．
+評価値から，提案したテーブル合成手法で中間言語モデルを考慮した翻訳を行った場合，すべての言語対において従来のテーブル合成手法よりもBLEUスコアの向上が確認できる．
+すべての組み合わせにおいて，テーブル合成手法で中間言語情報を記憶し，500万文の言語モデルを考慮して翻訳を行った場合に最も高いスコアを達成しており，従来法に比べ最大で1.8，平均で0.75ほどのBLEU値の向上が見られる．
+このことから，中間言語情報を記憶し，これを翻訳に利用することが曖昧性の解消に繋がり，安定して翻訳精度を改善できたと言えよう．
+
+\begin{table}[b]
+\caption{ピボット翻訳手法と中間言語モデル規模の組み合わせによる翻訳精度比較}
+\label{tab:scores-euro}
+\input{05table02.txt}
+\end{table}
+
+また，異なる要因による影響を切り分けて調査するため，MSCFGへ合成するが，中間言語モデルを用いずに翻訳を行った場合の比較も行った (Tri. MSCFG w/o PvtLM)．
+この場合，保存された中間言語情報が語彙選択に活用されないため，本手法の優位性は特に現れないものと予想できたが，実際には，SCFGに合成する場合よりも多くの言語対で僅かに高い翻訳精度が見られた．
+これは，追加の翻訳確率などのスコアが有効な素性として働き，パラメータ調整を行った上で，適切な語彙選択に繋がったことなどが原因として考えられる．
+
+大規模な中間言語モデルを用いる手法は，本稿で提案するテーブル合成後のモデルのみならず，従来の逐次的ピボット翻訳手法でも可能であるため，500万文の大規模な中間言語モデルを用いた場合の精度評価も行った (Cascade w/ PvtLM 5M).
+Cascade w/ PvtLM 5Mは20万文の中間言語モデルしか用いない逐次的ピボット翻訳手法 (Cascade w/ PvtLM 200k)と比較した場合にZh-Ar，Zh-Ruを除いたすべての言語対で高精度であり，単純に大規模な言語モデルを用いることで精度向上に繋がることは確認された．
+しかし，従来のテーブル合成手法であるTri. SCFGと比較した場合の精度差は言語対依存であり，安定した精度向上とはならなかった．
+また，本稿の提案手法 Tri. MSCFG w/ PvtLM 5Mと，Cascade w/ PvtLM 5Mを比較すると，同じ規模の中間言語モデルを用いていてもすべての言語対で提案手法の方が高精度であり，このことからもテーブル合成手法と大規模な中間言語モデルを用いることの有効性が高いと言えるだろう．
+
+
+\subsection{中間言語モデルの規模が翻訳精度に与える影響}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia5f10.eps}
+\end{center}
+\caption{中間言語モデル規模がピボット翻訳精度に与える影響}
+\label{fig:pivot-lm}
+\end{figure}
+
+\asis{
+中間言語モデルの規模がピボット翻訳精度に与える影響の大きさは言語対によって異なってはいるが，中間言語モデルの学習データサイズが大きくなるほど精度が向上することも確認できる．
+図\ref{fig:pivot-lm}は，中国語・スペイン語（左）およびアラビア語・ロシア語（右）のピボット翻訳において異なるデータサイズで学習した中間言語モデルが翻訳精度に与える影響を示す．
+図からも中間言語モデルが曖昧性を解消して翻訳精度向上に寄与している様子が確認できる．
+中間言語モデルの学習データサイズを増加させることによる翻訳精度への影響は対数的であることも見てとられるが，これは目的言語モデルサイズが翻訳精度へ与える影響と同様の傾向である\cite{brants07}．
+中国語・スペイン語の翻訳ではグラフの傾向から，さらに大規模な中間言語モデルを用いることで精度向上の見込みがあるが，一方でアラビア語・ロシア語の場合には学習データサイズが200万文から500万文に増加しても精度にほとんど影響が見られないため，これ以上の精度向上には限界があると考えられる．
+}
+
+
+\subsection{曖昧性が解消された例と未解決の問題}
+
+本提案手法によって中間言語側で曖昧性が解消されて翻訳精度向上に繋がったと考えられる訳出の例を示す．
+
+\vspace{0.5\Cvs}
+\begin{description}
+\fontsize{8.5pt}{13.3pt}\selectfont
+\item[入力文（フランス語）：]\mbox{}\\
+Le nom du candidat \textbf{propos\'{e}} est indiqu\'{e} dans l'annexa \`{a} la pr\'{e}sente note .
+\item[参照訳（スペイン語）：]\mbox{}\\
+El nombre del candidato \textbf{propuesto} se presenta en el anexo de la presente nota .
+\item[対応する英文：]\mbox{}\\
+The name of the candidate \textbf{thus nominated} is set out in the annex to the present note .
+\item[Tri. SCFG:]\mbox{}\\
+El nombre del \textbf{proyecto} de un candidato se indica en el anexo a la presente nota . \\ (BLEU+1: 34.99)
+\item[Tri. MSCFG w/ PvtLM 5M:]\mbox{}\\
+El nombre del candidato \textbf{propuesto} se indica en el anexo a la presente nota . (BLEU+1: 61.13) \\
+The name of the candidate \textbf{proposed} indicated in the annex to the present note . \\ （同時生成された英文）
+\end{description}
+\vspace{0.5\Cvs}
+
+上記の例では，入力文中のフランス語の分詞「propos\'{e} （指名された）」には参照役中のスペイン語の分詞「propuesto」が対応しているが，従来のテーブル合成手法では，誤った対応である名詞「proyecto （計画，立案）」が結び付き翻訳に用いられた結果，不正確な訳出となっている．
+一方で提案手法においては，入力文の「propos\'{e}」に対してスペイン語の「propuesto」と英語の「proposed」が同時に結び付いており，生成される英文中の単語の前後関係から適切な語彙選択を促し，訳出の改善に繋がったものと考えられる．
+
+逆に，提案手法では語彙選択がうまくいかず，直接対訳で学習した場合よりも精度が落ちた訳出の例を示す．
+
+\vspace{0.5\Cvs}
+\begin{description}
+\fontsize{8.5pt}{13.3pt}\selectfont
+\item[入力文（フランス語）：]\mbox{}\\
+J . Risques \textbf{d'aspiration} : \textbf{cit\`{e}re} de viscosit\'{e} pour la classification des \textbf{m\'{e}langes} ;
+\item[参照訳（スペイン語）：]\mbox{}\\
+J . Peligros por \textbf{aspiraci\'{o}n} : \textbf{criterio} de viscosidad para la clasificaci\'{o}n de \textbf{mezclas} ;
+\item[対応する英文：]\mbox{}\\
+J . \textbf{Aspiration} hazards : viscosity \textbf{criterion} for classification of \textbf{mixtures} ;
+\item[Direct 1:]\mbox{}\\
+J . Riesgos \textbf{d'aspiration} : \textbf{criterio} de viscosit\'{e} para la clasificaci\'{o}n de \textbf{los m\'{e}langes} ; (BLEU+1: 34.20)
+\item[Direct 2:]\mbox{}\\
+J . Riesgos \textbf{d'aspiration} : \textbf{criterio} de viscosit\'{e} para la clasificaci\'{o}n de \textbf{mezclas} ; (BLEU+1: 49.16)
+\item[Tri. MSCFG w/ PvtLM 2M:]\mbox{}\\
+J . Riesgos \textbf{d'aspiration} : viscosit\'{e} \textbf{criterios} para la clasificaci\'{o}n de \textbf{m\'{e}langes} ; (BLEU+1: 27.61) \\
+J . Risk d'aspiration : viscosit\'{e} \textbf{criteria} for the categorization of \textbf{m\'{e}langes} ; （同時生成された英文）
+\end{description}
+\vspace{0.5\Cvs}
+
+この例では，フランス語の「d'aspiration （吸引）」や「m\'{e}langes （混合物）」といった専門用語は，コーパス中の出現頻度が少なく，「d'aspiration」は train1 や train2 にも一度も出現しないため，Direct 1 / 2の双方で翻訳不可能で未知語扱いとなっており，「m\'{e}langes」は train2 でのみ出現しており，Direct 1では未知語扱いである．
+テーブル合成手法では，2つの翻訳モデルで共通して出現する中間言語フレーズのみしか学習できないため，他方のみにしか含まれない専門用語は未知語となってしまう．
+この問題は，その他のピボット翻訳手法である逐次的ピボット翻訳手法や擬似コーパス手法でも当然解決不可能なため，複数の対訳データでカバーできない表現は外部辞書などを用いて補う必要があるだろう．
+
+また，この例では未知語の問題以外にもスペイン語の単数形の名詞「criterio （基準）」がテーブル合成手法では複数形の「criterios」となっていたり語順が誤ったりしている問題も見られる．
+こういった問題は，本提案手法である程度は改善されているものの，活用形や語順の問題により正確に対処するためには，統語的情報を明示的に扱う手法の導入が必要であると考えられる．
+
+
+\subsection{Europarlを用いた評価および品詞毎の翻訳精度}
+
+提案手法の有効性を調査するための比較評価実験も，国連文書コーパスのみでなく，研究の過程で\ref{sec:pivot-europarl}節と同様にEuroparlを用いた欧州の言語間でのピボット翻訳においても実施した．
+この実験においても10万文の対訳データを用いて学習した翻訳モデルを合成するが，中間言語モデルの学習には最大200万文までの英文を利用した．
+この実験からも，中間言語情報を記憶するテーブル合成手法と200万文で学習した中間言語モデルを用いた場合に，すべての言語対において従来のピボット翻訳手法であるTri. SCFGやCascadeを上回る精度が得られた．
+このことから，本提案手法は言語構造の類似度に関わらず有効に機能するものと考えられる．
+
+\asis{
+また，英語は他の欧州諸言語と比較して，性・数・格に応じた活用などが簡略化された言語として有名であり，語形から統語情報が失われることで発生する曖昧性の問題もある．
+本節では，英語を介したドイツ語・フランス語の両方向の翻訳において，誤りの発生しやすい品詞について調査する．
+先ず，独仏・仏独翻訳における評価データの参照訳および各ピボット翻訳手法の翻訳結果に対して Stanford POS Tagger \cite{toutanova00,toutanova03}を用いて品詞付与を行い，参照訳と翻訳結果を比較して，語順は考慮せずに適合率と再現率の調和平均であるF値を算出した．
+
+表\ref{tab:pos-error-de-fr}および表\ref{tab:pos-error-fr-de}は，各翻訳における高頻出品詞の正解率を表している．
+出現頻度は，参照訳中の各品詞の出現回数を意味し，丸括弧内に示された数値は，提案手法とベースライン手法のF値の差分である．
+結果は言語対依存であるが，特に目的言語に強く依存していることが明らかである．
+
+\begin{table}[b]
+\caption{独仏翻訳における品詞毎の翻訳精度}
+\label{tab:pos-error-de-fr}
+\input{05table03.txt}
+\end{table}
+
+\begin{table}[b]
+\caption{仏独翻訳における品詞毎の翻訳精度}
+\label{tab:pos-error-fr-de}
+\input{05table04.txt}
+\end{table}
+
+表\ref{tab:pos-error-de-fr}の独仏翻訳の例では，提案手法によって，ベースライン手法よりも特に前置詞，定冠詞，動詞でF値が大きく向上している．
+一般名詞，形容詞，動詞，副詞は重要な内容語であり，語彙選択の幅も広いため，どの手法でも全体的にF値が低くなっている．
+一般名詞に関しては，通常のテーブル合成手法でもDirectと大きな差は出ておらず，そのため提案手法でもほとんど改善されなかった．
+一方で，動詞のF値は提案手法で大きく向上しており，中間言語モデルによって語の並びを考慮して語彙選択を行うことで翻訳精度向上に繋がったと考えられる．
+しかし，それでもDirectには大きく及ばず，頻度が比較的低い内容語の語彙選択を適切に行うことは困難と言えるだろう．
+一方で，機能語においては提案手法においてDirectと近いF値となった．
+
+表\ref{tab:pos-error-fr-de}の仏独翻訳の例では，表\ref{tab:pos-error-de-fr}の場合と少し変わっており，冠詞，前置詞，再帰代名詞のような機能語で，提案手法によってF値が大きく改善されているものの，Directと比べると大きな差があり，ピボット翻訳で精度が大きく落ちる原因と考えられる．
+冠詞や前置詞は機能語であるものの，ドイツ語では男性系・女性系に加えて，英語にもフランス語にもない中性系の活用を持っているため，フランス語よりも活用の種類が多く，また冠詞や前置詞も格に応じた活用をすることが知られている．
+原言語を英語に翻訳した際には統語的情報が失われることが多いため，機能語にも活用幅があるような目的言語に対してはピボット翻訳が特に困難になることが多い．
+}
+
+本節では，品詞毎の単語正解率の分析を行ったが，言語対毎に特定品詞の翻訳精度が落ちる現象が見られた．
+英語には同じ語形で多品詞の語が多いため，単語の対応だけで統語的な役割を判断するのは不可能な場合もある．
+統語的な情報を汲み取るには複数の単語からなるフレーズを考慮する必要があるが，文頭と文末のような離れた位置での依存関係も存在するため，単語列としてではなく構文構造を考慮することも重要と考えられる．
+そこで，本研究の今後の課題として，構文構造を中間言語の表現として用いるピボット翻訳手法を検討している．
+
+
+\section{まとめ}
+
+本研究の目的は，多言語機械翻訳における翻訳精度の向上を目指し，従来のピボット翻訳手法を調査，問題点を改善して翻訳精度を図ることであった．
+そのために，PBMTで既に有効性が示されている，テーブル合成手法によるピボット翻訳をSCFGに適用し，どのような処理が有効であるかに着目した．
+さらに，従来のテーブル合成手法では中間言語情報が失われ，曖昧性により翻訳精度が減少する問題に対処するため，中間言語情報を記憶し，中間言語モデルを利用して自然な語順の語彙選択を促すことで精度を向上させるテーブル合成手法についても提案した．
+本論文で提案した手法を用いて，国連文書を元にした多言語コーパスの6言語のデータを用いてピボット翻訳の比較評価を行ったところ，英語を中間言語としたすべての言語の組み合わせで従来のテーブル合成手法よりも高い翻訳精度が示された．
+また，特に大規模な中間言語モデルを用いることで，より適切な語彙選択が促されて翻訳の質を高められることが分かった．
+しかし，提案手法でも，直接の対訳コーパスを用いて学習を行った理想的な状況と比較すると，精度の開きが大きく，中間言語モデルをさらに大きくするだけでは解決できないであろう点も示唆された．
+本提案手法で解決できなかった曖昧性の問題を調査すべく，特定の言語対で品詞毎の単語正解率を求めたところ，語順を考慮するだけでは解消されない曖昧性の問題もあり，構文情報を用いてこの点を改善することが今後の課題として考えられる．
+
+ピボット翻訳の曖昧性の問題は，主として中間言語の表現力に起因しており，中間言語の単語列だけでは原言語の情報が失われてしまい，目的言語側で確率的に正しく再現することは困難である．
+そのため，今後の課題として，中間言語を特定の言語の単語列としてではなく，より高い表現力を持った構文構造を中間表現とすることで，中間言語側の多品詞語の問題に対処したり，原言語側の情報を保存して，より正確に目的言語側で情報を再現するための手法を検討する．
+
+1つ目は，中間表現に統語情報を用いた翻訳規則テーブルの軽量化・高精度化である．
+本研究で提案した手法では，SCFGの翻訳モデルを学習するために，階層的フレーズベース翻訳という枠組の翻訳手法で翻訳規則を獲得している．
+これは，翻訳において重要な，単語並び替え問題を高精度に対処できる点で優れているが，統語情報を用いず，総当り的な手段で非終端記号を含んだ翻訳規則を学習するため，テーブルサイズが肥大化する傾向がある．
+その上，テーブル合成時には，中間表現の一致する組み合わせによってテーブルサイズはさらに増加する．
+これは，曖昧性により多くの誤ったフレーズ対応も保存されることを意味するため，不要な規則は除去してサイズを削減するべきである．
+このような，中間表現が一致する組み合わせの中には，文法上の役割は異なるが表記上同じようなものも含まれるため，意味の対応しない組み合わせに対して高い翻訳確率が推定されてしまう場合もある．
+こういった問題は，中間言語の表現に統語情報を組み込むことで，品詞や句構造が異なればフレーズの対応も結び付かないという制約が働き，誤った句対応を容易に除外できるため，テーブルサイズは減少し，曖昧性が解消されて翻訳精度の向上が期待できる．
+
+2つ目は，中間表現に原言語の統語情報を保存するピボット翻訳手法の提案である．
+ピボット翻訳においては，中間言語の表現力が悪影響を及ぼして，原言語の情報が失われてしまうことを述べてきたが，これは機械翻訳に限らず，人手による翻訳でも度々起こる問題である．
+例えば，英語には人称接尾辞のような活用体系がないため，英語に訳した際に性・数・格などの統語的情報が失われ，結果的に英語を元にした翻訳では原意と大きく異なってしまう現象などがある．
+本枠組では，前述の中間言語側の統語情報と組み合わせることで，より原意を汲んだ翻訳の実現を目指す．
+
+
+
+\acknowledgment
+
+本研究の一部はJSPS科研費16H05873，24240032およびATR-Trek社共同研究の助成を受けて実施されました．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Brants, Popat, Xu, Och, \BBA\ Dean}{Brants
+  et~al.}{2007}]{brants07}
+Brants, T., Popat, A.~C., Xu, P., Och, F.~J., \BBA\ Dean, J. \BBOP 2007\BBCP.
+\newblock \BBOQ Large Language Models in Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings EMNLP}, \mbox{\BPGS\ 858--867}.
+
+\bibitem[\protect\BCAY{Brown, Pietra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{brown93}
+Brown, P.~F., Pietra, V.~J., Pietra, S. A.~D., \BBA\ Mercer, R.~L. \BBOP
+  1993\BBCP.
+\newblock \BBOQ The Mathematics of Statistical Machine Translation: Parameter
+  Estimation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}, \mbox{\BPGS\ 263--312}.
+
+\bibitem[\protect\BCAY{Chappelier \BBA\ Rajman}{Chappelier \BBA\
+  Rajman}{1998}]{chappelier98}
+Chappelier, J.-C.\BBACOMMA\ \BBA\ Rajman, M. \BBOP 1998\BBCP.
+\newblock \BBOQ A Generalized CYK Algorithm for Parsing Stochastic CFG.\BBCQ\
+\newblock In {\Bem Proceedings TAPD, \textup{Vol. 98, No. 5}}, \mbox{\BPGS\
+  133--137}.
+
+\bibitem[\protect\BCAY{Chiang}{Chiang}{2007}]{chiang07}
+Chiang, D. \BBOP 2007\BBCP.
+\newblock \BBOQ Hierarchical Phrase-based Translation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 33}  (2), \mbox{\BPGS\
+  201--228}.
+
+\bibitem[\protect\BCAY{Cohn \BBA\ Lapata}{Cohn \BBA\ Lapata}{2007}]{cohn07}
+Cohn, T.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Machine Translation by Triangulation: Making Effective Use of
+  Multi-Parallel Corpora.\BBCQ\
+\newblock In {\Bem Proceedings ACL}, \mbox{\BPGS\ 728--735}.
+
+\bibitem[\protect\BCAY{Dabre, Cromieres, Kurohashi, \BBA\ Bhattacharyya}{Dabre
+  et~al.}{2015}]{dabre15}
+Dabre, R., Cromieres, F., Kurohashi, S., \BBA\ Bhattacharyya, P. \BBOP
+  2015\BBCP.
+\newblock \BBOQ Leveraging Small Multilingual Corpora for SMT Using Many Pivot
+  Languages.\BBCQ\
+\newblock In {\Bem Proceedings NAACL}, \mbox{\BPGS\ 1192--1202}.
+
+\bibitem[\protect\BCAY{de~Gispert \BBA\ Mari{\~{n}}o}{de~Gispert \BBA\
+  Mari{\~{n}}o}{2006}]{gispert06}
+de~Gispert, A.\BBACOMMA\ \BBA\ Mari{\~{n}}o, J.~B. \BBOP 2006\BBCP.
+\newblock \BBOQ Catalan-English Statistical Machine Translation without
+  Parallel Corpus: Bridging through Spanish.\BBCQ\
+\newblock In {\Bem Proceedings of LREC 5th Workshop on Strategies for
+  Developing Machine Translation for Minority Languages}, \mbox{\BPGS\ 65--68}.
+
+\bibitem[\protect\BCAY{Dyer, Cordova, Mont, \BBA\ Lin}{Dyer
+  et~al.}{2008}]{dyer08}
+Dyer, C., Cordova, A., Mont, A., \BBA\ Lin, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Fast, Easy, and Cheap: Construction of Statistical Machine
+  Translation Models with MapReduce.\BBCQ\
+\newblock In {\Bem Proceedings WMT}, \mbox{\BPGS\ 199--207}.
+
+\bibitem[\protect\BCAY{Goto, Utiyama, Sumita, Tamura, \BBA\ Kurohashi}{Goto
+  et~al.}{2013}]{goto13acl}
+Goto, I., Utiyama, M., Sumita, E., Tamura, A., \BBA\ Kurohashi, S. \BBOP
+  2013\BBCP.
+\newblock \BBOQ Distortion Model Considering Rich Context for Statistical
+  Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings ACL}, \mbox{\BPGS\ 155--165}.
+
+\bibitem[\protect\BCAY{Heafield}{Heafield}{2011}]{heafield11}
+Heafield, K. \BBOP 2011\BBCP.
+\newblock \BBOQ KenLM: Faster and Smaller Language Model Queries.\BBCQ\
+\newblock In {\Bem Proceedings, WMT}, \mbox{\BPGS\ 187--197}.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2004}]{koehn04bootstrap}
+Koehn, P. \BBOP 2004\BBCP.
+\newblock \BBOQ Statistical Significance Tests for Machine Translation
+  Evaluation.\BBCQ\
+\newblock In Lin, D.\BBACOMMA\ \BBA\ Wu, D.\BEDS, {\Bem Proceedings EMNLP},
+  \mbox{\BPGS\ 388--395}.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2005}]{koehn05europarl}
+Koehn, P. \BBOP 2005\BBCP.
+\newblock \BBOQ Europarl: A Parallel Corpus for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem MT Summit}, \lowercase{\BVOL}~5, \mbox{\BPGS\ 79--86}.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{koehn07moses}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings ACL}, \mbox{\BPGS\ 177--180}.
+
+\bibitem[\protect\BCAY{Koehn, Och, \BBA\ Marcu}{Koehn et~al.}{2003}]{koehn03}
+Koehn, P., Och, F.~J., \BBA\ Marcu, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Phrase-Based Translation.\BBCQ\
+\newblock In {\Bem Proceedings NAACL}, \mbox{\BPGS\ 48--54}.
+
+\bibitem[\protect\BCAY{Levinboim \BBA\ Chiang}{Levinboim \BBA\
+  Chiang}{2015}]{levinboim15}
+Levinboim, T.\BBACOMMA\ \BBA\ Chiang, D. \BBOP 2015\BBCP.
+\newblock \BBOQ Supervised Phrase Table Triangulation with Neural Word
+  Embeddings for Low-Resource Languages.\BBCQ\
+\newblock In {\Bem Proceedings EMNLP}, \mbox{\BPGS\ 1079--1083}.
+
+\bibitem[\protect\BCAY{三浦\JBA Neubig\JBA Sakti\JBA 戸田\JBA 中村}{三浦 \Jetal
+  }{2014}]{miura14nl12}
+三浦明波\JBA Neubig{ Graham}\JBA Sakti{ Sakriani}\JBA 戸田智基\JBA 中村哲 \BBOP
+  2014\BBCP.
+\newblock 階層的フレーズベース翻訳におけるピボット翻訳手法の応用.\
+\newblock \Jem{情報処理学会第 219 回自然言語処理研究会 (SIG-NL), 20号},
+  \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{三浦\JBA Neubig\JBA Sakti\JBA 戸田\JBA 中村}{三浦 \Jetal
+  }{2015}]{miura15nl07}
+三浦明波\JBA Neubig{ Graham}\JBA Sakti{ Sakriani}\JBA 戸田智基\JBA 中村哲 \BBOP
+  2015\BBCP.
+\newblock 中間言語モデルを用いたピボット翻訳の精度向上.\
+\newblock \Jem{情報処理学会第 222 回自然言語処理研究会 (SIG-NL), 2号},
+  \mbox{\BPGS\ 1--5}.
+
+\bibitem[\protect\BCAY{Miura, Neubig, Sakti, Toda, \BBA\ Nakamura}{Miura
+  et~al.}{2015}]{miura15acl}
+Miura, A., Neubig, G., Sakti, S., Toda, T., \BBA\ Nakamura, S. \BBOP 2015\BBCP.
+\newblock \BBOQ Improving Pivot Translation by Remembering the Pivot.\BBCQ\
+\newblock In {\Bem Proceedings ACL}, \mbox{\BPGS\ 573--577}.
+
+\bibitem[\protect\BCAY{Neubig}{Neubig}{2013}]{neubig13travatar}
+Neubig, G. \BBOP 2013\BBCP.
+\newblock \BBOQ Travatar: A Forest-to-String Machine Translation Engine based
+  on Tree Transducers.\BBCQ\
+\newblock In {\Bem Proceedings ACL Demo Track}, \mbox{\BPGS\ 91--96}.
+
+\bibitem[\protect\BCAY{Neubig, Arthur, \BBA\ Duh}{Neubig
+  et~al.}{2015}]{neubig15naacl}
+Neubig, G., Arthur, P., \BBA\ Duh, K. \BBOP 2015\BBCP.
+\newblock \BBOQ Multi-Target Machine Translation with Multi-Synchronous
+  Context-free Grammars.\BBCQ\
+\newblock In {\Bem Proceedings NAACL}, \mbox{\BPGS\ 484--491}.
+
+\bibitem[\protect\BCAY{Neubig, Nakata, \BBA\ Mori}{Neubig
+  et~al.}{2011}]{neubig11-kytea}
+Neubig, G., Nakata, Y., \BBA\ Mori, S. \BBOP 2011\BBCP.
+\newblock \BBOQ Pointwise Prediction for Robust, Adaptable Japanese
+  Morphological Analysis.\BBCQ\
+\newblock In {\Bem Proceedings ACL}, \mbox{\BPGS\ 529--533}.
+
+\bibitem[\protect\BCAY{Nirenburg}{Nirenburg}{1989}]{nirenburg89}
+Nirenburg, S. \BBOP 1989\BBCP.
+\newblock \BBOQ Knowledge-Based Machine Translation.\BBCQ\
+\newblock {\Bem Machine Translation}, {\Bbf 4}  (1), \mbox{\BPGS\ 5--24}.
+
+\bibitem[\protect\BCAY{Och}{Och}{2003}]{och03mert}
+Och, F.~J. \BBOP 2003\BBCP.
+\newblock \BBOQ Minimum Error Rate Training in Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings ACL}, \mbox{\BPGS\ 160--167}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{papineni02}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings ACL}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Shannon}{Shannon}{1948}]{shannon48}
+Shannon, C.~E. \BBOP 1948\BBCP.
+\newblock \BBOQ A Mathematical Theory of Communication.\BBCQ\
+\newblock {\Bem Bell System Technical Journal}, {\Bbf 27}  (3), \mbox{\BPGS\
+  379--423}.
+
+\bibitem[\protect\BCAY{Toutanova, Klein, Manning, \BBA\ Singer}{Toutanova
+  et~al.}{2003}]{toutanova03}
+Toutanova, K., Klein, D., Manning, C.~D., \BBA\ Singer, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ Feature-rich Part-of-speech Tagging with a Cyclic Dependency
+  Network.\BBCQ\
+\newblock In {\Bem Proceedings NAACL}, \mbox{\BPGS\ 173--180}.
+
+\bibitem[\protect\BCAY{Toutanova \BBA\ Manning}{Toutanova \BBA\
+  Manning}{2000}]{toutanova00}
+Toutanova, K.\BBACOMMA\ \BBA\ Manning, C.~D. \BBOP 2000\BBCP.
+\newblock \BBOQ Enriching the Knowledge Sources Used in a Maximum Entropy
+  Part-of-Speech Tagger.\BBCQ\
+\newblock In {\Bem Proceedings EMNLP}, \mbox{\BPGS\ 63--70}.
+
+\bibitem[\protect\BCAY{Utiyama \BBA\ Isahara}{Utiyama \BBA\
+  Isahara}{2007}]{utiyama07}
+Utiyama, M.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2007\BBCP.
+\newblock \BBOQ A Comparison of Pivot Methods for Phrase-Based Statistical
+  Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings NAACL}, \mbox{\BPGS\ 484--491}.
+
+\bibitem[\protect\BCAY{Zhu, He, Wu, Zhu, Wang, \BBA\ Zhao}{Zhu
+  et~al.}{2014}]{zhu14}
+Zhu, X., He, Z., Wu, H., Zhu, C., Wang, H., \BBA\ Zhao, T. \BBOP 2014\BBCP.
+\newblock \BBOQ Improving Pivot-Based Statistical Machine Translation by
+  Pivoting the Co-occurrence Count of Phrase Pairs.\BBCQ\
+\newblock In {\Bem Proceedings EMNLP}, \mbox{\BPGS\ 1665--1675}.
+
+\bibitem[\protect\BCAY{Ziemski, Junczys-Dowmunt, \BBA\ Pouliquen}{Ziemski
+  et~al.}{2016}]{ziemski16un}
+Ziemski, M., Junczys-Dowmunt, M., \BBA\ Pouliquen, B. \BBOP 2016\BBCP.
+\newblock \BBOQ The United Nations Parallel Corpus v1.0.\BBCQ\
+\newblock In {\Bem Proceedings LREC}, \mbox{\BPGS\ 3530--3534}.
+
+\end{thebibliography}
+
+
+\clearpage
+
+\begin{biography}
+\addtolength{\baselineskip}{-1pt}
+
+\bioauthor{三浦　明波}{
+2013年イスラエル国テクニオン・イスラエル工科大学コンピュータ・サイエンス専攻卒業．
+2016年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+現在，同大学院博士後期課程在学．
+機械翻訳，自然言語処理に関する研究に従事．
+情報処理学会，言語処理学会，ACL 各会員．
+}
+\bioauthor[:]{Graham Neubig}{
+2005年米国イリノイ大学アーバナ・シャンペーン校工学部コンピュータ・サイエンス専攻卒業．
+2010年京都大学大学院情報学研究科修士課程修了．
+2012年同大学院博士後期課程修了．
+2012〜2016年奈良先端科学技術大学院大学助教．
+現在，カーネギーメロン大学言語技術研究所助教，奈良先端科学技術大学院大学客員准教授．
+機械翻訳，自然言語処理に関する研究に従事．
+}
+\bioauthor[:]{Sakriani Sakti}{
+1999年インドネシア・バンドン工科大学情報卒業．
+2002年ドイツ・ウルム大学修士，2008年博士課程修了．
+2003〜2011年ATR音声言語コミュニケーション研究所研究員，情報通信研究機構主任研究員．
+現在，奈良先端科学技術大学院大学情報科学研究科助教．
+2015〜2016 年フランスINRIA滞在研究員．
+統計的パターン認識，音声認識，音声翻訳，認知コミュニケーション，グラフィカルモデルの研究に従事．
+JNS，SFN，ASJ，ISCA，IEICE，IEEE 各会員．
+}
+\bioauthor{戸田　智基}{
+1999年名古屋大学工学部電気電子・情報工学科卒業．
+2003年奈良先端科学技術大学院大学情報科学研究科博士後期課程修了．
+同年日本学術振興会特別研究員-PD．
+2005年奈良先端科学技術大学院大学情報科学研究科助手．
+2007年同助教．
+2011年同准教授．
+2015年より名古屋大学情報基盤センター教授．工学博士．音声情報処理の研究に従事．
+IEEE，電子情報通信学会，情報処理学会，日本音響学会 各会員．
+}
+\bioauthor{中村　　哲}{
+1981年京都工芸繊維大学工芸学部電子工学科卒業．京都大学工学博士．シャープ株式会社．
+奈良先端科学技術大学院大学助教授，2000年ATR音声言語コミュニケーション研究所室長，所長，
+2006年（独）情報通信研究機構研究センター長，けいはんな研究所長などを経て，
+現在，奈良先端科学技術大学院大学教授．
+ATRフェロー．カールスルーエ大学客員教授．
+音声翻訳，音声対話，自然言語処理の研究に従事．
+情報処理学会喜安記念業績賞，総務大臣表彰， 文部科学大臣表彰，Antonio Zampoli賞受賞．
+ISCA 理事，IEEE SLTC 委員，IEEEフェロー．
+}
+
+
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

@@ -1,0 +1,1066 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{array}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{footnote}
+\makesavenoteenv{tabular}
+\makesavenoteenv{table}
+    \usepackage[OT2,OT1]{fontenc}
+\newcommand\textcyr[1]{{\fontencoding{OT2}\fontfamily{wncyr}\selectfont #1}}
+
+
+
+\Volume{23}
+\Number{3}
+\Month{June}
+\Year{2016}
+
+\received{2015}{11}{24}
+\revised{2016}{1}{29}
+\accepted{2016}{3}{28}
+
+\setcounter{page}{299}
+
+\etitle{A Generalized Dependency Tree Language Model for SMT}
+\eauthor{John Richardson\affiref{KU} \and Taku Kudo\affiref{Google} \and Hideto Kazawa\affiref{Google} \and Sadao Kurohashi\affiref{KU}}
+\eabstract{
+In this paper we describe a generalized dependency tree language model for machine
+translation. We consider in detail the question of how to define tree-based $n$-grams,
+or `$t$-treelets',
+and thoroughly explore the strengths and weaknesses of our approach by evaluating
+the effect on translation quality
+for nine major languages. In addition, we show that it is possible to attain a significant
+improvement in translation quality for even non-structured machine translation
+by reranking filtered parses of $k$-best string output.
+}
+\ekeywords{Language Model, Target-Side Syntax, Dependency Tree, Machine Translation, Reranking}
+
+\headauthor{Richardson, Kudo, Kazawa, Kurohashi}
+\headtitle{Generalized Dependency Tree LM}
+
+\affilabel{KU}{}{Graduate School of Informatics, Kyoto University}
+\affilabel{Google}{}{Google, Inc.}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+Since the early days of word-based translation, the research community
+has been moving towards more and more syntactic approaches to translation.
+Classic $n$-gram language models are effective
+at capturing translation fluency at the word level, however such approaches
+often fail at the syntactic and semantic level. In this study we abstract
+the traditional definition of a classic $n$-gram to dependency trees and show how
+our approach is able to improve more challenging issues such as long-distance
+word agreement.
+
+The primary motivation for using structured language models is that we
+can reduce the `distance' between words that are interdependent on a syntactic
+(and often semantic) level. While tree-based models have more complicated
+structure than their string-based counterparts, the sparsity of the most important
+information is reduced, giving a more compact and relevant representation
+of context.
+
+Despite recent advances in neural and structured language modeling technology,
+the most widespread language modeling paradigm in major translation systems
+is still classic $n$-gram modeling. Classic $n$-gram
+models are combined with a variety of smoothing methods,
+the most popular being modified Kneser-Ney \cite{Chen96} and Stupid Backoff
+\cite{Brants07}, to form simple and robust models of linear word context.
+There exist highly optimized implementations, such as KenLM \cite{KenLM},
+making $n$-gram models popular in modern systems \cite{Moses,Travatar,KyotoEBMT}.
+
+There have been a number of issues that have prevented the widespread adoption
+of tree-based language models.
+We believe that the two main problems are the lack of an agreed standard on the
+most effective definition of tree-based context, and the requirement for a
+syntax-based decoder for full integration into a machine translation system.
+The use of parsers as language models has shown little improvement
+in translation experiments \cite{Och04,Post08} and there have been previous
+attempts to use syntax-based language modeling that have failed to show any
+statistically significant increase in BLEU \cite{Schwartz11}
+(see errata\footnote{https://www.cs.jhu.edu/{\textasciitilde}ccb/publications/incremental-syntactic-language-models-for-phrase-based-translation-errata.pdf}).
+In this paper we show that we can still achieve a significant improvement in
+translation quality judged by humans without requiring a syntax-based decoder.
+
+In this paper we frequently refer to the problem of long-distance word agreement.
+This is a tricky issue for string-based machine translation, which does not
+consider long-distance dependencies and therefore is susceptible to errors such as
+incorrect noun/verb agreements. We show that our model is most effective for
+languages, such as those in the Slavic family, that are morphologically rich
+and allow for free word order, because they contain more examples of non-local
+dependencies that effect fluency. See Figure~\ref{Figure:Agreement}
+for an example of such a long-distance word agreement error.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-3ia4f1.eps}
+\end{center}
+\hangcaption{Example of long-distance agreement error in a French
+    translation. The grammatical gender of the adjective \textit{utilis\'{e}es} (f.pl.) should be
+    corrected to \textit{utilis\'{e}s} (m.pl.) to agree with the noun \textit{min\'{e}raux} (m.pl.).
+    The verb \textit{sont} also demonstrates long-distance agreement that would be difficult
+    to capture with a classic $n$-gram model.}
+\label{Figure:Agreement}
+\end{figure}
+
+
+\section{Related Work}
+
+The idea of capturing structure in a language model has been around since the
+late 90's \cite{Chelba97}, particularly in the speech recognition community.
+Such tree-based, or `structured' language models have mainly
+considered only limited word histories, such as ancestors \cite{Gubbins13}
+or specific parent/sibling relationships \cite{Shen08}, however more
+recent attempts have started to define more general syntactic word histories \cite{Sidorov12}.
+The beginnings of such generalized approaches can be traced back to
+`arbori-context' trees \cite{Mori01}, which are designed to select optimal
+partial histories.
+
+Other effective syntactic approaches in recent years have included a bilingual
+language model \cite{Marino06,Niehues11}
+enhanced with some dependency information \cite{Garmash14}, specifically the POS tags of
+parent/grandparent and closest left/right siblings, and
+modeling a generative dependency structure on top of a classic $n$-gram
+language model \cite{Ding14}.
+
+While not directly designed as `syntax-based' language models, approaches based
+on neural networks have also been shown to be effective at capturing a more
+general word history than classic $n$-gram models. Such approaches include
+feed-forward \cite{Bengio03,Schwenk07} and recurrent \cite{Mikolov10}
+neural network language models and more recently LSTM-based language
+models \cite{Sundermeyer12}. The most recent approach at the time of writing
+considers a hybrid approach of syntactic and neural network components \cite{Sennrich15}.
+
+Two major drawbacks of neural network based approaches are that it can be difficult to `reverse
+engineer' the syntactic knowledge learned and that model training can struggle
+computationally on large data.
+
+Our approach expands on existing studies by proposing
+a more generalized framework for syntactic context and analyzing its
+effectiveness for a large range of language pairs. We show that it is
+applicable even to systems without target-side syntax.
+
+
+
+\section{Model Details}
+
+\subsection{Classic $n$-grams with Linear History}
+
+The classic generative story for language models is as a Markov process.
+Generation of a sequence of words is based on the notion of `history' or `context',
+i.e., the ordered list of words already generated. It would be desirable
+to consider complete histories, however in practice this is not tractable.
+To counter sparsity and computational issues, a selective history must be used.
+
+These ideas inspire the design of the classic $n$-gram language model. We
+assume an $(n-1)$th order Markov property and use a linear context, i.e., model
+the probability of any given word as being conditional on the previous $n-1$ words.
+The probability of a sentence $w_1, ..., w_m$ can be written as:
+\begin{align*}
+   P(w_1, ..., w_m) & = \prod_i^m P(w_i \mid w_1, ..., w_{i-1}) \\
+                    & \approx \prod_i^m P(w_i \mid w_{i-n+1}, ..., w_{i-1}).
+\end{align*}
+
+In many cases, this linear history can be helpful in determining the next word.
+For example, the word `Francisco' is more likely to appear after `San' than `Los'.
+But when it comes to modeling other issues affecting fluency, such as word agreement,
+we must also use non-local context, ideally at the same time without
+increasing model sparsity. This is the primary motivation for our tree-based
+language model.
+
+
+\subsection{Syntax-Based History and $t$-treelets}
+
+We now consider how to define the history of a word on the syntactic level.
+In this paper we consider generalized tree $n$-grams, or `$t$-treelets', as the syntax-based equivalent of the
+classic $n$-gram. Our definition of $t$-treelets is similar to the concept of syntactic $n$-grams \cite{Sidorov12},
+which we formalize and expand over arbitrary tree structures. This is in contrast to
+previous work that considers only a limited subset of possible syntactic relations.
+
+Let us assume a sentence $S = \{w_1, w_2, ..., w_m\}$ of length $m$ with a virtual
+root $R$ and a connected tree structure $T:S \rightarrow S \cup \{R\}$ mapping each word $w_i$ to one head
+$T(w_i) \in S \cup \{R\}$ with $T(w_i) \ne w_i$. The design of $T$ can be motivated
+by any arbitrary set of standards, however a natural choice for machine translation applications
+would be dependency parses.
+
+We now define the `history' $H_i$ for $w_i$ as the subset of $S$
+consisting of the words visited by in-order depth-first traversal of $\{S,T\}$ starting at $R$ and ending at $w_i$.
+The diagram on the right of Figure~\ref{Figure:Model}
+shows the tree-based history of an example sentence (shown on the left).
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-3ia4f2.eps}
+\end{center}
+\hangcaption{Example of $t$-treelet extraction.
+    The left figure shows an example sentence $\{S,T\}$ and the right
+    figure shows the history $H$ for `mice'. The five possible $t$-treelets of order
+    $l \le 3$ are shown beneath.}
+\label{Figure:Model}
+\end{figure}
+
+The core reasoning behind this definition of history is that we wish to ensure
+that the $t$-treelet history of all words respects a well-defined ordering (in this case
+the order of visiting nodes by depth-first traversal). This ensures that we never
+encounter any cyclic dependencies or ambiguity when calculating the probability of an entire
+tree. Note that this well-defined ordering is trivial in the case of classic
+$n$-gram models, however this is an important consideration in tree-based models.
+
+While in this paper we use in-order depth-first traversal, any well-defined ordering
+could be used, for example to reflect the ordering used for hypothesis combination
+in a tree-based decoder.
+As an example of differences caused by this choice, an in-order depth-first traversal
+allows us to include the children of left-side siblings into word history, and this is
+useful for many word agreement problems, however this is not possible
+with breadth-first traversal.
+
+Conversely we cannot make use of the right-side siblings
+of a word. This could be useful in rare cases such as `le prix fixe' (`the set price')
+when we need to use a modifier to the right of a determiner (the adjective `fixe')
+to determine the gender/number of its head noun (`prix'), which in this case could be
+either singular or plural.
+
+We now define the `$t$-treelets of size $l$ for $w_i$', as
+all connected subtrees $S' \in H_i$ where $w_i \in S'$ and $|S'| = l$, along with
+the tree structure $T$. See the lower half of Figure~\ref{Figure:Model} for
+the $t$-treelets of order $l \le 3$ extracted for the word `mice' in the example sentence.
+Our $t$-treelet definition captures in particular the difference
+between left and right dependencies, e.g., whether $w_i$ is to the left or right of
+$T(w_i)$ (we treat each case separately), and relative sibling positions, which are to
+our knowledge not considered in previous work.
+
+While there is only one possible linear $n$-gram of given size for any word, the
+same cannot be said for $t$-treelets. Furthermore, the number of possible
+$t$-treelet shapes increases with $l$ and depends on the sentence structure.
+For convenience we normalize the $\{S', T\}$ by renumbering the words
+and dependencies from $1$ to $l$. This allows us to classify $t$-treelet shapes into
+groups.
+
+The possible shapes for $t$-treelets for $l \le 3$ are shown with natural language
+examples in Figure~\ref{Figure:Types}. For completeness we also add the empty $t$-treelet.
+There are 10 possible such $t$-treelets: 1 of size 1, 2 of size 2 and 7 of size 3.
+A major benefit of this approach is that we are able to turn each shape $g$ `on' and `off',
+a process which is described in Section~\ref{Section:ShapeSelection} below.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-3ia4f3.eps}
+\end{center}
+\hangcaption{The shapes of all possible $t$-treelet types
+    for $l \le 3$ with natural language examples and word-by-word glosses.
+    The words marked with dark nodes represent the $w_i$ around which the $t$-treelets
+are centered.}
+\label{Figure:Types}
+\end{figure}
+
+We can now model the probability of generating a given word $w_i$ with
+$t$-treelets $G$ as $P(w_i \mid H) \approx P(w_i \mid G)$. Note that the different
+$g \in G$ are not always independent, so this probability can be rather complicated
+to calculate.
+We found that the approximation $P(w_i \mid G) \approx \sqrt[|G|]{\prod_{g \in G} P(w_i \mid g)}$
+works well, although it could also be possible for example to treat the individual
+$P(w_i \mid g)$ as scores and combine with a log-linear model.
+In our case we found that it was difficult to learn weights for a log-linear model,
+since in our experiments BLEU was not sensitive to changes in long-range word agreements.
+
+
+\subsubsection{Task-specific shape selection}
+\label{Section:ShapeSelection}
+
+Previous definitions of tree-based histories have considered
+subsets of the possible $t$-treelet shapes that we have defined above, such as ancestor chains
+$\{w_i, T(w_i), ..., T^{l-1}(w_i)\}$ \cite{Gubbins13} and restricted parent/sibling relations
+\cite{Shen08}. Our definition not only expands upon these, but also adds flexibility
+as we are able to turn each shape type `on' and `off' depending on the requirements
+of the task. An additional benefit is that it becomes possible to compare directly with previous work
+by simply selecting $t$-treelet shapes.
+
+In particular, we found that there are types of dependency relations that may or may
+not affect word agreement depending on languages and parsing standards.
+The natural language examples shown in Figure~\ref{Figure:Types} give classic cases where
+certain $t$-treelet shapes are important for determining word morphology. There equally are
+types that are never (or very rarely) used in certain languages, and we found that considering
+these types at times caused unnecessary noise. This is similar to using unnecessarily long
+$n$-gram sizes in classic language models, where there is often not enough gain in expressiveness
+to warrant the additional errors caused by sparsity and irregular smoothing.
+
+See Section~\ref{Section:Tuning} for experimental results and a more detailed analysis of
+the relative performance of various special cases of our model, including comparison with previous work.
+
+
+\subsection{Smoothing}
+\label{Section:Smoothing}
+
+Since we conducted our translation experiments on web-scale data, we designed our
+model to be used with Stupid Backoff \cite{Brants07} smoothing, which has been shown
+to perform well on this kind of data.
+
+The mathematical formulation of Stupid Backoff smoothing is shown below. The formula
+below is applied
+recursively until a known $n$-gram is found, and unigram scores are defined as
+$SB(w_i) = c(w_i) / \sum_w c(w)$, where $c(w)$ is the observed frequency of word $w$ in the
+training corpus. The parameter
+$\alpha$ controls the degree to which we penalize backing off to shorter $n$-grams.
+\begin{equation}
+    SB(w_i \mid w^{i-1}_{i-n+1}) = 
+    \begin{cases}
+        \frac{c(w^i_{i-n+1})}{c(w^{i-1}_{i-n+1})}, & \text{if}\ c(w^i_{i-n+1}) > 0\\
+        \alpha SB(w_i \mid w^{i-1}_{i-n+2}), & \text{otherwise}.
+    \end{cases}
+\end{equation}
+
+The primary advantage of this smoothing
+method is that it does not require the calculation or lookup of modified $t$-treelet counts.
+This allows for fast and simple calculation of backoff probabilities, and works well
+when using each $t$-treelet type score as a feature.
+Note that Stupid Backoff smoothing was also
+used in similar work \cite{Gubbins13} that we use for comparison.
+
+When backing off to shorter $t$-treelets, note that we calculate probabilities based on the
+shorter shape type, and that this type is always unique because of the (in-order depth-first)
+ordering constraint. For example (in Figure~\ref{Figure:Types}), `il est grand' (type 4) is
+backed off to `est grand' (type 2) non-ambiguously.
+
+
+\subsection{Application to SMT: Filtering and Reranking}
+\label{Section:Filtering}
+
+In our experiments (see Section~\ref{Section:Experiments}) we measure the translation
+improvement gained by reranking $k$-best machine translation output using our
+language model.
+
+Reranking is a very flexible and simple approach.
+In particular we do not make any assumptions about the
+decoding algorithm of the underlying MT system and we are able to use a standard string-to-string system
+by simply parsing the output. As mentioned in the introduction, we believe that a
+major stumbling block for syntax-based language modeling has been the lack of
+applicability to string-based MT systems (which are still the most common), and
+we show that for our model this is not an issue.
+
+The obvious problem of using string output is that we cannot guarantee reliable parsing,
+particularly of (poorly formed) machine translation output. We propose the
+simple approach of using a filtering heuristic based on dependency tree consistency
+to reduce this problem.
+
+We parse all $k$-best candidates and extract the dependency treelets
+of size $l$ centered on each word that differs between each candidate and the 1-best (baseline)
+translation. We then discard any $k$-best candidates that contain any such treelets
+with a different dependency structure to the corresponding treelet in the 1-best translation.
+This simple heuristic was very effective at reducing errors caused by bad translations/parses,
+as simple word changes (e.g., changing the gender of a definite article)
+should not affect the parse tree. Naturally this filtering leads to a small reduction in recall.
+
+
+\section{Experimental Setup}
+\label{Section:Experiments}
+
+We performed a series of experiments to measure the improvement in translation quality
+obtainable by reranking MT output using our proposed tree-based language model.
+In particular we were interested in improving morphological errors such as word agreement.
+
+
+\subsection{Language Choice}
+
+In our experiments we built and evaluated models for nine major languages. This allowed
+us to analyze clearly the types of morphological error that the proposed model
+was able to improve. The languages were selected from a variety
+of language families and all display word agreement to various degrees.
+
+The languages chosen were: Czech and Russian [Slavic];
+Hungarian [Uralic]; Dutch and German [Germanic]; French, Portuguese and Spanish
+[Romance]; and Hebrew [Semitic]. For consistency we used English as the source
+language for all translation experiments. See Table~\ref{Table:Languages} for an overview
+of the characteristics of these languages affecting (long-distance) word agreements.
+
+\begin{table}[t]
+\hangcaption{Word agreement/ordering characteristics of the nine languages selected for translation experiments.}
+\label{Table:Languages}
+\input{02table01.txt}
+\end{table}
+
+All language models were trained on mixed domain monolingual web corpora of
+5--10 billion unique sentences per language.
+
+
+\subsection{Automatic Evaluation Metrics}
+
+Translation quality was measured with BLEU \cite{BLEU} and the language model was
+intrinsically evaluated using a method of evaluation we call `win-rate' (see below).
+
+The BLEU metric has the following formulation:
+\begin{equation}
+BLEU = BP \cdot \exp{\sum_{n=1}^N{w_n \log{p_n}}},
+\end{equation}
+where BP is a brevity penalty, $w_n$ are weights and $p_n$ are $n$-gram precisions.
+As can be seen from the definition, BLEU considers only the precision of local $n$-grams.
+BLEU has been shown in the past to be ineffective in evaluating syntax-based
+approaches, with improvements being `invisible to [such] an $n$-gram metric' \cite{Sennrich15}.
+
+We also found that BLEU was unreliable at reflecting changes in translation quality for long-distance
+dependencies, and that the sensitivity was low because only a small fraction of words
+were changed by using the proposed model (for example many sentences do not contain word agreement errors).
+Nonetheless it was practical to use such an automatic measurement for parameter tuning.
+
+As another point of reference, we also used a method of intrinsic language model evaluation we call `win-rate'.
+For each sentence we calculated the language model score (using the proposed model)
+of the baseline MT system output and the reference translation. The win rate was then
+calculated as follows, giving the ratio of number of times our model gives a higher score to the
+reference translation than to the baseline output. The model can be considered useful if it can successfully
+give a higher score to the reference translation than the baseline MT output.
+While we do not claim that this metric is strongly correlated with human judgment,
+we believe it gives useful information and is very simple to implement.
+\begin{equation}
+win\mbox{-}rate = \frac{\#(score(reference) > score(baseline))}{\# sentences}
+\end{equation}
+
+The classic method of intrinsic language model evaluation is perplexity,
+however we chose not to use this measure because it assumes normalized
+probabilities, which we cannot strictly guarantee when using our model approximations
+and Stupid Backoff smoothing.
+
+
+\subsection{Training and Lookup}
+
+Prior to model training, we tokenized the entire training corpus and collected
+word frequencies. Tokens with frequency less than or equal to a certain threshold
+(in our case 1) were replaced with an `unknown' token in order to model $t$-treelet
+counts during lookup that include out-of-vocabulary tokens.
+
+Training was conducted by parsing training sentences and counting all $t$-treelets
+of size $\le 3$. It would be possible to use longer $t$-treelets however we found that
+there were not many cases where longer context was necessary for determining correct
+word agreement. To save memory $t$-treelets could be pruned based on frequency, however
+we found that this negatively impacted performance (see Table~\ref{Table:PreResults2}).
+Parsing was conducted with the shift-reduce dependency parser described in \cite{Lerner13}.
+
+\begin{table}[t]
+\hangcaption{Result of varying model size by changing $t$-treelet filtering threshold $f$ in training. These results used the setting `AllTypes'.}
+\label{Table:PreResults2}
+\input{02table02.txt}
+\end{table}
+
+
+\subsection{Reranking SMT Output}
+\label{Section:Reranking}
+
+In order to evaluate the effectiveness of the proposed model
+we tested the ability of our language model to rerank the
+1,000-best translation output of a string-based SMT system.
+
+The baseline translation system was a state-of-the-art in-house phrase-based
+translation system trained on large web data. The baseline
+used a standard 5-gram language model trained on the same data as the
+proposed tree-based model and for comparison also used Stupid Backoff smoothing.
+
+The 1,000-best translation candidates were filtered using the dependency tree consistency
+heuristic described in Section~\ref{Section:Filtering}. We also removed noisy
+sentences consisting over 50\% non-alphanumeric characters, and evaluated on
+sentences with length between 10 and 30 words.
+
+
+\section{Optimization of Model Parameters}
+\label{Section:Tuning}
+
+We first explored the effects of varying our model parameters, in particular
+the selection of $t$-treelet shapes, comparing with previous work.
+The experiments were conducted on a development data set consisting of approximately 10,000 sentences
+per language that were held out from our baseline and language model training data.
+
+For comparison with previous work, we first experimented with
+settings enabling various sets of $t$-treelet shapes (for size $l \le 3$). The setups
+`Ancestors' and `Siblings' were designed to correspond to the models of
+\cite{Gubbins13} and \cite{Shen08} respectively. Note that there are some
+slight differences, in particular the smoothing algorithm for `Siblings' (Shen et al.
+did not mention any smoothing) and the fact that our models are more
+general than previous work, differentiating between left and right children.
+
+The four model variants tested were as follows:
+\begin{itemize}
+    \item Ancestors: ancestors, no siblings (types: 1--2, 6--9)
+    \item Siblings: siblings, no ancestors (types: 1--5)
+    \item AllTypes: all $t$-treelet types (types: 1--9)
+    \item Trigrams: all pure 3-grams, siblings and ancestors (types: 3--9)
+\end{itemize}
+
+
+\subsection{Results}
+
+Table~\ref{Table:PreResults} shows the results for the four system variants.
+We can see that the most effective settings were to use all $t$-treelets
+or all trigrams, and these more general setups performed better than
+the more restrictive settings based on previous work. We found that
+using only trigrams gave better results than for all $t$-treelets because
+the lower order $t$-treelets often gave less reliable information (i.e., we
+need longer context).
+
+\begin{table}[t]
+\hangcaption{Comparison of model formulations enabling various $t$-treelet types. BLEU and win-rate are shown for each proposed system. The best results are shown in bold type.}
+\label{Table:PreResults}
+\input{02table03.txt}
+\end{table}
+
+Additional tuning experiments showed that improvements were made by increasing
+model size (reducing $t$-treelet filtering threshold frequency $f$ for training,
+see Table~\ref{Table:PreResults2}). An increase of on average 0.1 BLEU per language
+was observed by varying the beam width from 1 to 100, and we used a beam width
+of 100 for all our evaluation results. We note that the parsing quality was roughly
+the same for all languages. For detailed parser evaluation, see \cite{Lerner13}.
+
+We also found empirically that it was effective to penalize unseen
+$t$-treelets more heavily than in previous work \cite{Brants07} by changing the backoff parameter $\alpha$ from the
+standard 0.4 to 0.004 (see Section~\ref{Section:Smoothing} for more details).
+We did not conduct a full-scale experiment to find the optimum value.
+
+
+
+\section{Final Evaluation and Error Analysis}
+\label{Section:Test}
+
+\subsection{Experimental Settings}
+
+We conducted a full evaluation of our proposed approach on nine language pairs.
+For the final evaluation we used the `Trigrams' settings that were shown in
+Section~\ref{Section:Tuning} to be the most effective overall.
+We decided to use this setting for all language pairs, since we did not
+believe that the BLEU and win-rate scores gave a clear enough winner
+for each individual language pair.
+
+The experiments were conducted by translating mixed-domain English web sentences that
+were held out from the baseline SMT system and language model training data.
+As we were interested in evaluating the differences between the baseline and
+proposed models, we translated a large test set then for evaluation randomly selected
+(on average) 400 sentences per language that had different output between the
+baseline and proposed systems.
+The change rates in Table~\ref{Table:Results} show the percentages of sentences
+that were translated differently.
+
+
+\subsection{Human Evaluation}
+
+Translation quality was measured by skilled human raters in order to maximize
+the reliability of the evaluation.
+The raters were bilingual speakers of each language pair but not professional
+translators.
+
+For each sentence the raters were instructed to give a score between 0 and 6 (inclusive),
+given the source sentence and translation, one rater per sentence.
+The rating guidelines are shown in Table~\ref{Table:Rating}.
+The number of raters per language pair are shown in Table~\ref{Table:Results}.
+
+\begin{table}[b]
+\caption{Rating guidelines for human evaluation.}
+\label{Table:Rating}
+\input{02table04.txt}
+\end{table}
+
+We calculated the following scores for each language pair:
+\begin{itemize}
+\item `mean-diff-score': The mean difference between the sentence-level
+human ratings of the proposed and baseline systems.
+\item `mean-diff-sign': The mean difference between the number of sentence-level
+wins and losses (in terms of human ratings) of the proposed and baseline systems.
+\item `change-rate': Percentage of sentences that were different between the baseline and proposed systems.
+\item `baseline': Mean sentence-level human evaluation score for the baseline system.
+\item `proposed': Mean sentence-level human evaluation score for the proposed system.
+\end{itemize}
+
+\begin{table}[b]
+\hangcaption{Human evaluation results, comparing mean difference between proposed and baseline systems, sorted by language group.}
+\label{Table:Results}
+\input{02table05.txt}
+\end{table}
+
+
+\subsection{Results}
+
+\begin{table}[b]
+\hangcaption{Number of test sentences with each score difference ($-6$ to $+6$) between proposed and baseline systems.}
+\label{Table:Diff}
+\input{02table06.txt}
+\end{table}
+
+Table~\ref{Table:Results} shows the results sorted by language family.
+Significantly positive ($p < 0.05$) results for `mean-diff-score' and `mean-diff-sign'
+are shown in bold type. Table~\ref{Table:Diff} shows the exact number of test sentences
+with each score difference ($-6$ to +6) between proposed and baseline systems.
+
+The results show a significantly positive\footnote{More precisely,
+we calculated the 95\% confidence interval for the observed mean using the Student's
+$t$-distribution, where the degrees of freedom were set to the sample size minus 1.
+The result was deemed significantly positive if the lower bound was greater than zero.}
+improvement for Czech, Russian, Hungarian,
+German and French, with more fluent output as judged by human raters.
+In particular,
+all the languages displaying noun declension were significantly improved (Czech, Russian, Hungarian
+and German). The translation quality for Romance languages (with the exception of French),
+Hebrew and Dutch did not change significantly when using a tree-based language model.
+In the next section we analyze these findings in detail.
+
+
+\subsection{Discussion}
+
+The results of the human evaluation showed a
+noticeable difference between the effectiveness of the tree-based language model
+for different languages.
+In particular, the morphological characteristics of each language (to some extent captured by
+the language family) appear to effect greatly the utility of a structured language model
+in comparison to the baseline, which uses a standard $n$-gram model.
+
+All nine languages require correct word agreement for high fluency, however the type and nature
+of these agreements varies between language. For example, adjective-noun and noun-verb
+agreement in Romance languages can be expressed relatively simply with an $n$-gram model
+as the words in question normally appear together, which could explain why we saw less
+improvement for this language family. In contrast,
+case choice in Slavic languages requires consideration of complicated and
+long-distance dependencies, which is consistent with the large improvement shown by our proposed system.
+Similar observations that such approaches are more
+effective for languages with relatively free word order have been made in previous work \cite{Sennrich15}.
+
+The magnitude of improvement per language also showed some correlation with the baseline translation quality.
+Analysis of the scores given by human raters showed a tendency for lowered
+sensitivity to word endings when the translation quality was high.
+We found many examples of generally well-translated sentences (particularly
+in Portuguese and Spanish) that were given a score of 6 (out of 6)
+irrespective of word ending errors. This means that there were a number of improvements
+not reflected in our results. Conversely, Russian sentences with a lower
+average score tended to gain or lose a whole point when word endings were changed.
+This could also be due to the type of errors themselves, as for example
+adjective agreement mistakes are unlikely to impede understanding as much as case errors,
+and shows the importance of accurate long-distance agreement.
+
+
+\subsection{Error Categorization}
+
+Table~\ref{Table:Errors} gives an error categorization for a random sample of
+ten incorrect sentences for each of five languages (Dutch,
+French, German, Portuguese and Russian). The categories are defined as follows:
+
+\begin{itemize}
+\item OOV (26\%): $t$-treelet not seen in training data
+\item Meaning (22\%): Meaning of original sentence changed (e.g., tense)
+\item Tricky (16\%): Various tricky cases (e.g., incorrect choice of indicative/subjunctive,
+case selection requiring semantic inference)
+\item Parse (14\%): Parse error caused incorrect $t$-treelet lookup
+\item Noise (12\%): Broken input sentence, incorrect human rating
+\item Context (10\%): Model used inappropriate context (e.g., too short)
+\end{itemize}
+
+\begin{table}[b]
+\caption{Error categories for analyzed test sentences.}
+\label{Table:Errors}
+\begin{center}
+\input{02table07.txt}
+\end{table}
+
+Overall the most common cause for errors was out-of-vocabulary
+$t$-treelets, particularly
+phrases involving rare nouns. Our current model does not attempt to guess
+deep information, such as the gender or case of out-of-vocabulary words, however this would
+make for interesting future work. The second most common error was changing the original
+sentence meaning by for example modifying the tense or changing singular to plural. This
+could be improved in the future by considering a bilingual approach incorporating source
+tokens.
+
+Despite parse error reduction by our filtering method, errors in the parsing of the training corpus
+still led to learning some incorrect $t$-treelets. In particular, structures such as `the JJ NN and NN'
+(for example `the unusual character and Amy') caused the most errors, as they were often
+incorrectly parsed and caused word agreement errors (e.g., `unusual' had plural agreement).
+While in the majority of cases the proposed model formulation picked sufficient and appropriate context,
+there were some difficult cases requiring larger context that was not covered by length 3 $t$-treelets,
+in particular for words with many ($>3$) siblings.
+
+
+\subsection{Example Sentences}
+
+See Appendix~\ref{Appendix:Improved} for examples of sentences improved using the
+proposed method. Appendix~\ref{Appendix:Worsened} gives examples of worsened
+translations with an explanation of each error.
+
+
+\section{Conclusion and Future Work}
+
+In this paper we have described a generalized dependency tree language model
+for machine translation. We performed a thorough human evaluation on
+nine major languages using models trained on large web data, and have shown
+significantly positive improvement in translation quality for five morphologically rich languages.
+
+Analysis suggests that a generalized tree-based language model is best suited to languages groups such as Slavic and
+Uralic that display many non-local features such as cases, as we saw no significant improvement over a classic $n$-gram language model
+for groups such as Romance languages with high baseline quality and few non-local word agreements.
+Despite the common concern that tree-based language models are incompatible
+with string-based MT systems, we have shown that our model is capable of performing
+well even in this scenario by using filtered parses of string MT output.
+
+As future work we would like to experiment with other methods of integrating
+the language model score into machine translation systems. The natural starting
+point is to query the tree language model during decoding, as the reranking
+method proposed in this paper has access to a limited number of hypotheses
+and does not integrate other features that are available to the decoder.
+
+In addition, as we have shown that BLEU is insensitive to changes made using a syntax-based
+language model, we would like to try in the future using metrics based on
+syntactic $n$-grams \cite{Sennrich15}. This would allow for improved model tuning.
+
+It would also be interesting to use the language model to generate word endings
+and then use these to edit the 1-best translation.
+This has the benefit of increasing the search space without
+affecting the decoding complexity. Our preliminary experiments show that
+source-side information must also be used so as not to generate
+candidates that change the meaning of the original sentence.
+
+
+\acknowledgment
+
+The authors would like to thank the reviewers for their feedback and advice.
+We would also like to thank Yoshikiyo Kato, Tetsuji Nakagawa, Mikio
+Hirabayashi, Fabien Cromi\`{e}res and Raj Dabre for their advice during the preparation
+of this paper. This research was conducted by the first author
+during an internship at Google, Inc.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Bengio, Ducharme, Vincent, \BBA\ Janvin}{Bengio
+  et~al.}{2003}]{Bengio03}
+Bengio, Y., Ducharme, R., Vincent, P., \BBA\ Janvin, C. \BBOP 2003\BBCP.
+\newblock \BBOQ A Neural Probabilistic Language Model.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 3}, \mbox{\BPGS\
+  1137--1155}.
+
+\bibitem[\protect\BCAY{Brants, Popat, Xu, Och, \BBA\ Dean}{Brants
+  et~al.}{2007}]{Brants07}
+Brants, T., Popat, A.~C., Xu, P., Och, F.~J., \BBA\ Dean, J. \BBOP 2007\BBCP.
+\newblock \BBOQ Large Language Models in Machine Translation.\BBCQ\
+\newblock In {\Bem EMNLP}, \mbox{\BPGS\ 858--867}.
+
+\bibitem[\protect\BCAY{Chelba}{Chelba}{1997}]{Chelba97}
+Chelba, C. \BBOP 1997\BBCP.
+\newblock \BBOQ A Structured Language Model.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th Conference on European Chapter of the
+  Association for Computational Linguistics}, \mbox{\BPGS\ 498--500}.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Chen \BBA\ Goodman}{Chen \BBA\ Goodman}{1996}]{Chen96}
+Chen, S.~F.\BBACOMMA\ \BBA\ Goodman, J. \BBOP 1996\BBCP.
+\newblock \BBOQ An Empirical Study of Smoothing Techniques for Language
+  Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of the 34th Annual Meeting on Association for
+  Computational Linguistics}, ACL '96, \mbox{\BPGS\ 310--318}, Stroudsburg, PA,
+  USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Ding \BBA\ Yamamoto}{Ding \BBA\ Yamamoto}{2014}]{Ding14}
+Ding, C.\BBACOMMA\ \BBA\ Yamamoto, M. \BBOP 2014\BBCP.
+\newblock \BBOQ A Generative Dependency N-gram Language Model: Unsupervised
+  Parameter Estimation and Application.\BBCQ\
+\newblock {\Bem Journal of Natural Language Processing}, {\Bbf 21}  (5),
+  \mbox{\BPGS\ 981--1009}.
+
+\bibitem[\protect\BCAY{Garmash \BBA\ Monz}{Garmash \BBA\
+  Monz}{2014}]{Garmash14}
+Garmash, E.\BBACOMMA\ \BBA\ Monz, C. \BBOP 2014\BBCP.
+\newblock \BBOQ Dependency-Based Bilingual Language Models for Reordering in
+  Statistical Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2014 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 1689--1700}, Doha, Qatar.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Gubbins \BBA\ Vlachos}{Gubbins \BBA\
+  Vlachos}{2013}]{Gubbins13}
+Gubbins, J.\BBACOMMA\ \BBA\ Vlachos, A. \BBOP 2013\BBCP.
+\newblock \BBOQ Dependency Language Models for Sentence Completion.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1405--1410}.
+
+\bibitem[\protect\BCAY{Heafield}{Heafield}{2011}]{KenLM}
+Heafield, K. \BBOP 2011\BBCP.
+\newblock \BBOQ KenLM: Faster and Smaller Language Model Queries.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Workshop on Statistical Machine
+  Translation}.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{Moses}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the ACL on
+  Interactive Poster and Demonstration Sessions}, ACL '07, \mbox{\BPGS\
+  177--180}, Stroudsburg, PA, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Lerner \BBA\ Petrov}{Lerner \BBA\
+  Petrov}{2013}]{Lerner13}
+Lerner, U.\BBACOMMA\ \BBA\ Petrov, S. \BBOP 2013\BBCP.
+\newblock \BBOQ Source-Side Classifier Preordering for Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP '13)}.
+
+\bibitem[\protect\BCAY{Mari{\~n}o, Banchs, Crego, de~Gispert, Lambert,
+  Fonollosa, \BBA\ Costa-juss{\`a}}{Mari{\~n}o et~al.}{2006}]{Marino06}
+Mari{\~n}o, J.~B., Banchs, R.~E., Crego, J.~M., de~Gispert, A., Lambert, P.,
+  Fonollosa, J. A.~R., \BBA\ Costa-juss{\`a}, M.~R. \BBOP 2006\BBCP.
+\newblock \BBOQ N-gram-based Machine Translation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 32}  (4), \mbox{\BPGS\
+  527--549}.
+
+\bibitem[\protect\BCAY{Mikolov, Karafi{\'a}t, Burget, Cernock{\'y}, \BBA\
+  Khudanpur}{Mikolov et~al.}{2010}]{Mikolov10}
+Mikolov, T., Karafi{\'a}t, M., Burget, L., Cernock{\'y}, J., \BBA\ Khudanpur,
+  S. \BBOP 2010\BBCP.
+\newblock \BBOQ Recurrent Neural Network Based Language Model.\BBCQ\
+\newblock In {\Bem INTERSPEECH 2010, 11th Annual Conference of the
+  International Speech Communication Association}, \mbox{\BPGS\ 1045--1048}.
+
+\bibitem[\protect\BCAY{Mori, Nishimura, \BBA\ Itoh}{Mori et~al.}{2001}]{Mori01}
+Mori, S., Nishimura, M., \BBA\ Itoh, N. \BBOP 2001\BBCP.
+\newblock \BBOQ Improvement of a Structured Language Model: Arbori-context
+  Tree.\BBCQ\
+\newblock In {\Bem EUROSPEECH 2001 Scandinavia, 7th European Conference on
+  Speech Communication and Technology}, \mbox{\BPGS\ 713--716}.
+
+\bibitem[\protect\BCAY{Neubig}{Neubig}{2013}]{Travatar}
+Neubig, G. \BBOP 2013\BBCP.
+\newblock \BBOQ Travatar: A Forest-to-String Machine Translation Engine based
+  on Tree Transducers.\BBCQ\
+\newblock In {\Bem ACL (Conference System Demonstrations)}, \mbox{\BPGS\
+  91--96}. The Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Niehues, Herrmann, Vogel, \BBA\ Waibel}{Niehues
+  et~al.}{2011}]{Niehues11}
+Niehues, J., Herrmann, T., Vogel, S., \BBA\ Waibel, A. \BBOP 2011\BBCP.
+\newblock \BBOQ Wider Context by Using Bilingual Language Models in Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Workshop on Statistical Machine
+  Translation}, \mbox{\BPGS\ 198--206}, Edinburgh, Scotland. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Och, Gildea, Khudanpur, Sarkar, Yamada, Fraser, Kumar,
+  Shen, Smith, Eng, Jain, Jin, \BBA\ Radev}{Och et~al.}{2004}]{Och04}
+Och, F.~J., Gildea, D., Khudanpur, S., Sarkar, A., Yamada, K., Fraser, A.,
+  Kumar, S., Shen, L., Smith, D.~A., Eng, K., Jain, V., Jin, Z., \BBA\ Radev,
+  D. \BBOP 2004\BBCP.
+\newblock \BBOQ A Smorgasbord of Features for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference on Human Language
+  Technologies and the Annual Meeting of the North American Chapter of the
+  Association of Computational Linguistics (HLT-NAACL)}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{BLEU}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 311--318}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Post \BBA\ Gildea}{Post \BBA\ Gildea}{2008}]{Post08}
+Post, M.\BBACOMMA\ \BBA\ Gildea, D. \BBOP 2008\BBCP.
+\newblock \BBOQ Parsers as Language Models for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of AMTA}.
+
+\bibitem[\protect\BCAY{Richardson, Cromi{\`e}res, Nakazawa, \BBA\
+  Kurohashi}{Richardson et~al.}{2014}]{KyotoEBMT}
+Richardson, J., Cromi{\`e}res, F., Nakazawa, T., \BBA\ Kurohashi, S. \BBOP
+  2014\BBCP.
+\newblock \BBOQ KyotoEBMT: An Example-Based Dependency-to-Dependency
+  Translation Framework.\BBCQ\
+\newblock In {\Bem Proceedings of 52nd Annual Meeting of the Association for
+  Computational Linguistics: System Demonstrations}, \mbox{\BPGS\ 79--84},
+  Baltimore, Maryland. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Schwartz, Callison-Burch, Schuler, \BBA\ Wu}{Schwartz
+  et~al.}{2011}]{Schwartz11}
+Schwartz, L., Callison-Burch, C., Schuler, W., \BBA\ Wu, S. \BBOP 2011\BBCP.
+\newblock \BBOQ Incremental Syntactic Language Models for Phrase-based
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  620--631}, Portland, Oregon, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Schwenk}{Schwenk}{2007}]{Schwenk07}
+Schwenk, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Continuous Space Language Models.\BBCQ\
+\newblock {\Bem Computer Speech and Language}, {\Bbf 21}  (3), \mbox{\BPGS\
+  492--518}.
+
+\bibitem[\protect\BCAY{Sennrich}{Sennrich}{2015}]{Sennrich15}
+Sennrich, R. \BBOP 2015\BBCP.
+\newblock \BBOQ Modelling and Optimizing on Syntactic N-Grams for Statistical
+  Machine Translation.\BBCQ\
+\newblock {\Bem Transactions of the Association for Computational Linguistics},
+  {\Bbf 3}, \mbox{\BPGS\ 169--182}.
+
+\bibitem[\protect\BCAY{Shen, Xu, \BBA\ Weischedel}{Shen et~al.}{2008}]{Shen08}
+Shen, L., Xu, J., \BBA\ Weischedel, R.~M. \BBOP 2008\BBCP.
+\newblock \BBOQ A New String-to-Dependency Machine Translation Algorithm with a
+  Target Dependency Language Model.\BBCQ\
+\newblock In {\Bem Association for Computational Linguistics}.
+
+\bibitem[\protect\BCAY{Sidorov, Velasquez, Stamatatos, Gelbukh, \BBA\
+  Chanona-Hern{\'a}ndez}{Sidorov et~al.}{2013}]{Sidorov12}
+Sidorov, G., Velasquez, F., Stamatatos, E., Gelbukh, A., \BBA\
+  Chanona-Hern{\'a}ndez, L. \BBOP 2013\BBCP.
+\newblock \BBOQ Syntactic Dependency-based N-grams As Classification
+  Features.\BBCQ\
+\newblock In {\Bem Proceedings of the 11th Mexican International Conference on
+  Advances in Computational Intelligence - Volume Part II}, MICAI'12,
+  \mbox{\BPGS\ 1--11}, Berlin, Heidelberg. Springer-Verlag.
+
+\bibitem[\protect\BCAY{Sundermeyer, Schl{\"u}ter, \BBA\ Ney}{Sundermeyer
+  et~al.}{2012}]{Sundermeyer12}
+Sundermeyer, M., Schl{\"u}ter, R., \BBA\ Ney, H. \BBOP 2012\BBCP.
+\newblock \BBOQ LSTM Neural Networks for Language Modeling.\BBCQ\
+\newblock In {\Bem Interspeech}, \mbox{\BPGS\ 194--197}, Portland, OR, USA.
+
+\end{thebibliography}
+
+
+\appendix
+
+\section{Example Sentences (Improved)}
+\label{Appendix:Improved}
+
+Below we give illustrative examples of improved translations for the five languages
+analyzed in Table~\ref{Table:Errors} (Dutch, French, German, Portuguese and Russian).
+\subsection{Dutch}
+\begin{itemize}
+    \item \textbf{Input:} Then you might also be interested in Innolog Holdings Corporation
+    \item \textbf{Baseline:} Dan {\bf is dit} misschien ook ge\"{i}nteresseerd in Innolog Holdings Corporation
+    \item \textbf{Proposed:} Dan {\bf ben jij} misschien ook ge\"{i}nteresseerd in Innolog Holdings Corporation
+\end{itemize}
+\subsection{French}
+\begin{itemize}
+    \item \textbf{Input:} This is an example of how a complex data structure must be broken in basic data elements.
+    \item \textbf{Baseline:} Ceci est un exemple de la mani\`{e}re dont une structure de donn\'{e}es complexe doit \^{e}tre {\bf bris\'{e}} en \'{e}l\'{e}ments de base de donn\'{e}es.
+    \item \textbf{Proposed:} Ceci est un exemple de la mani\`{e}re dont une structure de donn\'{e}es complexe doit \^{e}tre {\bf bris\'{e}e} en \'{e}l\'{e}ments de base de donn\'{e}es.
+\end{itemize}
+\subsection{German}
+\begin{itemize}
+    \item \textbf{Input:} The aim of this game is to help your child with their shape and visual recognition skills.
+    \item \textbf{Baseline:} Das Ziel dieses Spiels ist es, {\bf Ihr} Kind mit ihrer Form und visuelle Erkennung F\"{a}higkeiten helfen.
+    \item \textbf{Proposed:} Das Ziel dieses Spiels ist es, {\bf Ihrem} Kind mit ihrer Form und visuelle Erkennung F\"{a}higkeiten helfen.
+\end{itemize}
+\subsection{Portuguese}
+\begin{itemize}
+    \item \textbf{Input:} Many of the students play video games all the time at home.
+    \item \textbf{Baseline:} Muitos dos estudantes {\bf jogar} videogames o tempo todo em casa.
+    \item \textbf{Proposed:} Muitos dos estudantes {\bf jogam} videogames o tempo todo em casa.
+\end{itemize}
+\subsection{Russian}
+\begin{itemize}
+    \item \textbf{Input:} In 2013 we are believing for revival over your church and our cities.
+    \item \textbf{Baseline:} \textcyr{V 2013 godu my verim v vozrozhdenie nad vashe{\u i} tserkvi i nashikh} {\bf \textcyr{gorodakh}}.
+    \item \textbf{Proposed:} \textcyr{V 2013 godu my verim v vozrozhdenie nad vashe{\u i} tserkvi i nashikh} {\bf \textcyr{gorodov}}.
+\end{itemize}
+
+
+\section{Example Sentences (Worsened)}
+\label{Appendix:Worsened}
+
+Below we give illustrative examples of worsened translations.
+
+
+\subsection{Dutch}
+
+This error was caused by incorrect parsing of the noun sequence of repeated `wijn' (wine) tokens.
+\begin{itemize}
+    \item \textbf{Input:} Donnafugata Wines - White wines, Red wines, Natural sweet wines
+    \item \textbf{Baseline:} Donnafugata {\bf Wijnen} - Witte wijn, rode wijn, natuurlijke zoete wijnen
+    \item \textbf{Proposed:} Donnafugata {\bf Wijn} - Witte wijn, rode wijn, natuurlijke zoete wijnen
+\end{itemize}
+
+
+\subsection{French}
+
+While the change is grammatically correct, it incorrectly modifies the original tense (past into present).
+\begin{itemize}
+    \item \textbf{Input:} Aurel Stein`s identification seemed rather tentative
+    \item \textbf{Baseline:} L`identification de Aurel Stein {\bf semblait} plut\^{o}t provisoire
+    \item \textbf{Proposed:} L`identification de Aurel Stein {\bf semble} plut\^{o}t provisoire
+\end{itemize}
+
+
+\subsection{German}
+
+The error is caused by an OOV $t$-treelet `dem taktischen R\"{u}ckzug' (`the tactical withdrawal').
+\begin{itemize}
+    \item \textbf{Input:} The song is sung by a soldier on the island of Corfu, following the tactical withdrawal of the Serbian Army through east and west Albania.
+    \item \textbf{Baseline:} Der Song wird von einem Soldaten auf der Insel Korfu gesungen, nach {\bf dem} taktischen R\"{u}ckzug der serbischen Armee durch Ost und West Albanien.
+    \item \textbf{Proposed:} Der Song wird von einem Soldaten auf der Insel Korfu gesungen, nach {\bf der} taktischen R\"{u}ckzug der serbischen Armee durch Ost und West Albanien.
+\end{itemize}
+
+
+\subsection{Portuguese}
+
+This is caused by a parse error around the infinitive construction `n\~{a}o saber' (`not knowing').
+\begin{itemize}
+    \item \textbf{Input:} Charms, demons in caves, and the mediator`s art of not knowing
+    \item \textbf{Baseline:} Pendentes, dem\^{o}nios em cavernas, e arte do mediador de n\~{a}o {\bf saber}
+    \item \textbf{Proposed:} Pendentes, dem\^{o}nios em cavernas, e arte do mediador de n\~{a}o {\bf sabendo}
+\end{itemize}
+
+
+\subsection{Russian}
+
+This is a tricky example where the Russian preposition `\textcyr{na}' (`to/on') can take either of two grammatical
+cases (accusative or prepositional) depending on meaning, and the incorrect meaning is selected.
+\begin{itemize}
+    \item \textbf{Input:} Sending a notification to update a badge on the tile
+    \item \textbf{Baseline:} \textcyr{Otpravka uvedomleniya obnovit\cyrsftsn{} znachok na} {\bf \textcyr{plitke}}
+    \item \textbf{Proposed:} \textcyr{Otpravka uvedomleniya obnovit\cyrsftsn{} znachok na} {\bf \textcyr{plitku}}
+\end{itemize}
+
+
+
+\begin{biography}
+
+\bioauthor[:]{John Richardson}{
+Received the M.A. degree (first class honours) in Oriental Studies
+and Mathematics from Corpus Christi College, Cambridge, and the M.Inf.
+degree from Kyoto University, where he worked on the application of topic models
+to machine translation. He is currently studying for a Ph.D. in Informatics
+at Kyoto University, researching dependency tree-to-tree machine translation.
+}
+\bioauthor[:]{Taku Kudo}{
+Received the Master and Doctor of Engineering from Nara Institute of Science
+and Technology in 2001 and 2004 respectively. In 2004, joined NTT Communication
+Science Laboratories. Since 2005, worked as Software Engineer for Google.
+Involved in R\&D of machine translation systems.
+}
+\bioauthor[:]{Hideto Kazawa}{
+Received Master of Science from University of Tokyo in 1997, and Doctor of
+Engineering from Nara Institute of Science and Technology in 2006.
+Worked at NTT Communication Science Laboratories from 1997 to 2006,
+then joined Google. Currently working on research and development of
+machine translation systems.
+}
+\bioauthor[:]{Sadao Kurohashi}{
+Received the B.S., M.S., and Ph.D. in Electrical Engineering
+from Kyoto University in 1989, 1991, and 1994, respectively. He is currently
+a professor of the Graduate School of Informatics at Kyoto University.
+His research interests include natural language processing, knowledge
+acquisition/representation, and information retrieval.
+He received the 10th and 20th anniversary best paper awards from the Journal
+of Natural Language Processing in 2004 and 2014 respectively.
+}
+
+\end{biography}
+
+\biodate
+
+
+\end{document}

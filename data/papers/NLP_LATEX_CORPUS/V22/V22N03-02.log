@@ -1,0 +1,30 @@
+This is pdfTeX, Version 3.14159265-2.6-1.40.16 (TeX Live 2015/Debian) (preloaded format=pdflatex 2018.5.23)  4 JUL 2018 13:39
+entering extended mode
+ restricted \write18 enabled.
+ %&-line parsing enabled.
+**/home/momo/mywork/data/papers/NLP_LATEX_CORPUS/V22/V22N03-02
+(/home/momo/mywork/data/papers/NLP_LATEX_CORPUS/V22/V22N03-02.tex
+LaTeX2e <2016/02/01>
+Babel <3.9q> and hyphenation patterns for 81 language(s) loaded.
+
+! LaTeX Error: File `jnlp_1.4.cls' not found.
+
+Type X to quit or <RETURN> to proceed,
+or enter new name. (Default extension: cls)
+
+Enter file name: 
+! Emergency stop.
+<read *> 
+         
+l.2 ^^M
+        
+Here is how much of TeX's memory you used:
+ 11 strings out of 493029
+ 354 string characters out of 6136234
+ 53065 words of memory out of 5000000
+ 3644 multiletter control sequences out of 15000+600000
+ 3640 words of font info for 14 fonts, out of 8000000 for 9000
+ 1141 hyphenation exceptions out of 8191
+ 10i,0n,7p,100b,8s stack positions out of 5000i,500n,10000p,200000b,80000s
+
+!  ==> Fatal error occurred, no output PDF file produced!

@@ -1,0 +1,900 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+
+\usepackage{soul}
+\usepackage{wasysym}
+\usepackage{udline}
+\usepackage{footnote}
+\makesavenoteenv{tabular}
+\makesavenoteenv{table}
+\newcounter{tweetnumber}
+\setcounter{tweetnumber}{0}
+\makeatletter
+\def\extweet#1{}
+\makeatother
+
+
+
+\Volume{23}
+\Number{5}
+\Month{December}
+\Year{2016}
+
+\received{2015}{12}{23}
+\revised{2016}{4}{8}
+\rerevised{2016}{6}{16}
+\accepted{2016}{8}{9}
+
+\setcounter{page}{383}
+
+\etitle{Recognition of Sarcasm in Microblogging Based on Sentiment Analysis and Coherence Identification}
+\eauthor{Piyoros Tungthamthiti\affiref{JAIST} \and Kiyoaki Shirai\affiref{JAIST} \and Masnizah Mohd\affiref{JAIST}}
+\eabstract{
+Recognition of sarcasm in microblogging is important in a range of NLP applications, such as opinion mining.
+However, this is a challenging task, as the real meaning of a sarcastic sentence is the opposite of the literal meaning.
+Furthermore, microblogging messages are short and usually written in a free style that may include misspellings, grammatical errors, and complex sentence structures.
+This paper proposes a novel method for identifying sarcasm in tweets.
+It combines two supervised classifiers, a Support Vector Machine (SVM) using N-gram features and an SVM using our proposed features.
+Our features represent the intensity and contradictions of sentiment in a tweet, derived by sentiment analysis.
+The sentiment contradiction feature also considers coherence among multiple sentences in the tweet, and this is automatically identified by our proposed method using unsupervised clustering and an adaptive genetic algorithm.
+Furthermore, a method for identifying the concepts of unknown sentiment words is used to compensate for gaps in the sentiment lexicon.
+Our method also considers punctuation and the special symbols that are frequently used in Twitter messaging.
+Experiments using two datasets demonstrated that our proposed system outperformed baseline systems on one dataset, while producing comparable results on the other.
+Accuracy of 82\% and 76\% was achieved in sarcasm identification on the two datasets.
+}
+\ekeywords{Sarcasm, Microblogging, Sentiment Analysis, Coherence, Concept Knowledge}
+
+\headauthor{Tungthamthiti, Shirai, Mohd}
+\headtitle{Recognition of Sarcasm in Microblogging}
+
+\affilabel{JAIST}{}{School of Advanced Science and Technology, Japan Advanced Institute of Science and Technology}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\label{ref:introduction}
+
+Social networks are web-based applications that allow messages, photos, videos, music and other personal information to be sent to or shared with specific groups of people (e.g., family, friends, or community).
+Recently, social network providers such as Twitter, Facebook, and Google have reported a rapid increase in the number of users.
+This paper focuses on the analysis of texts on Twitter.
+Twitter has over 200 million active users each month \shortcite{OCarroll_2012}, generating messages at a peak rate of over 230,000 tweets per minute \shortcite{Ashtari_2013}.
+Tweets are short messages, of which opinions, evaluations, and judgments often constitute an important part \shortcite{Pak_2010}. Users are limited to 140 characters per tweet.
+Tweets use a free writing style, and may include complex sentence structures.
+This may create difficulties in understanding the meaning of the message.
+
+Sarcasm is an ironic or satirical style of discourse in which the intended meaning is reversed.
+It is often used to insult or criticize a person or a thing.
+Recognition of sarcasm is one of the most challenging tasks in natural language processing (NLP).
+The task mainly focuses on determining whether the actual meaning of a given tweet is coincident with its literal meaning.
+It has potential applications in many other areas of NLP, especially opinion mining and sentiment analysis in social networks.
+Identification of sarcasm would enable consumers to obtain more accurate information about people's opinions on topics in different domains (including politics, potential purchases and sports).
+It could supply companies or service providers with more precise information on the opinions of users about their products or services.
+This would help them to improve their planning, decision making, or business strategy.
+
+This paper introduces a novel method for deciding whether a given tweet is sarcastic.
+Our sarcasm recognition system is based on supervised machine learning.
+In addition to the conventional N-gram of words, several extra features are derived from sentiment analysis of the tweet.
+These take account of the intensity and contradiction of the sentiment in the given tweet.
+Punctuation and special symbols that appear frequently in Twitter are also used as features.
+One of the important characteristics of our method is that the system considers the coherence among multiple sentences in the tweet to derive the sentiment contradiction feature.
+Although the contradiction of sentiment is one useful clue by which sarcasm is identified, the contradictions in incoherent sentences might not support the conclusion that they are sarcastic.
+We propose a sophisticated method for identifying coherence in a tweet based on unsupervised clustering and an adaptive genetic algorithm.
+Furthermore, a concept expansion mechanism is introduced to improve sentiment analysis.
+Since sentiment analysis often suffers from the use of unknown opinion words that do not appear in the sentiment lexicon, concepts related to unknown words provide help in identifying sentiment polarity.
+
+The rest of the paper is organized as follows.
+Section \ref{sec:related work} discusses previous work on the analysis of sarcasm.
+Section \ref{sec:proposed method} describes our proposed methods.
+Section \ref{sec:evaluation} reports the results of experiments conducted to evaluate the proposed methods.
+Finally, section \ref{sec:conclusion} concludes the paper.
+
+
+\section{Related Work}
+\label{sec:related work}
+
+Sarcasm is defined as ``saying the opposite of what you mean'' \cite{Quintilien_1953}.
+It arises from contradictory intentions, which violate the expectations and felicity conditions of the listener \cite{Stringfellow_1994,Grice_1975,Gibbs_2007}.
+Sarcasm is also understood as the use of ironic statements to express disdain in the guise of approval \cite{Doerfler_2012}.
+In sarcasm, ridicule or mockery is used harshly, often crudely and contemptuously, for destructive purposes \cite{Singh_2012}.
+
+A wide variety of studies have analyzed sarcasm or irony in microblogging.
+A method of sarcasm detection based on semi-supervised pattern acquisition and classification with the acquired pattern-based and punctuation-based features has been proposed \cite{Tsur_2010,Davidov_2010}.
+\citeA{Reyes_2012} characterized irony using six kinds of features: n-grams, POS-grams, funny profiling, positive/negative profiling, affective profiling, and pleasantness profiling.
+Naive Bayesian classifier, Support Vector Machine (SVM), and decision tree were used to train classifiers for irony detection, achieving an acceptable level of accuracy.
+This was extended into a more complex model \cite{Reyes_2013}.
+This method introduced a new set of features at four levels: signatures, degree of unexpectedness, style, and emotional scenarios.
+\citeA{Barbieri_2014} proposed a method based on seven sets of lexical and semantic features, including the frequency of the words in reference corpora, their intensity, their written or spoken nature, their length, and the number of related synsets in WordNet \cite{Miller_1995}.
+
+Following the definition of sarcasm, contradiction of sentiment in the tweet is an important clue for the identification of sarcasm.
+\citeA{Ellen_2013} introduced a novel bootstrapping algorithm that automatically learned lists of positive sentiment phrases and negative situation phrases from sarcastic tweets.
+The learning process relied on the assumption that a positive sentiment verb phrase usually appears to the left of a negative situation phrase in a sarcastic tweet.
+The bootstrapping algorithm was comprised of the following two steps.
+The first step involved the learning of negative situation phrases that followed positive sentiment phrases, with ``love'' used as the initial seed of the positive sentiment word.
+In the second step, positive sentiment phrases that occurred near the negative situation phrases were learned.
+After iterating these two steps, the list of negative situation and positive sentiment phrases obtained was used to identify sarcasm by checking whether the tweet contained the positive sentiment word in close proximity to the negative situation phrase.
+Their method yielded some improvement in recall for sarcasm identification.
+However, the method was limited to a restricted number of specific syntactic structures.
+Also, sarcasm could not be identified accurately when it was constructed across separate clauses or multiple sentences.
+Sentiment contradiction was also considered in the sentiment analysis of figurative language (including sarcasm) in tweets \cite{Xu_2015}.
+
+\citeA{Carvalho_2009} investigated the use of a set of pre-defined surface patterns (i.e., emoticons, onomatopoeic expressions for laughter, heavy punctuation marks, quotation marks, and positive interjections) in newspaper articles.
+They showed that surface patterns were a much more accurate guide (from 45\% to 85\%) than deeper linguistic analysis.
+\citeA{Thelwall_2012} assessed the SentiStrength sentiment lexicon in a variety of online contexts.
+Their results showed that the use of punctuation, including single punctuation marks, repetitive punctuation marks, question marks, and exclamation marks, played a key role in improving the sentiment score.
+Since punctuation and special symbols such as emoticons are often used in tweets to emphasize the user's emotional attitude, they should be taken into account in sarcasm identification.
+
+This paper presents a supervised method for identifying sarcasm in texts posted on Twitter.
+Results from sentiment analysis are used, including the contradiction of sentiments used in Riloff's method \cite{Ellen_2013}.
+However, we introduce a unique sentiment contradiction feature, which also considers coherence within the tweet.
+Punctuation and symbols play a central role in our method, because their use is a distinctive feature of tweets.
+
+Coherence identification is used in discourse analysis to analyze relationships within written texts.
+In previous research, linguistic coherence has been defined in a variety of ways.
+\citeA{Bartlett_1932} defined coherence as a ``continuity of senses.''
+Similarly, coherence has been understood as ``the mutual access and relevance within a configuration of concepts and relations'' \cite{Beaugrande_1996}.
+\citeA{Soon_2001} introduced a complex method that linked coreferring noun phrases both within and across sentences.
+Twelve features were used to create a set of feature vectors from the documents; then, a classifier was learned from training documents.
+C5 \cite{Rutvija_2015} was used as the learning algorithm in this study.
+The results showed performance comparable to that of state-of-the-art non-learning-based systems on the MUC-6 and MUC-7 standard datasets.
+However, their method mainly focused on coreference resolution, rather than on the identification of coherent relationships.
+We have previously presented a naive method for coherence identification in tweets using a set of heuristic rules based on grammatical relations \cite{Tungthamthiti_2014}.
+In this paper, we introduce a more sophisticated method, based on unsupervised clustering and an adaptive genetic algorithm.
+
+
+\section{Proposed Method}
+\label{sec:proposed method}
+
+Our sarcasm identification method uses a supervised learning framework.
+Figure \ref{method_overview} shows the overall system.
+First, an input tweet is pre-processed by removing stop words, lemmatization, and so on.
+Next, four kinds of features are extracted: a word N-gram (N = 1, 2, 3), a sentiment score, sentiment contradiction, and punctuation and special symbols.
+Two classifiers are applied to judge whether the given tweet is sarcastic.
+One is an SVM classifier that uses the N-gram features; the other is an SVM that uses the remaining features.
+These classifiers are trained\footnote{We used LIBLINEAR (https://www.csie.ntu.edu.tw/\~{}cjlin/liblinear/) with default parameters.} from labeled data, i.e., a collection of tweets with sarcasm tags.
+A simple voting method is applied to determine the final judgment.
+If two classifiers disagree, the result that has a larger margin, defined as the distance between a vector of the given tweet and a separate hyperplane, is chosen.
+In the rest of this section, we will explain in more detail how the classifiers are trained.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-5ia1f1.eps}
+\end{center}
+\caption{Flowchart of the overall process of our method}
+\label{method_overview}
+\end{figure}
+
+
+\subsection{Data Preprocessing}
+
+Before the SVMs are trained, the tweets to be used as training data are preprocessed.
+First, the Stanford Lemmatizer\footnote{http://nlp.stanford.edu/software/corenlp.shtml} is applied to identify the part-of-speech (POS) and to transform the words into lemma form.
+Usernames, URLs, and hashtags are removed, since they are weakly informative in sarcasm classification.
+This preprocessing is applied each time a new tweet is classified.
+
+
+\subsection{Proposed Features}
+\label{proposed_features}
+
+In addition to the standard N-gram features, we use three further features to characterize the properties of sarcasm.
+Although the basic ideas behind our proposed features are shared with previous work on the analysis of sarcasm, the ways in which the features are extracted are different.
+The uniqueness of our sentiment contradiction feature will be explained in section \ref{sentiment_contradiction}.
+Note that, in this study, the feature vector is binary; a weight of 1 is given to the feature if it exists in the tweet, and 0 otherwise.
+
+
+\subsubsection{Sentiment score feature}
+\label{sentiment_score}
+
+Sarcasm is characterized by violations of expectations and of felicity conditions \cite{Stringfellow_1994}.
+We therefore use sentiment analysis to recognize the level of violation and of aggressiveness in the words of the tweet.
+The sentiment score feature represents the intensity of positive or negative sentiment in the tweet.
+This is measured from the sentiment scores of the words, derived from a public sentiment lexicon.
+Our method also considers the concepts of the words when conducting sentiment analysis.
+Since many potential sentiment words are not listed in the sentiment lexicon, our system is designed to extract the concept of an unknown sentiment word to improve the accuracy of the sentiment analysis.
+This procedure is called ``concept expansion'' in this paper.
+Let us consider an example of a sarcastic tweet. T\ref{tw:concept}.
+\begin{quote}
+  \setnoko
+  \extweet{tw:concept}: I \unl{love} going to \unc{work} on \unc{holidays}.
+\end{quote}
+Suppose that the system can identify only the positive word ``love'' from the sentiment lexicon, while the polarity of the other words is unknown.
+By concept expansion, we can recognize that the word ``work'' refers to ``tiring'' or ``stressful situation'' and that ``holiday'' refers to ``day where person stay home and relax.''
+The system is now able to identify the two additional sentiment words ``holiday'' and ``work,'' which represent positive and negative sentiments, respectively.
+In this way, concept expansion can compensate for gaps in the sentiment lexicon.
+
+In this research, two lexicons are used to obtain the sentiment scores of the words: SentiStrength \cite{Thelwall_2012} and SenticNet \cite{Cambria_2012}.
+SentiStrength is a sentiment lexicon that uses linguistic information and rules to detect sentiment in English text.
+The lexicon provides positive and negative sentiment scores for various types of polarity words such as booster words, question words, emotion words, negation words, slang, idioms, and emoticons.
+The score is represented as an integer from $-5$ to $+5$ where a larger absolute value represents a stronger sentiment.
+SenticNet is a sentiment lexicon giving sentiment scores for common-sense concepts.
+The score is scaled from $-1$ to $+1$ to signify the polarity and intensity of the sentiment.
+The score from SenticNet is multiplied by 5 and rounded so that the sentiment scores from both lexicons are represented by an integer from $-5$ to $+5$.
+Finally, the polarity score of the word $w$, $po\_score(w)$, is defined by Equation (\ref{polarity_score}), where $score_\mathit{SS}$ and $score_\mathit{SN}$ are the scores given by SentiStrength(SS) and SenticNet(SN), respectively.
+\begin{equation}
+    \label{polarity_score}
+    po\_score(w) = 
+    \begin{cases}
+      \frac{1}{2}\;(score_\mathit{SS}(w) + score_\mathit{SN}(w)) & \text{if } w \in SS \text{ and } w \in SN \\
+      score_\mathit{SS}(w) \text{ or } score_\mathit{SN}(w) & \text{if } w \in SS \text{ or } w \in SN \\
+      0 & \text{otherwise}
+    \end{cases}
+\end{equation}
+The extended polarity score of $w$, $ex\_po\_score(w)$, is given by Equation (\ref{extended_polarity_score})
+\begin{equation}
+    \label{extended_polarity_score}
+    ex\_po\_score(w) =
+    \begin{cases}
+      po\_score(w) & \text{if } w \in SS \text{ or } w \in SN \\
+      \frac{1}{|C|}\sum\limits_{c \in C(w)} po\_score\_c(c) & \text{if } C(w) \text{ is derived by concept expansion} \\
+      0 & \text{otherwise}
+    \end{cases}
+\end{equation}
+where $C(w)$ is a set of concepts expanded from the word $w$.
+The details of concept expansion will be explained in subsection \ref{concept_level_expansion}.
+
+Finally, the sum of the sentiment scores of all positive or negative words in the tweet, $sum\_pos\_score$ or $sum\_neg\_score$, is calculated using Equation (\ref{sum_pos}) or (\ref{sum_neg})
+\begin{gather}
+    sum\_pos\_score = \sum\limits_{pos\_w}ex\_po\_score(pos\_w)
+    \label{sum_pos} \\
+    sum\_neg\_score = \sum\limits_{neg\_w}ex\_po\_score(neg\_w)
+    \label{sum_neg}
+\end{gather}
+where $pos\_w$ or $neg\_w$ is a word whose extended sentiment score is positive or negative.
+We define six sentiment score features ``$po$-$degree$'', where $po$ is either ``positive'' or ``negative'' and
+$degree$ is a rating of ``low,'' ``medium,'' or ``high.''
+The features ``positive-low,'' ``positive-medium,'' and ``positive-high'' are activated if $sum\_pos\_score = 0$, $0 < sum\_pos\_score \le 2$, and $sum\_pos\_score > 2$.
+The range of sentiment scores for each class is determined based on our intuition.
+The sentiment score features for negative polarity are defined similarly.
+
+
+\subsubsection{Sentiment contradiction feature}
+\label{sentiment_contradiction}
+
+As noted above, sarcasm is normally present in a sentence that expresses a meaning that is the opposite of the intended meaning.
+Therefore, we also use sentiment analysis to find contradictions in sentiment polarity among words in the tweet.
+Although conflicts in polarity have been used in previous analyses of sarcasm, a novel characteristic of our proposed feature is the detection of coherence in the tweet.
+We assume that coherence plays a significant role, because sentiment contradiction in incoherent sentences may not indicate sarcasm.
+Consider the following two examples.
+\begin{quote}
+  \extweet{tw:coherent}: I am coughing and choking. I am feeling great.\\
+  \extweet{tw:incoherent}: I am coughing and choking. Mary is still fine.
+\end{quote}
+Since both negative words (``coughing'' and ``choking'') and positive words (``great'' or ``fine'') are present, sentiment contradiction is detected in both T\ref{tw:coherent} and T\ref{tw:incoherent}. However, T\ref{tw:coherent} is sarcastic, while T\ref{tw:incoherent} is not.
+In T\ref{tw:coherent}, the two sentences are coherent, or related each other.
+This coherence is captured by the fact that the pronoun ``I'' is the subject of both sentences.
+T\ref{tw:coherent} clearly contains a contradiction in logical meaning, through the use of opposing words (coughing and choking $\ne$ great).
+Thus T\ref{tw:coherent} can be classified as sarcastic.
+In contrast, in T\ref{tw:incoherent} there is no signifier of logical connection between the words in the two sentences, as the negative and positive words clearly refer to the different subjects ``I'' and ``Mary.''
+In this case, the tweet can be regarded as non-sarcastic even though a sentiment contradiction was found.
+
+The sentiment contradiction feature is represented as either $contra$ or $contra\mathrm{+}coher$.
+The feature $contra$ is activated if two conditions are satisfied: 1) the tweet consists of only one sentence and 2) a contradiction in sentiment score is found as both $sum\_pos\_score$ (defined by Equation (\ref{sum_pos})) and $sum\_neg\_score$ (Equation (\ref{sum_neg})) are greater than 0.
+The feature $contra\mathrm{+}coher$ is activated if three conditions are fulfilled: 1) the tweet consists of two or more sentences, 2) contradiction in the sentiment score is found, and 3) the tweet is classified as coherent or incoherent.
+The procedures for identifying coherence in the tweet will be discussed in subsection \ref{coherence_identification}.
+
+
+\subsubsection{Punctuation and special symbols feature}
+\label{punctuation}
+
+Many studies have shown that punctuation plays an important role in text communications -- signaling pauses, a change in the tone of voice, or indicating strong feelings or exaggeration.
+Punctuation is influential in text classification, especially in the area of sentiment analysis.
+Thus, punctuation and special symbols are used as features in our research.
+Seven symbols or words are treated as punctuation or special symbol features: 1) emoticons, 2) repetitive sequences of punctuation, 3) repetitive sequences of characters, 4) capitalized words, 5) slang or booster words, 6) exclamation marks, and 7) idioms.
+The frequency of these elements in the tweet, denoted as $fre$, is classified into three classes: ``low'' ($fre = 0$), ``medium'' ($1 \le fre \le 3$), and ``high'' ($fre > 3$).
+The range of frequency for each class was determined through preliminary experiments.
+Our punctuation and special symbol features are represented as pairings of one of seven elements and three frequency classes, introducing 21 features in total.
+
+
+\subsection{Concept Expansion and Pruning}
+\label{concept_level_expansion}
+
+
+\subsubsection{Concept expansion}
+
+Next we explain the procedure for deriving the set of concepts, i.e., $C(w)$ in Equation (\ref{extended_polarity_score}).
+A concept lexicon called ConceptNet 5.0\footnote{http://conceptnet5.media.mit.edu/} is used to expand the concepts of a word whose sentiment score is unknown.
+ConceptNet 5.0 is a semantic network comprising common-sense knowledge and concepts, represented in the form of nodes (words or short phrases) and labeled edges (relationships between them).
+For example, the sentence ``A dog is an animal'' is parsed into an assertion as ``dog/IsA/animal.''
+The assertion consists of two nodes (``dog'' and ``animal'') and one edge (``IsA'').
+There are 31 types of relationship, such as ``PartOf,'' ``UsedFor,'' ``MadeOf,'' etc.
+ConceptNet contains over 800,000 assertions.
+These assertions are ranked based on voting by users, to ensure the quality and significance of each assertion.
+In our method, for each word $w$, the top five ranked concepts are set as $C(w)$.
+
+Since the concepts in ConceptNet 5.0 can be represented as phrases (such as ``day where person stay home and relax''), the polarity score of the concept $c$ ($po\_score\_c(c)$ in Equation (\ref{extended_polarity_score})) is defined as the average of the polarity score of the words in the concept:
+\begin{equation}
+  \label{polarity_score_of_concept}
+  po\_score\_c(c) = \frac{1}{|C|} \sum_{w \in C} po\_score(w)
+\end{equation}
+where $C$ stands for the set of sentiment words in $c$.
+
+
+\subsubsection{Concept pruning}
+
+Although concept expansion is an effective way of recognizing the polarity of an unknown sentiment word, some irrelevant concepts are generated.
+They may cause errors when applied to sarcasm identification.
+For example, five concepts can be expanded from ``holiday'' in the tweet T\ref{concept-pruning}.
+\begin{quote}
+  \extweet{concept-pruning}: The typhoon is still blowing hard. What is a nice holiday! \\
+  {\small
+  holiday \verb|=>|
+  \begin{tabular}[t]{p{0.87\linewidth}@{}}
+    [``special day,'' ``day where person stay home and relax,'' ``\st{special event celebrate by person},'' ``special day that celebrate event,'' ``day where person do not have to work'']    
+  \end{tabular}
+  }
+\end{quote}
+In this case, the concept ``special event celebrate by person'' should not be expanded, since ``holiday'' in T\ref{concept-pruning} refers not to an event but to a day.
+We introduce a procedure called ``concept pruning'' to prevent such irrelevant concepts from being expanded.
+
+Concept pruning is done in three steps: 1) word sense disambiguation (WSD) 2) keyword extraction, and 3) similarity measurement.
+In the first step, WSD is performed to find the actual meaning of the unknown sentiment word within the tweet.
+SenseLearner 2.0\footnote{http://lit.csci.unt.edu/\~{}senselearner/} is used to determine the WordNet sense of the word.
+In the second step, the disambiguated sense and one of the five most highly ranked concepts of the word are represented as a set of keywords $K_s$ and $K_c$, respectively.
+$K_s$ is a set of words in the gloss of the WordNet sense $s$, while $K_c$ is a set of words in the concept $c$.
+Only nouns, verbs, adjectives and adverbs are extracted as keywords.
+\pagebreak
+In the final step, the similarity between $K_s$ and $K_c$ is measured by Equation (\ref{similarity_sense_concept}).
+\begin{equation}
+  \label{similarity_sense_concept}
+  sim(K_s,K_c) = \max_{w_s \in K_s, w_c \in K_c} sim\_word(w_s,w_c)
+\end{equation}
+In this study, Word2Vec \cite{Mikolov_2013} and Resnik's algorithm \cite{Resnik_1995} are used to compute the word similarity $sim\_word(w_s,w_c)$.
+If $sim(K_s,K_c)$ is greater than a threshold value $T_c$, the concept $c$ is kept, otherwise it is pruned.
+
+The parameter $T_c$ was optimized on development data.\footnote{The details of the development data will be introduced in Subsection \ref{sec:data}.}\@ 
+Figure \ref{result_resnik_word2vec_comparison} shows the accuracy of sarcasm identification at different threshold values of $T_c$.\footnote{The ranges of $sim(K_{s},K_{c})$ of Word2Vec and Resnik's algorithm are [$-1$,1] and [0,10], respectively.}\@ 
+This suggested that Word2Vec provides better accuracy than Resnik's algorithm, and that accuracy is greatest when $T_c=0.2$.
+From these results, we chose Word2Vec as the word similarity measure, and set $T_c$ as 0.2.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-5ia1f2.eps}
+\end{center}
+\caption{Optimization of the parameter $T_c$: Word2Vec (left) and Resnik's algorithm (right)}
+\label{result_resnik_word2vec_comparison}
+\end{figure}
+
+
+\subsection{Coherence identification}
+\label{coherence_identification}
+
+This subsection presents our method for identifying coherence among the sentences in a tweet.
+The proposed method is based on a clustering-based adaptive genetic algorithm (CAGA).
+The coherence identification used in this study creates clusters of coherent and incoherent tweets for a given set of tweets.
+The overall procedure of coherence identification is shown in Figure~\ref{Clustering_genetic_algorithm}.
+In the training phase, the input set of tweets was annotated with coherence tags to indicate whether each tweet was coherent or not.
+We then constructed a manually annotated data set consisting of 800 coherent tweets and 800 incoherent tweets.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia1f3.eps}
+\end{center}
+\caption{Clustering-based adaptive genetic algorithm for coherence identification in tweets}
+\label{Clustering_genetic_algorithm}
+\end{figure}
+
+\begin{table}[b]
+\caption{Features for clustering coherent/incoherent tweets}
+\label{tab:feature-coherence-clustering}
+\input{01table01.txt}
+\end{table}
+
+To cluster the coherent and incoherent tweets, each tweet was represented as a feature vector.
+Let us suppose that sentence $s_{1}$ precedes $s_{2}$ in the tweet; then, the word $w_1$ or $w_2$ is the subject, noun, or pronoun in $s_1$ or $s_2$.
+The features used for clustering are summarized in Table~\ref{tab:feature-coherence-clustering}.
+The detailed procedure by which the semantic class agreement feature (9th feature) is derived as follows.
+	\begin{enumerate}
+		\item For each $i=1$ and 2, the sense of $w_{i}$, called $sense_i$, is disambiguated by SenseLearner 2.0.
+                \item A set of hypernyms and hyponyms of $sense_i$ and $sense_i$ itself, called $SHH_i$, is created.
+		\item The similarity of all possible pairs of synsets from $SHH_1$ and $SHH_2$ is measured using a method proposed by Resnik \cite{Resnik_1995}.
+		\item The feature is activated when the similarity of one of the synset pairs is greater than a threshold value. This was set to 1.37, based on intuition.
+	\end{enumerate}
+The last two features in Table~\ref{tab:feature-coherence-clustering} were introduced because acronyms, abbreviations, and emoticons are often treated as separate sentences.
+In other words, the isolated acronym/abbreviation/{\linebreak}emotiocon is always considered to be coherent with the other sentences.
+If three or more sentences are present, the feature vector is constructed as follows.
+The feature vectors of all pairs of sentences, denoted by $\vec{c}_{ij}$, are created.
+The value of each dimension is set at 0 if the values at the same dimension of all $\vec{c}_{ij}$ are 0, and otherwise at 1.
+
+After the extraction of feature vectors, unsupervised clustering is performed.
+We trialed three representative clustering algorithms: K-means, the EM (expectation maximization) algorithm \cite{Mclachlan_2008}, and hierarchical clustering.
+Note that the number of clusters ($N_c$) should be predefined in these algorithms. $N_c$ is optimized using training data.
+
+The remaining problem is to set the weights of the feature vectors.
+The initial weights are binary: if the feature is present, the weighting is 1, whereas if the feature is absent, the weighting is 0.
+The weights of the present and absent features are then optimized using an adaptive genetic algorithm (GA).
+The weight of each feature is changed from $-1$ to $+1$ in steps of 0.2.
+The GA searches for an optimal set of feature weights at which the clustering performance is highest.
+
+In the test phase, the tweets in the test data are converted to feature vectors with the optimized weights; then, unsupervised clustering is performed.
+The cluster labels are used as the coherence feature for sarcasm identification.
+That is, $contra\mathrm{+}coher$ described in \ref{sentiment_contradiction} is a set of $N_c$ features represented as $contra\mathrm{+}cl_i$, where $cl_i$ stands for the i-th cluster to which the tweet belongs.
+
+\begin{table}[b]
+\caption{Accuracy of coherence identification}
+\label{result_coherence}
+\input{01table02.txt}
+\end{table}
+
+Table~\ref{result_coherence} shows the performance of the coherence identification on training data for three clustering algorithms and different number of clusters ($N_c$).
+Accuracy is defined as the ratio of agreement between the gold and predicted coherence tags.
+The coherence tag of each tweet is predicted as follows -- each cluster is judged to be a cluster of coherent or incoherent tweets by voting the coherence tags of the tweets in the cluster.
+Then all the tweets within a coherent or incoherent cluster are regarded as coherent or incoherent.
+As shown in Table~\ref{result_coherence}, the EM algorithm outperformed the others.
+The greatest accuracy was achieved when $N_c$ was set to 8.
+
+The advantage of the CAGA is that clustering of the tweets is performed in an unsupervised manner.
+Note that the coherence tags of the tweets are used only for the determination of feature weights by the GA, optimization of the number of clusters $N_c$, and selection of the clustering algorithm (K-means, EM, or hierarchical).
+If the training data is not annotated with coherence tags, the CAGA can be run as follows.
+For each step of the iterative learning of feature weights using the GA, our sarcasm identification system is trained on the obtained coherent/incoherent clusters, and the accuracy of sarcasm identification on development data is measured.
+The GA searches for the optimal feature weights at which sarcasm recognition is maximized.
+This procedure is indicated by the dotted lines in Figure \ref{Clustering_genetic_algorithm}.
+Similarly, optimization of $N_c$ and selection of the clustering algorithm are also possible.
+Therefore, although a significantly greater computational cost is incurred, manual annotation of the coherence to training data can be avoided.
+In this sense, the CAGA can be regarded as a semi-supervised method.
+
+
+\section{Evaluation}
+\label{sec:evaluation}
+
+
+\subsection{Data}
+\label{sec:data}
+
+Two datasets were used in our experiments: 1) the ARTK (automatically retrieved tweets using keywords) dataset and 2) the SemEval-2015 Task 11 dataset.
+The ARTK dataset consists of 300,000 tweets, of which 150,000 were selected as sarcastic, while the remaining 150,000 were selected as non-sarcastic.
+To identify sarcastic tweets, the hashtag ``\#sarcasm'' was used as the query keyword.
+The non-sarcastic tweets were retrieved by searching with keywords randomly selected from WordNet.
+Clearly, some sarcastic tweets are posted without the ``\#sarcasm'' hashtag.
+We checked a random sample of 300 tweets lacking this hashtag, and found that only 3.7\% were sarcastic.
+We therefore ignored this noise in the experiment.
+Twitter4J\footnote{http://twitter4j.org/en/index.html} was used as the tool for preparing the collection of tweet data.
+The development dataset of 30,000 tweets that was used for parameter optimization of $T_c$ was constructed in the same way.
+We also used the SemEval-2015 Task 11 dataset for sentiment analysis of figurative language in Twitter.
+This is a collection of tweets annotated with a sentiment score of between $-5$ and $+5$.
+This dataset contained hashtags indicating figurative language, such as \#sarcasm, \#irony, \#metaphor, and so on.
+Tweets with hashtags \#sarcasm or \#irony were regarded as being sarcastic, and the remainder as non-sarcastic.
+Note that \#irony tweets were categorized as sarcastic, since we found the difference between sarcasm and irony to be very subtle, making them difficult for human evaluators to distinguish.
+The training set contained 8,000 tweets, while the test set contained 4,000 tweets.
+In this dataset, 35\% of the tweets were sarcastic.
+
+
+\subsection{Task}
+
+The experimental task was to identify the sarcasm class (sarcastic or not) of a given tweet.
+The proposed system as well as the baselines were trained and tested by 5-fold cross validation on the ARTK dataset.
+On the SemEval-2015 task 11 dataset, the classifiers were trained from training data and evaluated on test data.
+
+Three baselines were established for comparison with our proposed methods.
+Baseline 1 was created by assuming that sarcasm usually occurs in a sentence that expresses a meaning opposite to the intended meaning.
+Therefore, tweets that contained both a positive and negative word ($sum\_pos\_score > 0$ and $sum\_neg\_score > 0$) were regarded as sarcastic.
+Baseline 2 was an SVM trained with only N-gram (uni-gram, bi-gram, and tri-gram) features.
+Since the N-gram is a common and well-known feature in sarcasm identification, this was considered a strong baseline.
+Baseline 3 followed the method proposed by \citeA{Ellen_2013}.\footnote{We implemented this system ourselves, but closely matching the original method, since we deliberately followed the detailed algorithm presented in \citeA{Ellen_2013}.}
+
+The evaluation criteria were the accuracy of sarcasm classification as well as recall, precision, and an F-measure for retrieval of sarcastic tweets. In the following discussion, accuracy was the main measure used to compare the methods.
+
+
+\subsection{Results}
+
+\begin{table}[b]
+\caption{Accuracy of sarcasm identification}
+\input{01table03.txt}
+\end{table}
+
+Table \ref{tab:results} shows the accuracy (A), recall (R), precision (P), and F-measure (F) of the different methods on the ARTK and SemEval datasets.
+Baseline 1 achieved 0.58 and 0.57 accuracy on the two datasets.
+Interestingly, the performance of Baseline 1 was acceptable, even though the method made no use of machine learning, but relied only on contradictions of sentiment polarity identified from the sentiment lexicon.
+Baseline 2 and Baseline 3 were more accurate than Baseline 1, and Baseline 3 performed best among the three baselines against all criteria.
+This suggested that a machine learning approach is appropriate for the identification of sarcasm.
+
+The last two rows of Table \ref{tab:results} show the results for our proposed methods.
+The accuracy of the SVM trained only with our proposed features was 0.63 on the ARTK and 0.60 on the SemEval datasets, or approximately 12\% lower than Baseline 2.
+This suggests that N-gram features are informative in the sarcasm identification task.
+The method in which voting of the SVM classifiers used N-grams and our proposed features achieved the best performance on the ARTK dataset.\footnote{A single SVM classifier using both N-gram and proposed features was also evaluated. Its performance was worse than the voting of two classifiers, with accuracies of 0.7856 and 0.7193 on the ARTK and SemEval datasets, respectively.}\@ 
+It outperformed Baseline 3 by 4\% in accuracy and 1.5\% on the F-measure.
+However, on the SemEval dataset our method displayed higher precision but lower recall than Baseline 3.
+On the F-measure and accuracy, Baseline 3 and our method were comparable.
+
+\begin{table}[b]
+\hangcaption{The average length and percentage of single and multiple sentence tweets in the ARTK and SemEval datasets}
+\label{tab:sentence_length_comparison}
+\input{01table04.txt}
+\end{table}
+\begin{table}[b]
+\caption{Accuracy of sarcasm identification on different length of tweet data}
+\label{tab:accuracy_different_sentence_length}
+\input{01table05.txt}
+\end{table}
+
+To compare our method with Baseline 3 in finer detail, we divided each dataset into two subsets: a subset consisting of single sentence tweets and a subset comprised of multiple sentences.
+Table \ref{tab:sentence_length_comparison} shows the average length of words per tweet and the proportion in these subsets, while Table \ref{tab:accuracy_different_sentence_length} compares the performance of the two methods on each subset.
+It was found that, while our method worked well for the multiple sentence subset, Riloff's method did not.
+Our proposed method achieved accuracies of 0.83 and 0.78 for multiple sentence tweets, which was approximately 11\% higher than Baseline 3 on the ARTK dataset and 8\% higher on the SemEval dataset.
+Let us consider the sarcastic tweet ``I had a fever last night, still coughing as if Im choking. Soon I wont be able to eat either. Things are going well.''
+Note that the positive word ``well'' and three negative words ``fever,'' ``coughing,'' and ``choking'' appear far apart from each other.
+Since Riloff's method checks for the existence of a positive sentiment phrase and a negative situation phrase within a five-word window, it fails to find a sentiment contradiction in this example.
+However, our method is able to correctly classify it as sarcastic.
+In contrast, our method performed worse than Riloff's on single sentence tweets.
+One reason for this is that our method sometimes wrongly identifies a sentiment contradiction in a long sentence.
+Consider the non-sarcastic tweet ``I'm feeling so irritable right now \& I just want to go home \& not speak to anyone \& take a rest.''
+It contains one positive word ``rest'' and one negative word ``irritable.''
+Since our method simply checks for the existence of positive and negative words to identify a sentiment contradiction,\footnote{Note that coherence is not considered for the single sentence tweets in our method.} it misclassifies this tweet as sarcastic. In contrast, since Riloff's method strictly checks for positive sentiment phrases and negative situation phrases, it successfully classifies it as non-sarcastic.
+When the sentence is long, our system is more prone to such false identification of sentiment contradiction.
+Our method performed better for single sentence tweets in the ARTK dataset than the SemEval dataset, since the average length of single sentence tweets in the ARTK dataset is shorter than that of the SemEval dataset.
+Similarly, our method is superior to Riloff's method on the ARTK dataset but comparable on the SemEval dataset, again because the single sentence tweets are longer in the SemEval dataset.
+
+Both Riloff's method and our methods make use of N-gram and sentiment contradiction features, although the way these features are driven is different.
+However, sentiment scores and punctuation and special symbol features are used only in our method.
+These were also used in many previous studies \cite{Tsur_2010,Davidov_2010,Reyes_2012,Reyes_2013}.
+
+
+\subsubsection{Contribution made by the features}
+
+To evaluate the effectiveness of our proposed features, classifiers lacking one type of feature were compared with the complete system.
+Table~\ref{tab:evaluation-feature} shows the results of this experiment.
+The fifth row ($-$ Coherence identification) denotes a system that does not take account of coherence.
+In this system, the sentiment contradiction feature is always activated if positive and negative words are detected.
+
+\begin{table}[t]
+\caption{Effectiveness of individual features}
+\label{tab:evaluation-feature}
+\input{01table06.txt}
+\end{table}
+
+Among the proposed features, the sentiment contradiction feature that considered the coherence of the tweet made the greatest contribution.
+This feature may capture the linguistic aspects of sarcasm.
+Note that the system that used the sentiment contradiction feature without considering coherence (fifth row of Table~\ref{tab:evaluation-feature}) performed worse than the system that did not use the sentiment contradiction feature (fourth row).
+This strongly suggests that the identification of coherence is important in sarcasm identification.
+
+The contribution of the sentiment score feature was also significant.
+Normally, sarcasm contains special elements that generate violations and aggressiveness in communication, especially in negation terms.
+Therefore, the strength of the sentiment polarity can be used to estimate the level of violation and aggressiveness, helping to identify sarcasm in the tweet.
+
+In contrast, the punctuation and special symbol feature proved less effective, since accuracy fell by only 0.27\% and 0.37\% on the two datasets when it was removed.
+Many previous studies have shown that sarcastic communication often contains strong emotional language, and emoticons and heavy punctuation can be used to indicate this.
+However, although the punctuation and special symbols feature can capture the strong emotions of the user, such emotional tweets do not always use sarcasm.
+Nevertheless, the feature did contribute a small gain in performance.
+
+
+\subsubsection{Contribution of concept expansion}
+
+The contribution made by concept expansion and pruning was also evaluated.
+Table~\ref{tab:concept-handling1} shows the results for three systems: no concept is expanded, the concepts are expanded but not pruned (the five most related concepts are always expanded), and only the related concepts are obtained by concept expansion and pruning.
+Table \ref{tab:concept-handling} shows the total number of expanded concepts in the test set.
+
+\begin{table}[b]
+\caption{Effectiveness of concept expansion and pruning}
+\label{tab:concept-handling1}
+\input{01table07.txt}
+\end{table}
+\begin{table}[b]
+\caption{Number of expanded concepts}
+\label{tab:concept-handling}
+\input{01table08.txt}
+\end{table}
+
+Concept expansion showed improvement against all evaluation criteria on both datasets by a maximum of 2.4\%, with the exception of accuracy on the SemEval dataset.
+On the ARTK and SemEval datasets,1.9 and 0.75 concepts per tweet were obtained, respectively.
+These could be used to identify the polarity of unknown words or slang in the sentiment lexicon.
+Concept pruning reduced the number of expanded concepts by 33\% and 32\%, contributing a further improvement.
+Our pruning method was shown to successfully remove irrelevant concepts.
+
+
+\subsubsection{Contribution of the clustering-based adaptive genetic algorithm}
+
+\begin{table}[b]
+\caption{Effectiveness of feature weighting by GA}
+\label{tab:CAGA}
+\input{01table09.txt}
+\end{table}
+
+The CAGA also played a part in enhancing the accuracy of the method.
+Table \ref{tab:CAGA} shows the results when the weights of the feature vector were determined by the CAGA, and when they were not.
+When the CAGA was not applied, all feature weights were represented as binary values.
+The CAGA increased accuracy by 1.78\% for the ARTK dataset and 0.98\% for the SemEval dataset.
+These results demonstrate that the CAGA played a significant role in predicting the optimized weight for each feature in the clustering of coherent and incoherent tweets.
+Our experiments showed that the features \textit{proper names} and \textit{demonstrative noun phrase} were less important, while \textit{semantic class agreement} and \textit{definite noun phrase} were significant features.
+
+
+\subsection{Limitations}
+
+Through error analysis of the experimental results, some limitations in our method were found.
+First, in sentiment identification and concept expansion many words were misinterpreted, which produced misclassification of sarcastic tweets.
+Consider the following example tweet: ``I had a terrible fight with my friend in the garden. I beat him around the bush.'' Our concept expansion module obtained one positive concept ``come out better in a competition race'' and one negative concept ``give a spanking to'' from the word ``beat.''
+Since the intensity of the positive concept is stronger than the negative concept in this example, our system will recognize ``beat'' as a positive word.
+Thus sentiment contradiction is wrongly identified, causing misclassification of this tweet as sarcastic.
+Sometimes, inappropriate concepts remain after concept pruning.
+Second, implicit sentiment in the tweet sometimes produces error.
+The tweet ``I just love how you tweet all these other girls'' uses only the positive word ``love'' and no contradiction of sentiment is detected.
+The system therefore misclassifies this as a non-sarcastic tweet.
+However, the phrase ``how you tweet all these other girls'' shows jealousy on the part of the user and the implication is negative.
+Since neither the sentiment lexicon nor our concept expansion module is able to detect the sentiment in this phrase, the system cannot identify this tweet as sarcastic.
+Finally, the method of coherence identification also needs further refinement.
+Consider as an example the tweet ``cold, sad \& sleepy. that's a perfect combo. goodnight.''
+This tweet contains both a positive word (``perfect'') and negative words (``cold'' and ``sad'').
+However, our coherence identification method failed to identify coherence in the tweet, causing a false-negative error.
+Recall that the demonstrative noun phrase feature is used in our method.
+The demonstrative ``that'' in this tweet may indicate coherence between the first and second sentences.
+However, the weight of this feature from training by the CAGA is too small to identify coherence.
+
+Other general causes of errors were found.
+The \#sarcasm hashtag is sometimes used to indicate the sarcasm of other, previously posted tweets.
+Consider the tweet ``@john4768 That was \#sarcasm.''
+In this example, it is not the tweet itself but a previous tweet by the user ``@John'' that is identified as sarcastic.
+In such cases, \#sarcasm is not an indicator that the tweet is sarcastic.
+In addition, our datasets contain many tweets that provide absolutely no clue that sarcasm is intended, other than the hashtag \#sarcasm, for example, ``I feel great \#sarcasm.''
+
+
+\section{Conclusions}
+\label{sec:conclusion}
+
+In this paper we proposed a novel method for identifying sarcasm in a tweet.
+Word N-grams, sentiment scores, sentiment contradictions, and punctuation and special symbol features were used in a supervised machine learning approach.
+Coherence in the tweet was used to derive the sentiment contradiction feature, which was identified by a clustering-based adaptive genetic algorithm.
+Concept expansion and pruning were used to enhance the features derived from the sentiment analysis.
+
+The contributions of the paper are as follows.
+1) A novel feature is proposed that is able to capture sentiment contradiction in a coherent tweet.
+Our experimental results demonstrated the significant contribution that coherence identification made to improvements in accuracy.
+2) A semi-supervised approach was used to identify coherence in a tweet.
+This was based on the unsupervised clustering and optimization of the weights of the feature vectors by an adaptive genetic algorithm.
+3) An alternative way of tackling the data sparseness of public sentiment lexicons was introduced.
+This utilizes ConceptNet as a source of additional external knowledge.
+The effectiveness of our concept expansion and pruning were empirically demonstrated.
+
+In future work, we will extend our approach from recognition of sarcasm to other areas of practical sentiment analysis.
+More specifically, we will explore ways of estimating the polarity and/or the intensity of sentiment from both sarcastic and non-sarcastic sentences in product reviews and news articles.
+Our initial work towards this goal was reported in \citeA{Tungthamthiti_2015}.
+In addition, we intend to apply personalization to the sentiment analysis task.
+Clearly, the intensity of sentiment will reflect the personality and characteristics of each individual user.
+Personalization is a promising way of improving the accuracy of sentiment analysis in sarcastic sentences.
+A more minor research goal is to run our CAGA without the use of coherence annotated data, as discussed in subsection \ref{coherence_identification}, and to empirically evaluate the effectiveness of such an approach.
+
+
+\acknowledgment
+
+We would like to thank the anonymous reviewers for their valuable comments.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Ashtari}{Ashtari}{2013}]{Ashtari_2013}
+Ashtari, O. \BBOP 2013\BBCP.
+\newblock \BBOQ The super Tweets of \#SB47.\BBCQ\
+  https://blog.twitter.com/2013/the-super-tweets-of-sb47.
+
+\bibitem[\protect\BCAY{Barbieri \BBA\ Saggion}{Barbieri \BBA\
+  Saggion}{2014}]{Barbieri_2014}
+Barbieri, F.\BBACOMMA\ \BBA\ Saggion, H. \BBOP 2014\BBCP.
+\newblock \BBOQ Modelling Irony in Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the Student Research Workshop at the 14th
+  Conference of the European Chapter of the Association for Computational
+  Linguistics}, \mbox{\BPGS\ 56--64}.
+
+\bibitem[\protect\BCAY{Bartlett}{Bartlett}{1932}]{Bartlett_1932}
+Bartlett, F.~C. \BBOP 1932\BBCP.
+\newblock {\Bem Remembering: A Study in Experimental and Social Psychology}.
+\newblock Cambridge: Cambridge University Press.
+
+\bibitem[\protect\BCAY{Beaugrande \BBA\ Dressler}{Beaugrande \BBA\
+  Dressler}{1981}]{Beaugrande_1996}
+Beaugrande, R.-A.~d.\BBACOMMA\ \BBA\ Dressler, W.~U. \BBOP 1981\BBCP.
+\newblock {\Bem Introduction to Text Linguistics}.
+\newblock Longman Linguistics Library. Routledge.
+
+\bibitem[\protect\BCAY{Cambria \BBA\ Hussain}{Cambria \BBA\
+  Hussain}{2012}]{Cambria_2012}
+Cambria, E.\BBACOMMA\ \BBA\ Hussain, A. \BBOP 2012\BBCP.
+\newblock {\Bem Sentic Computing: Techniques, Tools, and Applications}.
+\newblock Springer.
+
+\bibitem[\protect\BCAY{Carvalho, Sarmento, Silva, \BBA\ de~Oliveira}{Carvalho
+  et~al.}{2009}]{Carvalho_2009}
+Carvalho, P., Sarmento, L., Silva, M.~J., \BBA\ de~Oliveira, E. \BBOP
+  2009\BBCP.
+\newblock \BBOQ Clues for Detecting Irony in User-generated Contents: Oh...!!
+  It{\textquoteright}s So Easy;-).\BBCQ\
+\newblock In {\Bem Proceeding of the 1st International CIKM Workshop on
+  Topic-sentiment Analysis for Mass Opinion}, \mbox{\BPGS\ 53--56}.
+
+\bibitem[\protect\BCAY{Davidov, Tsur, \BBA\ Rappoport}{Davidov
+  et~al.}{2010}]{Davidov_2010}
+Davidov, D., Tsur, O., \BBA\ Rappoport, A. \BBOP 2010\BBCP.
+\newblock \BBOQ Semi-supervised Recognition of Sarcastic Sentences in Twitter
+  and Amazon.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th Conference on Computational Natural
+  Language Learning}, CoNLL'10, \mbox{\BPGS\ 107--116}.
+
+\bibitem[\protect\BCAY{Doerfler}{Doerfler}{2012}]{Doerfler_2012}
+Doerfler, R. \BBOP 2012\BBCP.
+\newblock \BBOQ A Comedy of Errors or, How I Learned to Stop Worrying and Love
+  Sensibility-Invariantism about `Funny'.\BBCQ\
+\newblock {\Bem Pacific Philosophical Quarterly}, {\Bbf 93}  (4), \mbox{\BPGS\
+  493--522}.
+
+\bibitem[\protect\BCAY{{Gibbs Jr.} \BBA\ Colston}{{Gibbs Jr.} \BBA\
+  Colston}{2007}]{Gibbs_2007}
+{Gibbs Jr.}, R.~W.\BBACOMMA\ \BBA\ Colston, H.~L. \BBOP 2007\BBCP.
+\newblock {\Bem Irony in Language and Thought: A Cognitive Science Reader}.
+\newblock Routledge.
+
+\bibitem[\protect\BCAY{Grice}{Grice}{1975}]{Grice_1975}
+Grice, H.~P. \BBOP 1975\BBCP.
+\newblock \BBOQ Logic and Conversion.\BBCQ\
+\newblock {\Bem Syntax and Semantics 3: Speech Acts}, \mbox{\BPGS\ 41--58}.
+
+\bibitem[\protect\BCAY{McLachlan \BBA\ Krishnan}{McLachlan \BBA\
+  Krishnan}{2008}]{Mclachlan_2008}
+McLachlan, G.~J.\BBACOMMA\ \BBA\ Krishnan, T. \BBOP 2008\BBCP.
+\newblock {\Bem The EM Algorithm and Extensions}.
+\newblock John Wiley \& Sons, Inc.
+
+\bibitem[\protect\BCAY{Mikolov, Chen, Corrado, \BBA\ Dean}{Mikolov
+  et~al.}{2013}]{Mikolov_2013}
+Mikolov, T., Chen, K., Corrado, G., \BBA\ Dean, J. \BBOP 2013\BBCP.
+\newblock \BBOQ Efficient Estimation of Word Representations in Vector
+  Space.\BBCQ\
+\newblock {\Bem International Conference on Learning Representations}.
+
+\bibitem[\protect\BCAY{Miller}{Miller}{1995}]{Miller_1995}
+Miller, G.~A. \BBOP 1995\BBCP.
+\newblock \BBOQ WordNet: A Lexical Database for English.\BBCQ\
+\newblock {\Bem Communications of the ACM}, {\Bbf 38}  (11), \mbox{\BPGS\
+  39--41}.
+
+\bibitem[\protect\BCAY{O'Carroll}{O'Carroll}{2012}]{OCarroll_2012}
+O'Carroll, L. \BBOP 2012\BBCP.
+\newblock \BBOQ Twitter active users pass 200 million.\BBCQ\
+  http://\linebreak[2]www.\linebreak[2]theguardian.\linebreak[2]com/\linebreak[2]technology/2012/dec/18/twitter-users-pass-200-million.
+
+\bibitem[\protect\BCAY{Pak \BBA\ Paroubek}{Pak \BBA\ Paroubek}{2010}]{Pak_2010}
+Pak, A.\BBACOMMA\ \BBA\ Paroubek, P. \BBOP 2010\BBCP.
+\newblock \BBOQ Twitter as a Corpus for Sentiment Analysis and Opinion
+  Mining.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th conference on International Language
+  Resources and Evaluation (LREC'10)}, \mbox{\BPGS\ 1320--1326}.
+
+\bibitem[\protect\BCAY{Pandya \BBA\ Pandya}{Pandya \BBA\
+  Pandya}{2015}]{Rutvija_2015}
+Pandya, R.\BBACOMMA\ \BBA\ Pandya, J. \BBOP 2015\BBCP.
+\newblock \BBOQ C5.0 Algorithm to Improved Decision Tree with Feature Selection
+  and Reduced Error Pruning.\BBCQ\
+\newblock {\Bem International Journal of Computer Applications}, {\Bbf 117}
+  (16), \mbox{\BPGS\ 18--21}.
+
+\bibitem[\protect\BCAY{Quintilien \BBA\ Butler}{Quintilien \BBA\
+  Butler}{1953}]{Quintilien_1953}
+Quintilien, M.~S.\BBACOMMA\ \BBA\ Butler, H.~E. \BBOP 1953\BBCP.
+\newblock {\Bem The Institutio Oratoria Of Quintilian. With an English
+  Translation by H. E. Butler}.
+
+\bibitem[\protect\BCAY{Resnik}{Resnik}{1995}]{Resnik_1995}
+Resnik, P. \BBOP 1995\BBCP.
+\newblock \BBOQ Using Information Content to Evaluate Semantic Similarity in a
+  Taxonomy.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th International Joint Conference on
+  Artificial Intelligence---Volume 1}, IJCAI'95, \mbox{\BPGS\ 448--453}.
+
+\bibitem[\protect\BCAY{Reyes \BBA\ Rosso}{Reyes \BBA\ Rosso}{2012}]{Reyes_2012}
+Reyes, A.\BBACOMMA\ \BBA\ Rosso, P. \BBOP 2012\BBCP.
+\newblock \BBOQ Making Objective Decisions from Subjective Data: Detecting
+  Irony in Customer Reviews.\BBCQ\
+\newblock {\Bem Decision Support Systems}, {\Bbf 53}  (4), \mbox{\BPGS\
+  754--760}.
+
+\bibitem[\protect\BCAY{Reyes, Rosso, \BBA\ Veale}{Reyes
+  et~al.}{2013}]{Reyes_2013}
+Reyes, A., Rosso, P., \BBA\ Veale, T. \BBOP 2013\BBCP.
+\newblock \BBOQ A Multidimensional Approach for Detecting Irony in
+  Twitter.\BBCQ\
+\newblock {\Bem Language Resources and Evaluation}, {\Bbf 47}  (1),
+  \mbox{\BPGS\ 239--268}.
+
+\bibitem[\protect\BCAY{Riloff, Qadir, Surve, {De Silva}, Gilbert, \BBA\
+  Huang}{Riloff et~al.}{2013}]{Ellen_2013}
+Riloff, E., Qadir, A., Surve, P., {De Silva}, L., Gilbert, N., \BBA\ Huang, R.
+  \BBOP 2013\BBCP.
+\newblock \BBOQ Sarcasm as Contrast between a Positive Sentiment and Negative
+  Situation.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 704--714}.
+
+\bibitem[\protect\BCAY{Singh}{Singh}{2012}]{Singh_2012}
+Singh, R.~K. \BBOP 2012\BBCP.
+\newblock \BBOQ Humour, Irony and Satire in Literature.\BBCQ\
+\newblock {\Bem International Journal of English and Literature (IJEL)}, {\Bbf
+  3}, \mbox{\BPGS\ 65--72}.
+
+\bibitem[\protect\BCAY{Soon, Ng, \BBA\ Lim}{Soon et~al.}{2001}]{Soon_2001}
+Soon, W.~M., Ng, H.~T., \BBA\ Lim, D.~C.~Y. \BBOP 2001\BBCP.
+\newblock \BBOQ A Machine Learning Approach to Coreference Resolution of Noun
+  Phrases.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 27}  (4), \mbox{\BPGS\
+  521--544}.
+
+\bibitem[\protect\BCAY{{Stringfellow Jr.}}{{Stringfellow
+  Jr.}}{1994}]{Stringfellow_1994}
+{Stringfellow Jr.}, F. \BBOP 1994\BBCP.
+\newblock {\Bem The Meaning of Irony: A Psychoanalytic Investigation}.
+\newblock State University of New York Press.
+
+\bibitem[\protect\BCAY{Thelwall, Buckley, \BBA\ Paltoglou}{Thelwall
+  et~al.}{2012}]{Thelwall_2012}
+Thelwall, M., Buckley, K., \BBA\ Paltoglou, G. \BBOP 2012\BBCP.
+\newblock \BBOQ Sentiment Strength Detection for the Social Web.\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science and
+  Technology}, {\Bbf 63}  (1), \mbox{\BPGS\ 163--173}.
+
+\bibitem[\protect\BCAY{Tsur, Davidov, \BBA\ Rappoport}{Tsur
+  et~al.}{2010}]{Tsur_2010}
+Tsur, O., Davidov, D., \BBA\ Rappoport, A. \BBOP 2010\BBCP.
+\newblock \BBOQ ICWSM---A Great Catchy Name: Semi-Supervised Recognition of
+  Sarcastic Sentences in Online Product Reviews.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International Conference on Weblogs
+  and Social Media (ICWSM-2010)}.
+
+\bibitem[\protect\BCAY{Tungthamthiti, Santus, Xu, Huang, \BBA\
+  Shirai}{Tungthamthiti et~al.}{2015}]{Tungthamthiti_2015}
+Tungthamthiti, P., Santus, E., Xu, H., Huang, C.-R., \BBA\ Shirai, K. \BBOP
+  2015\BBCP.
+\newblock \BBOQ Sentiment Analyzer with Rich Features for Ironic and Sarcastic
+  Tweets.\BBCQ\
+\newblock In {\Bem Proceedings of the 29th Pacific Asia Conference on Language,
+  Information and Computation}, \mbox{\BPGS\ 178--187}.
+
+\bibitem[\protect\BCAY{Tungthamthiti, Shirai, \BBA\ Mohd}{Tungthamthiti
+  et~al.}{2014}]{Tungthamthiti_2014}
+Tungthamthiti, P., Shirai, K., \BBA\ Mohd, M. \BBOP 2014\BBCP.
+\newblock \BBOQ Recognition of Sarcasms in Tweets Based on Concept Level
+  Sentiment Analysis and Supervised Learning Approaches.\BBCQ\
+\newblock In {\Bem Proceedings of the 28th Pacific Asia Conference on Language,
+  Information and Computation}, \mbox{\BPGS\ 404--413}.
+
+\bibitem[\protect\BCAY{Xu, Santus, Laszlo, \BBA\ Huang}{Xu
+  et~al.}{2015}]{Xu_2015}
+Xu, H., Santus, E., Laszlo, A., \BBA\ Huang, C.-R. \BBOP 2015\BBCP.
+\newblock \BBOQ LLT-PolyU: Identifying Sentiment Intensity in Ironic
+  Tweets.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th International Workshop on Semantic
+  Evaluation (SemEval 2015)}, \mbox{\BPGS\ 673--678}.
+
+\end{thebibliography}
+
+\begin{biography}
+
+\bioauthor[:]{Piyoros Tungthamthiti}{received the B.S. and M.E. from Sirindhorn International Institute of Technology (SIIT), Thammasat University in 2010 and 2012, respectively.
+He is currently a Ph.D. student at School of Advanced Science and Technology, Japan Advanced Institute of Science and Technology.
+His research interests are in the area of natural language processing (NLP), human computer interaction (HCI) and knowledge management.
+}
+
+\bioauthor[:]{Kiyoaki Shirai}{received the B.E., M.E. and Dr. Eng. from Tokyo Institute of Technology in 1993, 1995 and 1998, respectively.
+He was an assistant at the Graduate School of Information Science and Engineering, Tokyo Institute of Technology from 1998 to 2001.
+He is currently an associate professor at School of Information Science, Japan Advanced Institute of Science and Technology.
+His current research interests include natural language processing, especially corpus-based methods and their applications.
+He is a member of the Association for Natural Language Processing, the Japanese Society of Artificial Intelligence,
+the Information Processing Society of Japan, and the Institute of Electronics, Information and Communication Engineers.
+}
+
+\bioauthor[:]{Masnizah Mohd}{received her Ph.D. in Computer and Information Sciences from the University of Strathclyde, United Kingdom; and M.IT (2002) and B.IT (1999) degrees in Information Science from the Universiti Kebangsaan
+Malaysia.
+She was a postdoctoral  researcher at the School of Information Science, Japan Advanced Institute of Science and Technology (JAIST) from 2014 to 2016.
+She is currently an associate professor at the Faculty of Information Science and Technology, Universiti Kebangsaan Malaysia.
+Her main research interests are in the areas of Information Retrieval, Topic Detection and Tracking, and Natural Language Processing.
+She is interested in theoretical and practical information retrieval problems.
+Her research has focused on retrieval models, query/document representations, term weighting, user interaction, tasks and evaluation.
+}
+
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

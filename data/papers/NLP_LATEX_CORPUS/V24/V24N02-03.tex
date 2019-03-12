@@ -1,0 +1,1326 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage[multi]{otf}
+\usepackage{array}
+\makeatletter
+\newcommand{\MidSmall}{}
+\makeatother
+
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{url}
+\usepackage[ruled,linesnumbered]{algorithm2e}
+\usepackage[noend]{algpseudocode}
+
+
+\Volume{24}
+\Number{2}
+\Month{March}
+\Year{2017}
+
+\received{2016}{8}{5}
+\revised{2016}{10}{21}
+\rerevised{2016}{12}{8}
+\accepted{2017}{1}{13}
+
+\setcounter{page}{267}
+
+\etitle{Constrained Partial Parsing Based Dependency Tree Projection for Tree-to-Tree Machine Translation}
+\eauthor{Chenhui Chu\affiref{Author_1} \and Yu Shen\affiref{Author_2} \and Fabien Cromieres\affiref{Author_1} \and Sadao Kurohashi\affiref{Author_2}}
+\eabstract{
+Ideally, tree-to-tree machine translation (MT) that utilizes syntactic parse trees on both source and target sides could preserve non-local structure, and thus generate fluent and accurate translations. In practice, however, firstly, high quality parsers for both source and target languages are difficult to obtain; secondly, even if we have high quality parsers on both sides, they still can be non-isomorphic because of the annotation criterion difference between the two languages. The lack of isomorphism between the parse trees makes it difficult to extract translation rules. This extremely limits the performance of tree-to-tree MT. In this article, we present an approach that projects dependency parse trees from the language side that has a high quality parser, to the side that has a low quality parser, to improve the isomorphism of the parse trees. We first project a part of the dependencies with high confidence to make a partial parse tree, and then complement the remaining dependencies with partial parsing constrained by the already projected dependencies. Experiments conducted on the Japanese-Chinese and English-Chinese language pairs show that our proposed method significantly improves the performance on both the two language pairs.
+}
+
+\ekeywords{Cross-Language Projection, Constrained Partial Parsing, Tree-to-Tree \linebreak Machine Translation}
+
+\headauthor{Chu, Shen, Cromieres, Kurohashi}
+\headtitle{Cross-language Projection for Machine Translation}
+
+\affilabel{Author_1}{}{Japan Science and Technology Agency}
+\affilabel{Author_2}{}{Kyoto University}
+
+
+\begin{document}
+
+\maketitle
+
+\vspace*{-1.5\Cvs}
+\section{Introduction}
+
+According to how syntactic parse trees are used in machine translation (MT), there are 4 types of
+MT approaches: string-to-string that does not use parse trees \cite{chiang:2005:ACL,koehn-EtAl:2007:PosterDemo}, 
+string-to-tree that uses parse trees on the target side \cite{galley-EtAl:2006:COLACL,shen-xu-weischedel:2008:ACLMain},
+tree-to-string that uses parse trees on the source side 
+\cite{quirk-menezes-cherry:2005:ACL,liu-liu-lin:2006:COLACL,mi-huang:2008:EMNLP},
+and tree-to-tree that uses parse trees on both sides \cite{zhang-EtAl:2008:ACLMain3,richardson-EtAl:2015:WAT}.
+Intuitively, the tree-to-tree approach that employs syntactic analysis for both the source 
+and target sides seems to be the most appropriate. The reason is that it could preserve 
+the structure information on both sides, 
+\pagebreak
+which leads to fluent and accurate translations.
+
+In practice, however, good quality parsers on both the source and target sides are difficult to 
+acquire. In many cases, the parsing quality of one side is much higher than that of the other 
+side, because the higher quality side has a well annotated treebank or is linguistically easier to parse. 
+For example, in the case of Japanese-Chinese MT that we study in this article, 
+the head-final characteristic of Japanese \cite{isozaki-EtAl:2010:WMT} makes the dependency
+parsing for Japanese much easier than that of Chinese. Currently, the dependency 
+parsing accuracy of Japanese {from scratch is about 87\%} \cite{kawahara-kurohashi:2006:HLT-NAACL06-Main},
+while the Chinese parsing accuracy {from scratch is about 75\% \cite{hatori-EtAl:2012:ACL2012}}.
+Another problem is the annotation criterion difference of the treebanks in different languages, 
+which are used for training the parsers. For example, the dependency annotations
+of noun phrases and coordination could be different among different languages. For example,
+in Japanese, noun phrases and coordination are annotated as modifier-head dependencies
+\cite{kawahara-kurohashi:2006:HLT-NAACL06-Main}, while in Chinese they are annotated as 
+sibling dependencies \cite{shen-kawahara-kurohashi:2012:PACLIC}. These two problems lead to the
+parse difference between the source and target parse trees, which affects the translation
+rule extraction in tree-to-tree MT that requires the isomorphism of the parse trees.
+This extremely limits the translation quality of tree-to-tree MT.
+
+In this article, we present an approach that projects dependency trees from a high 
+quality (HQ) parser to a low quality (LQ) parser using alignment information.
+The projection could reduce the parsing errors on the LQ side, and address the 
+annotation criterion difference problem. This can make the LQ trees isomorphic to 
+the HQ trees, which can benefit the translation rule extraction in tree-to-tree MT,
+and thus improve the MT performance. The idea of cross-language projection of parse trees 
+has been proposed previously 
+\cite{hwa2005bootstrapping,ganchev-gillenwater-taskar:2009:ACLIJCNLP,jiang-EtAl:2010:POSTERS,Goto:2015:PUT:2791399.2699925}.
+However, few studies have been conducted in the context of dependency based tree-to-tree MT, 
+which is the setting of this article. 
+
+In addition, we propose a novel constrained partial parsing method to address the word alignment 
+problems such as unaligned words and alignment errors in projection. In detail, we first apply a 
+partial projection step to project a part of the dependencies with high confidence judged by the 
+alignment information and a projectivity criterion.
+We thus obtain a projected ``partial tree.'' We then find the missing dependencies from this 
+partial tree by applying a ``partial parsing'' method: we apply a parser to find the missing 
+dependencies subject to respecting the projected dependencies, so that we obtain a full dependency tree. 
+Initially, the LQ parser is used for the partial parsing process. Once the entire projection process has
+been finished, we select a part of the projected trees based on the dependency projection ratio 
+of the partial projection step, and re-train a parser for the LQ side. This re-trained parser tends 
+to be more isomorphic to the HQ parser, and thus we again apply it for the partial parsing process.
+
+This article is an extension of our previous study \cite{shen-EtAl:2016:WMT}. In \cite{shen-EtAl:2016:WMT},
+we only experimented on the Japanese-Chinese language pair in the scientific domain, and thus
+the language and task independency of our proposed method is not clear. In this article, we
+thus conduct additional experiments on the English-Chinese language pair in the patent and {Olympic domains.
+Moreover, we experimentally compare with our previously proposed another projection method \cite{Shen2015a}
+on all the tasks.} All the experiments are conducted on an open source dependency based tree-to-tree MT system 
+KyotoEBMT\footnote{http://nlp.ist.i.kyoto-u.ac.jp/EN/index.php?KyotoEBMT}
+\cite{richardson-EtAl:2015:WAT}. Experimental results show that our proposed method improves 
+the isomorphism of the source and target parse trees, leading to more translation rules being 
+extracted and used in the decoding process. We observe significant MT performance 
+improvements on 
+both the Japanese-Chinese and English-Chinese
+translation tasks in our {large scale} experiments, indicating the language and task independency of our proposed
+method. In addition, compared to our previous work \cite{shen-EtAl:2016:WMT},
+more detailed results and discussions are presented in this article.
+
+
+\section{The Difficulties of Tree-to-Tree MT}
+
+\subsection{Overview of the KyotoEBMT System}
+\label{subsec:ebmt_overview}
+
+This study is conducted on the KyotoEBMT system \cite{richardson-EtAl:2015:WAT}, 
+which is a representative dependency based tree-to-tree MT system.
+Figure \ref{fig:ebmt} shows an overview of the KyotoEBMT system on
+Chinese-to-Japanese translation. The translation example database is
+automatically constructed from a parallel training corpus by means of
+a discriminative alignment model \cite{riesa-irvine-marcu:2011:EMNLP}. 
+It contains ``examples'' that form the initial hypotheses to be combined 
+during decoding. Note that both source and target sides
+of all the examples are stored in dependency trees. An input
+sentence is also parsed and transformed into a dependency tree. For
+all the subtrees in the input dependency tree, matching hypotheses
+are searched in the example database. This step is the most time
+consuming part, and a fast subtree retrieval method 
+\cite{cromieres-kurohashi:2011:EMNLP} is used. There are many available
+hypotheses for one subtree, and also, there are many possible hypothesis
+combinations. The best combination is detected by a lattice-based decoder,
+which optimizes a log-linear model \cite{cromieres-kurohashi:2014:EMNLP2014}.
+In the example in Figure \ref{fig:ebmt}, four hypotheses are used. They
+are combined and produce an output dependency tree, which is the final translation. 
+For more details of the system, please refer to \cite{richardson-EtAl:2015:WAT}.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia3f1.eps}
+\end{center}
+\caption{An example of the KyotoEBMT system on Chinese-to-Japanese translation.}
+\label{fig:ebmt}
+\end{figure}
+
+
+\subsection{The Translation Example Extraction Problem}
+
+One advantage of the KyotoEBMT system is that it can handle examples that are discontinuous
+as a word sequence but continuous structurally, because of the usage of both
+source and target parse trees. In Figure \ref{fig:motivation}, for example, the translation
+example of ``26--31: 類似することを示唆する/4: 表明14: \UTFC{7C7B}似 (show the similarity)'' and 
+``0--2: このことは30--35: 示唆するものと思われる/0--4: \UTFC{8BA4}\UTFC{4E3A}\UTFC{8FD9}一\UTFC{73B0}象表明 (I think that this phenomenon shows)'' 
+can be extracted by the KyotoEBMT system, because they are continuous in the parse trees.
+However, in phrase based MT \cite{koehn-EtAl:2007:PosterDemo}, both of these two translation examples 
+could not be extracted. The reason for this is that ``4: 表明 (show)'' and ``14: \UTFC{7C7B}似 (similarity)'' are discontinuous
+in the Chinese sentence; similarly, ``0--2: このことは (this phenomenon)'' and ``30--35: 示唆するものと思われる 
+(I think that shows)'' are discontinuous in the Japanese sentence.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia3f2.eps}
+\end{center}
+\hangcaption{A motivated example that shows a word aligned Japanese-Chinese parse tree pair, where the solid black boxes show the word alignments.}
+\label{fig:motivation}
+\end{figure}
+
+On the other hand, it also adds the constraint that a translation example has to share the 
+same structure on the parse trees to guarantee the quality of the extracted examples. 
+This could be a problem because of two reasons. The main reason is parsing 
+error. In Figure \ref{fig:motivation}, for example, because of the parsing errors in the Chinese
+parse tree, the translation examples of ``3--8: 樹液中のＫ＋の/6--10: \UTFC{6811}液中Ｋ＋的 (sap's K+),'' and 
+``13--17: Ｋ＋のみを含む/16--19: 只含Ｋ＋ (only include K+)'' could not be extracted. The other reason is the annotation criterion 
+difference. In Figure \ref{fig:motivation}, for example, the translation example of ``18: 標準19: 試料/21: \UTFC{6807}准22: \UTFC{8BD5}\UTFC{6837}
+(standard sample)'' could not be extracted, {though the Chinese parse is correct. 
+The Japanese parser is only to chunk the elements of a compound noun and assign dependency between 
+adjacent elements, and thus this kind of noun phrase structure is annotated as modifier-head 
+dependencies \cite{kawahara-kurohashi:2006:HLT-NAACL06-Main};} while
+in Chinese it is annotated as siblings depending on the last word.
+
+One possible solution to address the above problem is to loosen the constraint for translation 
+example extraction. For example, to extract the ``18: 標準19: 試料/21: \UTFC{6807}准22: \UTFC{8BD5}\UTFC{6837} (standard sample)'' 
+example caused by the annotation criterion difference, we might allow the extraction of examples that 
+are modifier-head and sibling subtrees on the source and target sides, respectively. 
+However, firstly, even the loosening in this degree could also lead to other noisy translation 
+examples; secondly, what kind of loosening is required for the parse error case is unclear, 
+because the types of parse errors are diverse. Therefore, 
+instead of loosening the constraint, we choose the cross-lingual projection approach to address the problem.
+
+
+\section{Projection of Dependency Trees with Constrained Partial Parsing}
+
+Figure \ref{fig:overview} is an overview of our proposed constrained partial parsing method. 
+Firstly, we apply a partial projection process to project a part of the dependencies from the
+HQ tree using the HQ tree, word alignment information and a projectivity criterion.
+Note that the word alignment information is presented in Figure \ref{fig:overview} as the corresponding
+word indexes in the LQ and HQ trees.
+In Figure \ref{fig:overview}, the circled part in the HQ tree is projected. Next, we apply partial
+parsing to complement the other dependencies in the partially projected tree using the LQ parser.
+In Figure \ref{fig:overview}, as the LQ parser could parse the circled part in the original LQ tree correctly,
+it also complements the dependencies for the partially projected tree correctly. Once we obtained
+the projected trees, we select a part of the highly confident projected trees as training data to
+re-train the LQ parser. Finally, we apply the re-trained LQ parser for the partial parsing process,
+which further improves the quality of projection.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{24-2ia3f3.eps}
+\end{center}
+\caption{An overview of our constrained partial parsing based projection method.}
+\label{fig:overview}
+\end{figure}
+
+In the remaining of this section, we describe the details of partial projection, partial parsing,
+and re-training of the LQ parser in Section \ref{sec:partial_projection}, \ref{sec:partial_parsing},
+and \ref{sec:re-train} respectively.
+
+
+\subsection{Partial Projection}
+\label{sec:partial_projection}
+
+The pseudo-code of the partial projection process is shown in Algorithm \ref{alg:partial_projection}.
+We first present a direct mapping method for dependency tree projection using word alignment,
+which can be formalized as below.
+
+\SetAlFnt{\MidSmall}
+\begin{algorithm}[p]
+\input{03algo01.txt}
+\caption{{Partial Projection}}\label{alg:partial_projection}
+\end{algorithm}
+
+Given a parallel sentence pair $(S,T)$, where {$S=s_0...s_i...s_n$}, and {$T=t_0...t_j...t_m$} are
+sentences of the HQ and LQ sides, respectively; $s_i$ and $t_j$ denote the word index (which also denotes the
+node index in the dependency tree) in the corresponding sentences. We have a dependency tree for $S$ denoted as 
+$Tree_S=\{(s_i, s_k)...\}$ that is composed of a set of dependencies, where $(s_i, s_k)$ means that the
+word $s_i$ is dependent on the word $s_k$ {($s_k$ can be ``$-1$'', which denotes the root)}. 
+We also have an alignment set $A=\{a(s_i, t_j)...\}$ from $S$ to $T$, where
+$a(s_i, t_j)$ means that the HQ word $s_i$ is aligned to the LQ word $t_j$. The new LQ parse tree
+$Tree_T^{new}$ is projected from $Tree_S$. 
+
+{We first sort the dependencies in $Tree_S$ and $Tree_T$ in a top-down manner (from the root node to the leaf node) (Line 2
+in Algorithm \ref{alg:partial_projection}). We then calculate the dependency layers for both $Tree_S$ and $Tree_T$
+for further alignment processing (Line 3 in Algorithm \ref{alg:partial_projection}). The node that 
+is dependent on the root is assigned to layer \#1 (Line 21--23 in Algorithm \ref{alg:partial_projection}), and 
+the nodes that are dependent on the node on layer \#1 are assigned to layer \#2 and so on (Line 24--26 in Algorithm 
+\ref{alg:partial_projection}). Next, we} perform the following preprocessing for the unaligned
+HQ words {and the {\it many alignment} types (Line {4} in Algorithm \ref{alg:partial_projection})}.
+
+\begin{itemize}
+\item
+{\it unaligned words (HQ side)}: If $s_i$ is an unaligned word, link the dependencies around $s_i$. 
+More specifically, if $s_i$ is unaligned{, $s_h$ and $s_k$ are aligned words}, and $(s_h, s_i) \in Tree_S$, $(s_i, s_k) \in Tree_S$, we 
+add $(s_h, s_k)$ to $Tree_S$, and discard $(s_h, s_i)$ and $(s_i, s_k)$ from $Tree_S$ {(Line 29--33 in 
+Algorithm \ref{alg:partial_projection})}. This preprocess can make two 
+distinct words separated by unaligned words be a modifier-head pair. For example, in Figure \ref{fig:motivation}, because ``32: もの (thing)''
+is an unaligned word, we add (30: 示唆 (show), 33: と (and)) to $Tree_S$.
+\item
+{\it many to one alignment}: If $(s_i,s_k,...)$ aligns to $t_j$, 
+we take the head $s_r$ (e.g., $s_k$) from $(s_i,s_k,...)$ as the representative, 
+and then treat $s_r$ and $t_j$ as an one to one alignment {(Line 35--37 in Algorithm \ref{alg:partial_projection})}.
+The head $s_r$ is the node that is closest to the root among $(s_i,s_k,...)${, i.e., with the lowest layer number}.
+For example, in Figure \ref{fig:motivation}, a(33: と 34: 思わ 35: れる (think), 
+0: \UTFC{8BA4}\UTFC{4E3A} (think)) is a many to one alignment, and we select the head ``34: 思わ'' as the representative.
+\item
+{\it one to many alignment}: If $s_i$ aligns to several words $(t_j,t_l,...)$, similar to the many 
+to one alignment case, we take the head $t_r$ (e.g., $t_j$) from $(t_j, t_l,...)$ based on the original LQ tree as the representative, 
+and then treat $s_i$ and $t_r$ as an one to one alignment {(Line 38--40 in Algorithm \ref{alg:partial_projection})}.
+\item
+{\it many to many alignment}: Reduce this to one-to-many and many-to-one cases, i.e., select the 
+representatives for both sides,
+{and then treat it as an one to one alignment.}
+\end{itemize}
+
+We then process each {dependency pair $(s_i,s_k)$ with one to one alignment after the 
+alignment processing} in $Tree_S$ in a top-down manner by applying the following.
+
+\begin{itemize}
+\item
+{For the dependency pair ($s_i$, $-1$)
+(Line {6} in Algorithm \ref{alg:partial_projection}): if $s_i$ aligns to $t_j$
+(Line {7} in Algorithm \ref{alg:partial_projection}),
+we add $(t_j,-1)$ to $Tree_T^{new}$ (Line {8} in Algorithm \ref{alg:partial_projection}). 
+For example, in Figure \ref{fig:motivation},
+the Japanese dependency (34: 思わ (think), $-1$) is projected to the Chinese side as
+(0: \UTFC{8BA4}\UTFC{4E3A} (think), $-1$) by applying this.}
+\item
+{For the other dependency pairs (Line {11} in Algorithm \ref{alg:partial_projection}):} 
+if $s_i$ aligns to $t_j$, $s_k$ aligns to $t_l$, 
+{(Line {12} in Algorithm \ref{alg:partial_projection})}, 
+add $(t_j,t_l)$ to $Tree_T^{new}$ {(Line {14} in Algorithm \ref{alg:partial_projection})}. 
+For example, in Figure \ref{fig:motivation},
+the Japanese dependency (0: この (this), 1: こと (phenomenon)) is projected to the Chinese side as
+(1: \UTFC{8FD9}, 2: 一 (this)) by applying this.
+\end{itemize}
+
+As reported in \cite{Shen2015a}, this direct mapping method could lead to parsing 
+errors after projection that decreases the MT performance about 1.8 BLEU score compared 
+to the baseline system (Table 3 in \cite{Shen2015a}). {The parsing 
+errors are mainly due to alignment errors, which the direct mapping method does not 
+deal with \cite{Shen2015a}. Because the direct mapping method highly depends on word alignments, erroneous word alignments
+would lead to wrong projected dependency results. For example, in Figure \ref{fig:motivation},
+the Japanese word ``12: むしろ (preferably)'' is incorrectly aligned to the Chinese word ``13: 及其 (extremely)'';
+this erroneous alignment would project the Japanese dependency (12: むしろ (preferably), 14: +) to the Chinese side, 
+leading to a projected dependency of (13: 及其 (extremely), 19: +), which is obviously incorrect.
+Alignment errors could happen due to many factors, one of which is translation shift.
+The erroneous alignment in Figure \ref{fig:motivation} is caused by this.}
+
+{Besides alignment errors, there are two other cases} that the direct mapping method could not deal with:
+
+\begin{enumerate}
+\item
+{\it the other nodes in the one to many alignment case}: For the nodes (e.g., $t_l$) (in $(t_j,t_l,...)$
+that align to one word $s_i$) other than the representative $t_r$, there are no clues to determine
+their dependencies during the projection.
+\item
+{\it unaligned words (LQ side)}: If $t_j$ is an unaligned word, there are also no clues for 
+the projection. For example, in Figure \ref{fig:motivation}, because the word Chinese ``3: \UTFC{73B0}象 (phenomenon)'', 
+``15: 与 (and)'' and ``20: 的 ('s)'' are unaligned words, we cannot determine their dependencies by
+projection.
+\end{enumerate}
+
+Because of the existence of the above {two cases and alignment errors (case (3))}, we only 
+apply the direct mapping method for partial projection. For the (1) and (2) cases, we leave the dependencies
+for these words as null. For the (3) case, we propose a projectivity criterion to detect 
+the alignment error, and again leave the dependencies as null. Note that all of these three
+cases are processed during the top-down projection process.
+
+Projectivity is a property of dependency parsing, which informally means that there should 
+not be crossing arcs in a dependency tree \cite{Kubler:2009:DP:1538443}. For example, 
+$Tree_T^{new}=\{(0,2) (1,3) (2,3) (3,-1)\}$ is not projective, because 
+the arc of modifier-head pair (0,2) and that of modifier-head pair (1,3) is crossed. We use
+the projectivity property to detect alignment errors during the top-down projection 
+process. Suppose that by processing the HQ tree from the root, we already have a partially projected LQ subtree.
+Next, we want to project a new dependency in the HQ tree to the LQ side. If adding this newly 
+projected dependency to the partially projected subtree leads to 
+non-projectivity {(Line {13} in Algorithm \ref{alg:partial_projection})}, we give up this projection and leave the dependency as null.
+{Note that not all non-projectivites are caused by alignment errors;
+a few of them are also due to translation shift. As reported in \cite{Shen2015a},
+this projectivity criterion can address 90\% and 50\% parsing errors after projection 
+caused by alignment errors and translation shift, respectively (Table 2 in \cite{Shen2015a}).
+This improves the baseline system by about 0.8 BLEU score for a back tracking projection method
+(Table 3 in \cite{Shen2015a}).}
+
+{Here, we illustrate an alignment error in projection addressed by 
+this projectivity criterion using the example in Figure \ref{fig:motivation}.}
+In Figure \ref{fig:motivation}, if we use the erroneous alignment a(12: むしろ (preferably), 13: 及其 (extremely))
+to project the Japanese dependency (12: むしろ (preferably), 14: +) to the Chinese side, we
+obtain the dependency of (13: 及其 (extremely), 19: +).
+Before the projection for the node ``12: むしろ (preferably)'', because the node ``24: 挙動 (behavior)'' 
+is an ancestor of this node in the Japanese tree, it has been projected. The dependency (24: 挙動 (behavior), 
+26: 類似 (similar)) has been projected to the Chinese side, leading
+the dependency of (27: 作用 (behavior), 14: \UTFC{7C7B}似 (similar)). (13: 及其 (extremely), 19: +) and
+(27: 作用 (behavior), 14: \UTFC{7C7B}似 (similar)) lead to non-projectivity. Therefore, we leave
+the dependency for ``13: 及其 (extremely)'' as null.
+
+
+\subsection{Partial Parsing}
+\label{sec:partial_parsing}
+
+After the partial projection step, we obtain partial projected trees, with null dependencies
+discussed in Section \ref{sec:partial_projection}. We then perform partial parsing to
+complement these null dependencies. Before the description of the partial parsing method,
+we first review the formalism of dependency parsing  used in many previous studies such as 
+\cite{Kubler:2009:DP:1538443,shen-kawahara-kurohashi:2012:PACLIC}:
+\begin{equation}
+Y^*=argmax_{Y \in \Phi(X)}score(Y, X)
+\end{equation}
+where {$X=x_0...x_i...x_n$} is the input sentence, $Y$ is a candidate tree, $\Phi(X)$ is
+a set of all possible dependency trees over $X$. $Y$ can be denoted as 
+{$Y=\{(m,h):0\le{m}\leq{n},-1\leq{h}\leq{n}\}$}, where $(m,h)$ is a dependency from the modifier 
+$x_m$ to the head $x_h$. The problem of dependency parsing is to search the best tree from 
+$\Phi(X)$ that maximizes the score function $score(Y, X)$. 
+The score function can be factorized as the summation of the scores of its factors (subtrees):
+\begin{equation}
+score(Y, X)=\sum_{F \in Y}score(F, X)
+\end{equation}
+For example, in the first order graph based dependency parsing that assumes the dependencies
+in a tree are independent from each other, the score function can be denoted as:
+\begin{equation}
+score(Y, X)=\sum_{(m,h) \in Y}score(m,h,X)
+\end{equation}
+The score function for each factor is denoted as the inner product of a feature
+and a weight vector:
+\begin{equation}
+score(F, X)=w \cdot f(F, X)
+\end{equation}
+The weight vector can be learnt by e.g., the averaged structured perceptron algorithm \cite{collins:2002:EMNLP02}
+on an annotated treebank. During parsing, the parser would utilize the learnt weight vector
+to determine the best parse tree.
+
+In our partial parsing method, we aim to keep the dependencies in partial projected trees, while
+complementing the null dependencies to construct a projective tree. To realize this, we set extremely 
+high scores to the projected dependencies to maximize the $score(F, X)$ for these dependencies, 
+while for the null dependencies we set relatively small scores.
+Doing so, the parser would search the best tree that respects the partial projected
+dependencies. In our experiments, we used the projective second order graph based dependency parser
+\cite{shen-kawahara-kurohashi:2012:PACLIC}. We set the initial dependency
+scores for the projected dependencies to $1e12$, and $0$ to the null dependencies. 
+
+
+\subsection{Re-train a New Low Quality Side Parser}
+\label{sec:re-train}
+
+Re-training a new LQ parser on the projected trees is necessary for two reasons. Initially, 
+we use the original LQ parser for the partial parsing process, 
+because we do not have a better choice;
+due to the low accuracy and the annotation criterion difference problem of the LQ parser, we
+\pagebreak
+have the risk that it will produce unsatisfying parsing results, especially for the trees
+with a low ratio of dependencies being projected. Secondly, if we perform the LQ-to-HQ 
+direction MT, we should make the parsed trees of the input sentences isomorphic to the projected 
+trees. Re-training a new LQ parser on the projected trees could address both of these two problems.
+As the re-trained parser tend to be more isomorphic to the HQ parser, it could be more effective 
+for the partial parsing process, and could be applied for parsing the input sentences for the 
+LQ-to-HQ direction MT task. 
+
+Therefore, after the entire projection process, we select a part of the projected trees,
+and re-train a parser for the LQ side. How to select the projected trees for training the new
+LQ parser is an open question. The main question is how to take the balance of the quality and quantity
+of the projected trees. Currently, the selection criterion is empirical based on the ratio 
+of dependencies projected by the partial projection process in a tree, defined by
+\begin{equation}
+ratio=\frac{\#projected\_dependencies}{\#all\_dependencies}
+\end{equation}
+The motivation behind this is that the more dependencies projected by the partial projection 
+in a tree, the more isomorphic would the projected tree be as the HQ tree, and the less 
+affect would be introduced by the original LQ parser during the partial parsing process.
+We set a threshold, and use the trees with the ratio higher than the threshold for
+training the parser. We tried several thresholds in our preliminary experiments, and selected the
+best threshold
+based on the MT performance {(Section \ref{sec:experiments_selection})}.
+
+
+\section{Experiments}
+\label{sec:experiments}
+
+We conducted both Japanese-Chinese and English-Chinese MT experiments to verify the effectiveness of 
+our constrained partial parsing based projection method.
+
+
+\subsection{Settings}
+
+For the Japanese-Chinese language pair, we conducted experiments on the scientific domain MT task on the 
+Japanese-Chinese paper excerpt corpus (ASPEC-JC),\footnote{http://lotus.kuee.kyoto-u.ac.jp/ASPEC/} which 
+is one subtask of the workshop on Asian translation (WAT)\footnote{http://orchid.kuee.kyoto-u.ac.jp/WAT/} 
+\cite{nakazawa-EtAl:2015:WAT}. The ASPEC-JC task uses 672,315, 2,090, and 2,107 sentences for training, 
+development, and testing, respectively. For the English-Chinese language pair, we conducted experiments on
+{two tasks. The first one was} the English-Chinese subtask (NTCIR-EC) of the patent MT task at 
+the NTCIR-10 workshop\footnote{http://ntcir.nii.ac.jp/PatentMT-2/} 
+\cite{conf-ntcir-GotoCLST13}. The NTCIR-EC task uses 1,000,000, 2,000, and 2,000 sentences for training, 
+development, and testing, respectively. {The second one was the English-Chinese Olympic MT task at the 
+IWSLT 2012 workshop\footnote{{http://hltc.cs.ust.hk/iwslt/index.php/evaluation-campaign/olympics-task.html}}
+\cite{iwslt-overview:12}. After applying sub-sentence splitting following \cite{chu:2012:IWSLT},
+the IWSLT-EC task uses 81,820 sentences for training. The development, and testing sets contains 1,050, and 998 sentences 
+respectively.}
+
+We used the tree-to-tree MT system KyotoEBMT\footnote{{http://nlp.ist.i.kyoto-u.ac.jp/EN/index.php?KyotoEBMT}}
+\cite{richardson-EtAl:2015:WAT} for all of our MT experiments. For Chinese, we used
+the Chinese analyzing tool KyotoMorph\footnote{https://bitbucket.org/msmoshen/kyotomorph-beta} 
+proposed by Shen et al. \cite{shen-EtAl:2014:P14-2} for segmentation
+and part-of-speech (POS) tagging, and the SKP parser\footnote{https://bitbucket.org/msmoshen/skp-beta} 
+\cite{shen-kawahara-kurohashi:2012:PACLIC} for parsing.
+As the baseline Chinese parser, we trained SKP with the Penn Chinese treebank version 5 
+(CTB5)\footnote{https://catalog.ldc.upenn.edu/LDC2005T01} containing 18~k sentences in news domain,
+and an in-house scientific 
+domain treebank of 10~k sentences. For Japanese, we used 
+JUMAN\footnote{http://nlp.ist.i.kyoto-u.ac.jp/EN/index.php?JUMAN} \cite{kurohashi--EtAl:1994}
+for morphological analyzing,
+and the KNP parser for parsing\footnote{http://nlp.ist.i.kyoto-u.ac.jp/EN/index.php?KNP}
+\cite{kawahara-kurohashi:2006:HLT-NAACL06-Main}. 
+For English, we first used the Charniak's nlparser \cite{charniak-johnson:2005:ACL} to produce phrase 
+structures, and then transformed them into dependency structures by rules defining
+head words for phrases \cite{Collins:2003:HSM:1105703.1105706}. 
+{Note that we filtered long sentences that contain more than 70 words in the training data for efficiency.}
+For the Japanese-Chinese MT task, we trained two 5-gram language models for Chinese and Japanese, 
+respectively, on the training data of the ASPEC-JC corpus using the KenLM toolkit\footnote{https://github.com/kpu/kenlm/} 
+with interpolated Kneser-Ney discounting. For the English-Chinese MT {tasks}, we trained two 5-gram language 
+models for Chinese and English, respectively, on the training data of the NTCIR-EC {and IWSLT-EC corpora} using the same method.
+In all of our experiments, we used the discriminative 
+alignment model Nile\footnote{https://github.com/neubig/nile} \cite{riesa-irvine-marcu:2011:EMNLP} for word alignment; 
+tuning was performed by the k-best batch MIRA \cite{cherry-foster:2012:NAACL-HLT} with $10$ iterations, and it was 
+re-run for every experiment.
+
+Note that, in our tasks, Japanese and English are the HQ parser side, and Chinese is the LQ parser side,
+because of the parsing accuracy difference ({nearly} 90\% \cite{kawahara-kurohashi:2006:HLT-NAACL06-Main,charniak-johnson:2005:ACL} 
+v.s. {75\% \cite{hatori-EtAl:2012:ACL2012}}). Therefore, in our experiments, we 
+projected the Japanese/English parse trees to Chinese. We compared the MT performance of our proposed 
+projection method with the baseline Chinese parser. For Japanese-to-Chinese and English-to-Chinese MT experiments, 
+we compared the MT results of the Chinese training data parsed by the baseline parsed, to 
+those of the projected trees. For Chinese-to-Japanese and Chinese-to-English MT, we also re-parsed the development 
+and test Chinese sentences using the SKP model trained on the projected Chinese trees, for 
+the comparison. {In addition, we conducted experiments with our previously proposed 
+projection method \cite{Shen2015a}, in which the remaining dependencies for a partially 
+projected tree are complemented with a back tracking method based on the baseline parse tree.}
+
+
+\subsection{Partial Projection Statistics}
+
+We performed partial projection on the ASPEC-JC, NTCIR-EC, and {IWSLT-EC} training data, respectively, to project the 
+Japanese/English parse trees to Chinese. Table \ref{table:partial_projection} shows the statistics of the partial projection 
+process.\footnote{Note that the dependencies for punctuations were not counted in Table \ref{table:partial_projection}.}
+``All'' denotes the entire number of dependencies in the Chinese corpus. ``Projected'' denotes
+the number of dependencies being projected. ``Null'' denotes the number of dependencies that
+have not been projected by the partial projection process. As discussed in Section \ref{sec:partial_projection},
+there are three sub types of Null dependencies: (1) The other nodes rather than the representative in the 
+one to many alignment case; (2) unaligned words (LQ side); (3) Projectivity criterion for alignment 
+error detection. The statistics of these three sub types are also listed in Table \ref{table:partial_projection}.
+
+\begin{table}[b]
+\caption{Statistics of the partial projection process.}
+\label{table:partial_projection}
+\input{03table01.txt}
+\end{table}
+
+We can see that the projection percentage distributions on all these three data sets are similar.
+Among the null dependencies, about half of them (15\%/30\% in ASPEC-JC, 20\%/42\% in NTCIR-EC and 15\%/39\% in IWSLT-EC) 
+are due to the projectivity criterion, which indicates the importance of this criterion.
+
+
+\subsection{Selecting Projected Trees for Re-training the New Chinese Parser}
+\label{sec:experiments_selection}
+
+{To determine the best threshold of the partial projection ratio for re-training 
+the new Chinese parser, we empirically selected a series of thresholds, and compared the translation results
+on the development set of the ASPEC Chinese-to-Japanese MT task. Note that in all of these
+experiments, the baseline Chinese parser was used for the partial parsing process (i.e., the 
+results were obtained without using the re-trained Chinese parser for partial parsing).}
+
+\begin{table}[b]
+\hangcaption{BLEU scores on the development set of the ASPEC Zh-to-Ja task with different thresholds and number of trees to re-train the Chinese parser.}
+\label{table:re-train_result}
+\input{03table02.txt}
+\end{table}
+
+{Table \ref{table:re-train_result} shows the comparison results. The selection 
+of these thresholds was based on the number of projected trees used for training.
+We empirically set a series of thresholds to make the number of trees almost times of 20~k 
+trees, namely $\text{20~k}\rightarrow\text{40~k}\rightarrow\text{80~k}\rightarrow\text{170~k}\rightarrow\text{240~k}$.
+We stopped at 0.74 (240~k), because using this scale of training data has took us about 10 
+days to train the parser; moreover, we did not observe any improvements from 
+$0.78\rightarrow0.74$ $(\text{170~k}\rightarrow\text{240~k})$. As the threshold of ``0.78'' (170~k trees and 4.5~M words) shows the best 
+performance in our experiments, we used it for our final MT experiments. This threshold
+was also used for the NTCIR-EC and IWSLT-EC MT tasks, obtaining 72~k (2.4~M words) and 27~k (0.15~M words) projected trees 
+for retraining the parsers, respectively. Note that for the ASPEC-JC and NTCIR-EC tasks,
+we also limited the trees with more than 10 words. However, we did not set this limitation
+for IWSLT-EC, because it would limit the number of trees to only 1.2~k.
+Tuning the best threshold for each task is optimal, however, we leave it as a future work.}
+
+
+\subsection{MT Results}
+
+Table \ref{table:mt_result} shows the translation results, where KyotoEBMT is the baseline system that
+used the baseline Chinese parser; {Shen et al. (2015) denotes the systems using the projection method
+in \cite{Shen2015a}}; Baseline partial parsing denotes the projection 
+systems that used the baseline Chinese parser for the partial parsing process;
+Re-trained partial parsing denotes the systems that used the Chinese parser re-trained 
+on the projected trees for the partial parsing process. For reference, we also show 
+the MT performance of the phrase based, string-to-tree, and tree-to-string 
+systems,\footnote{{Note that Moses does not have a tree-to-tree decoder.}} which 
+are based on the open-source GIZA++/Moses pipeline \cite{koehn-EtAl:2007:PosterDemo}. 
+{Note that the syntax trees supported in the Moses tree-to-string/string-to-tree decoders 
+are constituency trees, to which our proposed method cannot be directly applied. To produce constituency trees, 
+we parsed Chinese and English sentences 
+with the Berkeley parser\footnote{https://github.com/slavpetrov/berkeleyparser}
+\cite{petrov-klein:2007:main}, and Japanese sentences with the Ckylark 
+parser\footnote{{https://github.com/odashi/ckylark}} \cite{oda-EtAl:2015:demos}.}
+The significance tests were 
+performed using the bootstrap resampling method \cite{koehn:2004:EMNLP}.
+
+\begin{table}[t]
+\hangcaption{BLEU scores of development/testing sets for ASPEC Ja-to-Zh and Zh-to-Ja, NTCIR En-to-Zh and Zh-to-En, IWSLT En-to-Zh and Zh-to-En.}
+\label{table:mt_result}
+\input{03table03.txt}
+\vspace{4pt}\small
+``$\dag$,'' ``*,'' and ``$\ddag$'' indicate that the result is significantly better than ``Baseline KyotoEBMT,'' {``Shen et al. (2015)''}, and ``Baseline partial parsing'' at {$p < 0.05$}, respectively, {for the results that are better than ``Baseline KyotoEBMT.'' }
+\end{table}
+
+We can see that, for ASPEC-JC the Baseline KyotoEBMT system outperforms the Moses systems 
+{except for the Zh-to-Ja translation on the Moses string-to-tree system};
+while for NTCIR-EC {and IWSLT-EC,} the Baseline KyotoEBMT systems are worse than {most of} the Moses systems. 
+We think the reason for this is that the Baseline KyotoEBMT system has been 
+optimized for the Japanese-Chinese and Japanese-English translations, but not for
+English-Chinese translation \cite{richardson-EtAl:2015:WAT}. However, the objective
+of this article is to show the effectiveness of the proposed projection method.
+Compared to the Moses systems, the performance of the Baseline KyotoEBMT in the Ja/En-to-Zh directions
+is much better than those of the Zh-to-Ja/En directions {on the ASPEC-JC
+and NTCIR-EC tasks (i.e., Ja-to-Zh (+0.32 BLEU): 29.33 (KyotoEBMT) 
+v.s. 29.01 (Moses best), Zh-to-Ja ($-1.69$ BLEU): 34.73 (KyotoEBMT) v.s. 36.42 (Moses best); 
+En-to-Zh ($-1.81$ BLEU): 27.46 (KyotoEBMT) v.s. 29.27 (Moses best), Zh-to-En ($-2.51$ BLEU): 28.66 (KyotoEBMT) v.s. 31.17 (Moses best))}. 
+The reason for this is that KyotoEBMT is much more sensitive to the parsing accuracy on the source side, because the source tree
+is utilized in the ordering of the final translation. Therefore using Chinese as the source
+side limits the effectiveness of the KyotoEBMT system. 
+
+{On the ASPEC-JC and NTCIR-EC tasks,}
+Baseline partial parsing performs significantly better than the Baseline KyotoEBMT 
+(except for En-to-Zh), and Re-trained partial parsing further improves the
+performance significantly. We also observe more improvements in the Zh-to-Ja/En
+directions than the Ja/En-to-Zh directions {comparing Re-trained partial 
+parsing with Baseline KyotoEBMT (i.e., Zh-to-Ja: +1.45 BLEU v.s. Ja-to-Zh: +0.95 BLEU;
+Zh-to-En: +1.34 BLEU v.s. En-to-Zh: +0.37 BLEU)}. The reason is similar to the one above that in
+Zh-to-Ja/En tasks, we not only improve the translation example extraction, but also
+the quality of the input trees.
+
+{On the IWSLT-EC task, our proposed projection method, however, decreases the MT
+performance. We believe the main reason for this is the small data scale of this task. As
+mentioned in Section \ref{sec:experiments_selection}, the projected data used for re-training 
+the new Chinese parser on this task is significantly smaller than those of the ASPEC-JC and NTCIR-EC
+tasks (0.15~M words v.s. 4.5~M and 2.4~M words). This leads the bad quality of the re-trained
+new parser, which decreases the MT performance especially for the Zh-to-En direction.}
+
+{Compared to Shen et al. (2015), the proposed method in this article is
+more effective on all the tasks (except for IWSLT-EC En-to-Zh). This indicates that 
+constrained partial parsing is better than back tracking for projection.
+We will analyze the reason for this more in Section \ref{sec:experiments_hypotheses}.}
+
+
+\subsection{{Discussion}}
+\label{sec:experiments_hypotheses}
+
+To further understand the reason for the MT {performance}, we investigated the number
+of initial hypotheses for the test sentences. The number of initial hypotheses for a test sentence is the number
+all the matching hypotheses in the example database for all the subtrees in the input 
+dependency structure of the test sentence (refer to Section \ref{subsec:ebmt_overview}).
+The entire number of initial hypotheses for all the test sentences of different systems are shown 
+in Table \ref{table:hypothesis}. We can see that the number of initial hypotheses for the partial 
+parsing systems on {all the tasks}
+is greatly larger than that of the baseline KyotoEBMT system. The reason for this is that 
+our projection method significantly increased the isomorphism of the source and target 
+trees in the training corpus, making more translation examples being extractable. 
+More initial hypotheses are potentially to improve the final MT performance. 
+{Compared to Shen et al. (2015), the proposed method in this article
+extracts more hypotheses on all the tasks except for IWSLT-EC En-to-Zh, leading to more MT improvements.}
+Compared to the other tasks {in ASPEC-JC and NTCIR-EC}, the initial hypothesis number increment 
+for the En-to-Zh task is relatively small, which leads to small improvement of MT performance as shown 
+in Table \ref{table:mt_result}. {The hypothesis number increment in the IWSLT-EC task
+is relatively small, which is one reason for that it does not improve the MT performance.}
+
+\begin{table}[t]
+\caption{Number of initial hypotheses for the test sentences.}
+\label{table:hypothesis}
+\input{03table04.txt}
+\end{table}
+
+In addition, we investigated the translation results of the Baseline KyotoEBMT and Re-trained partial parsing systems.
+We found that there are mainly three reasons that lead to the improvement {in the ASPEC-JC and NTCIR-EC tasks}.
+
+\begin{itemize}
+\item The improvement of the input parse tree (only for Zh-to-Ja/En translations).
+\item The increase of initial translation hypotheses.
+\item The isomorphism of the input and output target dependency trees.
+\end{itemize}
+
+Figure \ref{fig:zh_ja_improved} shows an improved example of Zh-to-Ja translation. 
+{There is a crucial parsing error in the input tree of the Baseline KyotoEBMT system, which incorrectly
+parses the word ``15: 抑制 (inhibit)'' be the head of the whole following noun phrase.
+Using this erroneous input parse tree, this word is also translated into the head of the entire noun
+phrase. Our Re-trained partial parsing improves the parsing result that parses the word ``15: 抑制 (inhibit)'' 
+as a part of the noun phrase ``15--18: 抑制\UTFC{6C27}消耗\UTFC{5B9E}\UTFC{9A8C} (test for inhibiting oxygen consumption)''. Although
+the parse for this noun phrase is still not perfect (the correct parse should be (15, 18) (17, 15) (16, 17)), 
+it is significantly better than the baseline, leading to a better translation.}
+The number of initial hypotheses for the Baseline 
+KyotoEBMT system is 2,447, while the number of initial hypotheses of the Re-trained partial 
+parsing system is 3,311. The number of hypotheses for ``0: \UTFC{9488}\UTFC{5BF9}...7: \UTFC{8FDB}行8: 了 (about...performed)'' increases
+from 52 to 176 by the Re-trained partial parsing system, which improves the translation.
+Note that the noun phrases
+``15--18: 抑制\UTFC{6C27}消耗\UTFC{5B9E}\UTFC{9A8C} (inhibition of oxygen consumption test)'' and ``20--23: 大型蚤急性毒性\UTFC{5B9E}\UTFC{9A8C} (large-scale flea acute toxicity test)''
+are parsed as siblings in the Baseline KyotoEBMT system, while in our Re-trained partial parsing model
+they are parsed as modifier-head dependencies, which are isomorphic to the Japanese parse tree.
+One unsatisfying point is that ``21: 蚤急性 (flea acute)'' is an unknown word, which is a difficult 
+technical term that could not be translated by both of the two systems.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia3f4.eps}
+\end{center}
+\hangcaption{An improved example of Zh-to-Ja translation (The subtrees in corresponding IDs/colors in the input and output dependency trees show the corresponding translation examples being used during translation).}
+\label{fig:zh_ja_improved}
+\end{figure}
+
+
+Figure \ref{fig:zh_en_improved} shows an improved example of Zh-to-En translation {in the NTCIR-EC task}. The KyotoMorph 
+incorrectly assigns a wrong POS tag ``NN (noun)'' for the word ``3: 接收 (receive)'', which should be 
+``VV (verb)'' in fact. This leads to this word be parsed as a part of a faked noun phrase 
+``2--5: 25接收部分\UTFC{7ED3}果 (25 receiving part result)'', which actually 
+should be the root of the sentence. As a result, the entire dependency structure is broken, leading
+to a very bad translation. Our Re-trained partial parsing correctly parses the entire sentence, leading 
+to a good translation. Our proposed method also increases the number of initial hypotheses (from 1,506 to 1,840),
+and thus more proper hypotheses are used in decoding. Moreover, the input and output target dependency 
+trees are isomorphic for our proposed system.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia3f5.eps}
+\end{center}
+\hangcaption{An improved example of Zh-to-En translation {in the NTCIR-EC task} (The subtrees in corresponding IDs/colors in the input and output dependency trees show the corresponding translation examples being used during translation).}
+\label{fig:zh_en_improved}
+\vspace{-1\Cvs}
+\end{figure}
+
+{For the improvements in the Zh-to-Ja/En translations, based on our investigation
+the first reason contributes most among the three reasons. {Among the
+40 (20 Zh-to-Ja and 20 Zh-to-Ja) improved sentences that we randomly investigated, 70\% are
+improved mainly because of the improvement of the input parse tree, and the remaining are 
+improved because of the other two reasons.} This is due to the characteristic
+of the KyotoEBMT system that the quality of the input parse significantly
+affects the translation quality, because the word order of the translation is essentially
+determined by the input dependency tree. This is also indicated by the results
+in the IWSLT-EC task that in spite of the improvement of the isomorphism, it 
+decreases the MT performance as the quality decrease of the input dependency tree.}
+
+Although, our proposed method can improve the translation in most cases, it also can lead to some
+side effects. Figure \ref{fig:zh_ja_decreased} shows a worsened example of Zh-to-Ja translation.
+Our proposed system produces a translation with more initial hypotheses (from 1,813 to 2,181) that is also 
+isomorphic to the input. This helps the system correctly translate ``11: 形成 formation'' into 
+Japanese, which is missed in the Baseline KyotoEBMT system. However, in spite of the correct POS tag 
+``VV (verb)'' assigned by the KyotoMorph for the word ``0: 模\UTFC{62DF} (simulate)'', our Re-trained partial 
+parsing incorrectly parses this word as a part of a noun phrase ``模\UTFC{62DF}幌延深地\UTFC{5C42}研究所 (simulation
+Horonobe underground research institute)''. As this 
+word should be the root of the sentence in fact, the translation is incorrect. The reason for the 
+wrong parse is similar as the parse improvement in the example of Figure \ref{fig:zh_ja_improved} 
+that noun phrases containing ``VV (verb)'' words are included in the training data for our Re-trained 
+partial parsing. To address this problem, projection of the POS and re-training the POS tagger might 
+work. However, we leave this as future work.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia3f6.eps}
+\end{center}
+\hangcaption{A worsened example of Zh-to-Ja translation (The subtrees in corresponding IDs/colors in the input and output dependency trees show the corresponding translation examples being used during translation).}
+\label{fig:zh_ja_decreased}
+\end{figure}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{24-2ia3f7.eps}
+\end{center}
+\hangcaption{{A worsened example of Zh-to-Ja translation in the IWSLT-EC task (The subtrees in corresponding IDs/colors in the input and output dependency trees show the corresponding translation examples being used during translation).}}
+\label{fig:zh_ja_decreased_iwslt}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+On the IWSLT-EC task, however, the proposed method decreased the MT performance.
+Based on our investigation, the main reason is the bad quality of the re-trained Chinese parser.
+{Among the 20 worsened sentences that we randomly investigated, 80\% are
+decreased due to the worsened input parse trees, while the remaining are due to worse
+translation example selection.}
+Figure \ref{fig:zh_ja_decreased_iwslt} shows such an example. We can see that the re-trained
+parser worsened the correct dependencies of (3: \UTFC{60A8} (you), 4: 的 (of)) and (10: 道 (this), 9: \UTFC{8FD9} (this))
+in the baseline parse tree, leading to the bad translations for these two subtrees.
+
+
+\section{Related Work}
+
+\subsection{Projection for Improving Parsing Accuracy}
+
+There are many previous studies that propose many methods to address the difficulties in projecting the parse 
+trees from a resource rich language (e.g., English) to a low resource language, to improve the parsing accuracy 
+of the low resource language. The difficulties in projection can be mainly divided into two categories: 
+word alignment errors and annotation criterion difference \cite{ganchev-gillenwater-taskar:2009:ACLIJCNLP}.
+
+To address the word alignment error problem, several studies have proposed to train a target parser on high
+confident partially projected trees. Ganchev et al. \citeyear{ganchev-gillenwater-taskar:2009:ACLIJCNLP} 
+presented a partial projection method with constraints such as language-specific annotation rules.
+They then trained a target parser using the partially projected trees. Spreyer and Kuhn \citeyear{spreyer-kuhn:2009:CoNLL} proposed 
+a similar method that trains both graph-based and transition-based dependency parsers on the partially projected trees.
+Rasooli and Collins \citeyear{rasooli-collins:2015:EMNLP} proposed a method to train a target parser on ``dense'' 
+projected trees. The ``dense'' projected trees might only contain a part of dependencies over a threshold.
+Jiang and Liu \citeyear{jiang-liu:2010:ACL} presented a different method that trains a classifier on projected 
+word pairs to determine whether a pair of words forms a dependency arc, and uses the word pairs for a graph based 
+dependency parser in a weighted average manner. Our proposed method differs from the previous studies in 
+several aspects: we propose the use of the projectivity criterion for partial projection; we utilize the original 
+target parser and propose a constrained partial parsing algorithm; we re-train a target parser on the full trees 
+generated by the partial parsing.
+
+To address the annotation criterion difference problem in projection, Hwa et al. \citeyear{hwa2005bootstrapping} 
+firstly projected the dependency parse trees, and then applied post projection transformations based on manually
+created rules. \citeA{jiang-liu-lv:2011:EMNLP} presented a method that tolerates the syntactic non-isomorphism 
+between languages. This leads the projected parse trees not have to follow the annotation criterion of the source 
+parse trees. Jiang and Liu \citeyear{Jiang:2009:AAA:1697236.1697241} proposed a method to transfer treebanks in the
+same language but annotated by different criteria. They transferred a source treebank annotated with a different 
+criterion, with the supervision by a target treebank annotated in the desired criterion. 
+Our proposed method does not adjust the annotation criterion difference between the source and the projected trees, 
+because in our tree-to-tree MT task, we prefer isomorphism trees.
+
+Although most of the previous studies require parallel corpora for projection, projection without the use of 
+parallel corpora also has been proposed. The {methods} for this include using bilingual lexicons 
+\cite{durrett-pauls-klein:2012:EMNLP-CoNLL} and bilingual word embeddings \cite{duong-EtAl:2015:CoNLL} 
+for delexicalized parsers. Previous studies link the POS features of delexicalized parsers with either 
+a bilingual lexicon \cite{durrett-pauls-klein:2012:EMNLP-CoNLL} or bilingual word embeddings \cite{duong-EtAl:2015:CoNLL}.
+
+Another line of studies is bilingual parsing, which jointly trains parsers for two languages on bilingual treebanks. 
+Burkett and Klein \citeyear{burkett-klein:2008:EMNLP} firstly proposed to jointly train on translated treebanks 
+of two languages, which leads to improvements in both parsing accuracy and MT. \citeA{huang-jiang-liu:2009:EMNLP} improved the work of \cite{burkett-klein:2008:EMNLP}, 
+in which re-ordering information acquired by a source parser is used for bilingual parsing. 
+\citeA{zhao-EtAl:2009:ACLIJCNLP1} proposed to use a bilingual lexicon for bilingual parsing. 
+\citeA{chen-kazama-torisawa:2010:ACL} presented a method that only requires treebanks 
+on the source side of a parallel corpus. \citeA{chen-EtAl:2011:EMNLP} used a SMT translated 
+bilingual treebank for bilingual parsing.
+
+
+\subsection{Projection for MT}
+
+Only a few studies have been conducted to improve MT performance via projection.
+\citeA{dara-EtAl:2011:IJCNLP-2011} proposed a dependency projection method that uses the 
+alignments between local word groups, instead of word forms that are used in most of the other studies. 
+Besides of the improvement on parsing accuracy, they also reported the alignment accuracy improvement.
+However, MT results were not reported in their study.
+For string-to-string MT \cite{koehn-EtAl:2007:PosterDemo}, Goto et al. \citeyear{Goto:2015:PUT:2791399.2699925} 
+proposed a pre-ordering method that projects target side constituency trees to the source side, and then
+generates pre-ordering rules based on the projected trees.
+For tree-to-string MT, Jiang et al. \citeyear{jiang-EtAl:2010:POSTERS} combined projection and supervised
+constituency parsing by guiding the parsing procedure of the supervised parser with the projected parser. They showed 
+parsing accuracy improvement on a supervised parser with relatively small training data. They also showed 
+that the guided parser achieved comparable MT results on a tree-to-string system \cite{liu-liu-lin:2006:COLACL}, 
+compared to a normal supervised parser trained on thousands of CTB trees.
+For tree-to-tree MT \cite{richardson-EtAl:2015:WAT}, we previously proposed a naive projection method 
+\cite{Shen2015a}. In our previous method, we complemented the remaining dependencies for a partially 
+projected tree with a back tracking method. Namely, we reused the dependencies in the original target tree 
+for the complement without considering the partially projected dependencies. In contrast, in this article we 
+propose partial parsing for the complement, in which we search for the best parse tree by taking account of 
+the partially projected dependencies.
+
+
+\section{Conclusion}
+
+In this article, we proposed a constrained partial parsing method for projection to address the non-isomorphic
+parse tree problem in a dependency based tree-to-tree MT system. {Large scale experiments} verified the effectiveness of
+our proposed method in both Japanese-Chinese and English-Chinese translations. 
+As future work, firstly, we plan to design a better way for selecting the projected trees for re-training the 
+LQ parser. Secondly, we plan to perform the partial parsing in several iterations.
+Finally, we plan to project not only dependencies but also POS tags.
+
+
+
+\acknowledgment
+We especially thank to Dr. Mo Shen for the insightful discussion of the constrained partial parsing method with us.
+We also thank the anonymous reviewers for their valuable comments.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Burkett \BBA\ Klein}{Burkett \BBA\
+  Klein}{2008}]{burkett-klein:2008:EMNLP}
+Burkett, D.\BBACOMMA\ \BBA\ Klein, D. \BBOP 2008\BBCP.
+\newblock \BBOQ Two Languages are Better than One (for Syntactic
+  Parsing).\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 877--886}, Honolulu, Hawaii.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Charniak \BBA\ Johnson}{Charniak \BBA\
+  Johnson}{2005}]{charniak-johnson:2005:ACL}
+Charniak, E.\BBACOMMA\ \BBA\ Johnson, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Coarse-to-Fine n-Best Parsing and MaxEnt Discriminative
+  Reranking.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting of the Association
+  for Computational Linguistics (ACL'05)}, \mbox{\BPGS\ 173--180}, Ann Arbor,
+  Michigan. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Chen, Kazama, \BBA\ Torisawa}{Chen
+  et~al.}{2010}]{chen-kazama-torisawa:2010:ACL}
+Chen, W., Kazama, J., \BBA\ Torisawa, K. \BBOP 2010\BBCP.
+\newblock \BBOQ Bitext Dependency Parsing with Bilingual Subtree
+  Constraints.\BBCQ\
+\newblock In {\Bem Proceedings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 21--29}, Uppsala, Sweden.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Chen, Kazama, Zhang, Tsuruoka, Zhang, Wang, Torisawa,
+  \BBA\ Li}{Chen et~al.}{2011}]{chen-EtAl:2011:EMNLP}
+Chen, W., Kazama, J., Zhang, M., Tsuruoka, Y., Zhang, Y., Wang, Y., Torisawa,
+  K., \BBA\ Li, H. \BBOP 2011\BBCP.
+\newblock \BBOQ SMT Helps Bitext Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 73--83}, Edinburgh, Scotland, UK.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Cherry \BBA\ Foster}{Cherry \BBA\
+  Foster}{2012}]{cherry-foster:2012:NAACL-HLT}
+Cherry, C.\BBACOMMA\ \BBA\ Foster, G. \BBOP 2012\BBCP.
+\newblock \BBOQ Batch Tuning Strategies for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies}, \mbox{\BPGS\ 427--436}, Montr{\'{e}}al, Canada. Association
+  for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Chiang}{Chiang}{2005}]{chiang:2005:ACL}
+Chiang, D. \BBOP 2005\BBCP.
+\newblock \BBOQ A Hierarchical Phrase-Based Model for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting of the Association
+  for Computational Linguistics (ACL'05)}, \mbox{\BPGS\ 263--270}, Ann Arbor,
+  Michigan. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Chu, Nakazawa, \BBA\ Kurohashi}{Chu
+  et~al.}{2012}]{chu:2012:IWSLT}
+Chu, C., Nakazawa, T., \BBA\ Kurohashi, S. \BBOP 2012\BBCP.
+\newblock \BBOQ EBMT System of Kyoto University in OLYMPICS Task at IWSLT
+  2012.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th International Workshop on Spoken
+  Language Translation (IWSLT 2012)}, \mbox{\BPGS\ 96--101}, Hong Kong, China.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{2002}]{collins:2002:EMNLP02}
+Collins, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Discriminative Training Methods for Hidden Markov Models:
+  Theory and Experiments with Perceptron Algorithms.\BBCQ\
+\newblock In {\Bem Proceedings of the 2002 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1--8}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{2003}]{Collins:2003:HSM:1105703.1105706}
+Collins, M. \BBOP 2003\BBCP.
+\newblock \BBOQ Head-Driven Statistical Models for Natural Language
+  Parsing.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (4), \mbox{\BPGS\
+  589--637}.
+
+\bibitem[\protect\BCAY{Cromieres \BBA\ Kurohashi}{Cromieres \BBA\
+  Kurohashi}{2011}]{cromieres-kurohashi:2011:EMNLP}
+Cromieres, F.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2011\BBCP.
+\newblock \BBOQ Efficient retrieval of tree translation examples for
+  Syntax-Based Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 508--518}, Edinburgh, Scotland,
+  UK. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Cromieres \BBA\ Kurohashi}{Cromieres \BBA\
+  Kurohashi}{2014}]{cromieres-kurohashi:2014:EMNLP2014}
+Cromieres, F.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2014\BBCP.
+\newblock \BBOQ Translation Rules with Right-Hand Side Lattices.\BBCQ\
+\newblock In {\Bem Proceedings of the 2014 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 577--588}, Doha, Qatar.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Dara, Mannem, Bayyarapu, \BBA\ PVS}{Dara
+  et~al.}{2011}]{dara-EtAl:2011:IJCNLP-2011}
+Dara, A., Mannem, P., Bayyarapu, H.~S., \BBA\ PVS, A. \BBOP 2011\BBCP.
+\newblock \BBOQ Transferring Syntactic Relations from English to Hindi Using
+  Alignments on Local Word Groups.\BBCQ\
+\newblock In {\Bem Proceedings of 5th International Joint Conference on Natural
+  Language Processing}, \mbox{\BPGS\ 447--455}, Chiang Mai, Thailand. Asian
+  Federation of Natural Language Processing.
+
+\bibitem[\protect\BCAY{Duong, Cohn, Bird, \BBA\ Cook}{Duong
+  et~al.}{2015}]{duong-EtAl:2015:CoNLL}
+Duong, L., Cohn, T., Bird, S., \BBA\ Cook, P. \BBOP 2015\BBCP.
+\newblock \BBOQ Cross-lingual Transfer for Unsupervised Dependency Parsing
+  Without Parallel Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th Conference on Computational Natural
+  Language Learning}, \mbox{\BPGS\ 113--122}, Beijing, China. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Durrett, Pauls, \BBA\ Klein}{Durrett
+  et~al.}{2012}]{durrett-pauls-klein:2012:EMNLP-CoNLL}
+Durrett, G., Pauls, A., \BBA\ Klein, D. \BBOP 2012\BBCP.
+\newblock \BBOQ Syntactic Transfer Using a Bilingual Lexicon.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning}, \mbox{\BPGS\ 1--11}, Jeju Island, Korea. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Federico, Cettolo, Bentivogli, Paul, \BBA\
+  St{\"{u}}ker}{Federico et~al.}{2012}]{iwslt-overview:12}
+Federico, M., Cettolo, M., Bentivogli, L., Paul, M., \BBA\ St{\"{u}}ker, S.
+  \BBOP 2012\BBCP.
+\newblock \BBOQ Overview of the IWSLT 2012 Evaluation Campaign.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th International Workshop on Spoken
+  Language Translation (IWSLT)}, Hong Kong.
+
+\bibitem[\protect\BCAY{Galley, Graehl, Knight, Marcu, DeNeefe, Wang, \BBA\
+  Thayer}{Galley et~al.}{2006}]{galley-EtAl:2006:COLACL}
+Galley, M., Graehl, J., Knight, K., Marcu, D., DeNeefe, S., Wang, W., \BBA\
+  Thayer, I. \BBOP 2006\BBCP.
+\newblock \BBOQ Scalable Inference and Training of Context-Rich Syntactic
+  Translation Models.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 961--968}, Sydney, Australia.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Ganchev, Gillenwater, \BBA\ Taskar}{Ganchev
+  et~al.}{2009}]{ganchev-gillenwater-taskar:2009:ACLIJCNLP}
+Ganchev, K., Gillenwater, J., \BBA\ Taskar, B. \BBOP 2009\BBCP.
+\newblock \BBOQ Dependency Grammar Induction via Bitext Projection
+  Constraints.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 369--377}, Suntec, Singapore.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Goto, Chow, Lu, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2013}]{conf-ntcir-GotoCLST13}
+Goto, I., Chow, K.-P., Lu, B., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2013\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at the NTCIR-10
+  Workshop.\BBCQ\
+\newblock In Kando, N.\BBACOMMA\ \BBA\ Kato, T.\BEDS, {\Bem NTCIR}. National
+  Institute of Informatics (NII).
+
+\bibitem[\protect\BCAY{Goto, Utiyama, Sumita, \BBA\ Kurohashi}{Goto
+  et~al.}{2015}]{Goto:2015:PUT:2791399.2699925}
+Goto, I., Utiyama, M., Sumita, E., \BBA\ Kurohashi, S. \BBOP 2015\BBCP.
+\newblock \BBOQ Preordering Using a Target-Language Parser via Cross-Language
+  Syntactic Projection for Statistical Machine Translation.\BBCQ\
+\newblock {\Bem ACM Transactions on Asian and Low-Resource Language Information
+  Processing}, {\Bbf 14}  (3), \mbox{\BPGS\ 13:1--13:23}.
+
+\bibitem[\protect\BCAY{Hatori, Matsuzaki, Miyao, \BBA\ Tsujii}{Hatori
+  et~al.}{2012}]{hatori-EtAl:2012:ACL2012}
+Hatori, J., Matsuzaki, T., Miyao, Y., \BBA\ Tsujii, J. \BBOP 2012\BBCP.
+\newblock \BBOQ Incremental Joint Approach to Word Segmentation, POS Tagging,
+  and Dependency Parsing in Chinese.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  1045--1053}, Jeju Island, Korea. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Huang, Jiang, \BBA\ Liu}{Huang
+  et~al.}{2009}]{huang-jiang-liu:2009:EMNLP}
+Huang, L., Jiang, W., \BBA\ Liu, Q. \BBOP 2009\BBCP.
+\newblock \BBOQ Bilingually-Constrained (Monolingual) Shift-Reduce
+  Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1222--1231}, Singapore.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Hwa, Resnik, Weinberg, Cabezas, \BBA\ Kolak}{Hwa
+  et~al.}{2005}]{hwa2005bootstrapping}
+Hwa, R., Resnik, P., Weinberg, A., Cabezas, C., \BBA\ Kolak, O. \BBOP
+  2005\BBCP.
+\newblock \BBOQ Bootstrapping Parsers via Syntactic Projection Across Parallel
+  Texts.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 11}  (03), \mbox{\BPGS\
+  311--325}.
+
+\bibitem[\protect\BCAY{Isozaki, Sudoh, Tsukada, \BBA\ Duh}{Isozaki
+  et~al.}{2010}]{isozaki-EtAl:2010:WMT}
+Isozaki, H., Sudoh, K., Tsukada, H., \BBA\ Duh, K. \BBOP 2010\BBCP.
+\newblock \BBOQ Head Finalization: A Simple Reordering Rule for SOV
+  Languages.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint 5th Workshop on Statistical Machine
+  Translation and MetricsMATR}, \mbox{\BPGS\ 244--251}, Uppsala, Sweden.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Liu}{Jiang \BBA\
+  Liu}{2009}]{Jiang:2009:AAA:1697236.1697241}
+Jiang, W.\BBACOMMA\ \BBA\ Liu, Q. \BBOP 2009\BBCP.
+\newblock \BBOQ Automatic Adaptation of Annotation Standards for Dependency
+  Parsing: Using Projected Treebank As Source Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of the 11th International Conference on Parsing
+  Technologies}, IWPT '09, \mbox{\BPGS\ 25--28}, Stroudsburg, PA, USA.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Liu}{Jiang \BBA\
+  Liu}{2010}]{jiang-liu:2010:ACL}
+Jiang, W.\BBACOMMA\ \BBA\ Liu, Q. \BBOP 2010\BBCP.
+\newblock \BBOQ Dependency Parsing and Projection Based on Word-Pair
+  Classification.\BBCQ\
+\newblock In {\Bem Proceedings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 12--20}, Uppsala, Sweden.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Jiang, Liu, \BBA\ Lv}{Jiang
+  et~al.}{2011}]{jiang-liu-lv:2011:EMNLP}
+Jiang, W., Liu, Q., \BBA\ Lv, Y. \BBOP 2011\BBCP.
+\newblock \BBOQ Relaxed Cross-lingual Projection of Constituent Syntax.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1192--1201}, Edinburgh, Scotland,
+  UK. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Jiang, Lv, Liu, \BBA\ Liu}{Jiang
+  et~al.}{2010}]{jiang-EtAl:2010:POSTERS}
+Jiang, W., Lv, Y., Liu, Y., \BBA\ Liu, Q. \BBOP 2010\BBCP.
+\newblock \BBOQ Effective Constituent Projection across Languages.\BBCQ\
+\newblock In {\Bem Coling 2010: Posters}, \mbox{\BPGS\ 516--524}, Beijing,
+  China. Coling 2010 Organizing Committee.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2006}]{kawahara-kurohashi:2006:HLT-NAACL06-Main}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2006\BBCP.
+\newblock \BBOQ A Fully-Lexicalized Probabilistic Model for Japanese Syntactic
+  and Case Structure Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Main Conference}, \mbox{\BPGS\ 176--183}, New York City, USA.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2004}]{koehn:2004:EMNLP}
+Koehn, P. \BBOP 2004\BBCP.
+\newblock \BBOQ Statistical Significance Tests for Machine Translation
+  Evaluation.\BBCQ\
+\newblock In Lin, D.\BBACOMMA\ \BBA\ Wu, D.\BEDS, {\Bem Proceedings of EMNLP
+  2004}, \mbox{\BPGS\ 388--395}, Barcelona, Spain. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{koehn-EtAl:2007:PosterDemo}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association
+  for Computational Linguistics Companion Volume Proceedings of the Demo and
+  Poster Sessions}, \mbox{\BPGS\ 177--180}, Prague, Czech Republic. Association
+  for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Kubler, McDonald, Nivre, \BBA\ Hirst}{Kubler
+  et~al.}{2009}]{Kubler:2009:DP:1538443}
+Kubler, S., McDonald, R., Nivre, J., \BBA\ Hirst, G. \BBOP 2009\BBCP.
+\newblock {\Bem Dependency Parsing}.
+\newblock Morgan and Claypool Publishers.
+
+\bibitem[\protect\BCAY{Kurohashi, Nakamura, Matsumoto, \BBA\ Nagao}{Kurohashi
+  et~al.}{1994}]{kurohashi--EtAl:1994}
+Kurohashi, S., Nakamura, T., Matsumoto, Y., \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Improvements of Japanese morphological analyzer JUMAN.\BBCQ\
+\newblock In {\Bem Proceedings of the International Workshop on Sharable
+  Natural Language}, \mbox{\BPGS\ 22--28}.
+
+\bibitem[\protect\BCAY{Liu, Liu, \BBA\ Lin}{Liu
+  et~al.}{2006}]{liu-liu-lin:2006:COLACL}
+Liu, Y., Liu, Q., \BBA\ Lin, S. \BBOP 2006\BBCP.
+\newblock \BBOQ Tree-to-String Alignment Template for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 609--616}, Sydney, Australia.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Mi \BBA\ Huang}{Mi \BBA\
+  Huang}{2008}]{mi-huang:2008:EMNLP}
+Mi, H.\BBACOMMA\ \BBA\ Huang, L. \BBOP 2008\BBCP.
+\newblock \BBOQ Forest-based Translation Rule Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 206--214}, Honolulu, Hawaii.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Nakazawa, Mino, Goto, Neubig, Kurohashi, \BBA\
+  Sumita}{Nakazawa et~al.}{2015}]{nakazawa-EtAl:2015:WAT}
+Nakazawa, T., Mino, H., Goto, I., Neubig, G., Kurohashi, S., \BBA\ Sumita, E.
+  \BBOP 2015\BBCP.
+\newblock \BBOQ Overview of the 2nd Workshop on Asian Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd Workshop on Asian Translation
+  (WAT2015)}, \mbox{\BPGS\ 1--28}, Kyoto, Japan.
+
+\bibitem[\protect\BCAY{Oda, Neubig, Sakti, Toda, \BBA\ Nakamura}{Oda
+  et~al.}{2015}]{oda-EtAl:2015:demos}
+Oda, Y., Neubig, G., Sakti, S., Toda, T., \BBA\ Nakamura, S. \BBOP 2015\BBCP.
+\newblock \BBOQ Ckylark: A More Robust PCFG-LA Parser.\BBCQ\
+\newblock In {\Bem Proceedings of the 2015 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Demonstrations},
+  \mbox{\BPGS\ 41--45}, Denver, Colorado. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Petrov \BBA\ Klein}{Petrov \BBA\
+  Klein}{2007}]{petrov-klein:2007:main}
+Petrov, S.\BBACOMMA\ \BBA\ Klein, D. \BBOP 2007\BBCP.
+\newblock \BBOQ Improved Inference for Unlexicalized Parsing.\BBCQ\
+\newblock In {\Bem Human Language Technologies 2007: The Conference of the
+  North American Chapter of the Association for Computational Linguistics;
+  Proceedings of the Main Conference}, \mbox{\BPGS\ 404--411}, Rochester, New
+  York. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Quirk, Menezes, \BBA\ Cherry}{Quirk
+  et~al.}{2005}]{quirk-menezes-cherry:2005:ACL}
+Quirk, C., Menezes, A., \BBA\ Cherry, C. \BBOP 2005\BBCP.
+\newblock \BBOQ Dependency Treelet Translation: Syntactically Informed Phrasal
+  SMT.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting of the Association
+  for Computational Linguistics (ACL'05)}, \mbox{\BPGS\ 271--279}, Ann Arbor,
+  Michigan. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Rasooli \BBA\ Collins}{Rasooli \BBA\
+  Collins}{2015}]{rasooli-collins:2015:EMNLP}
+Rasooli, M.~S.\BBACOMMA\ \BBA\ Collins, M. \BBOP 2015\BBCP.
+\newblock \BBOQ Density-Driven Cross-Lingual Transfer of Dependency
+  Parsers.\BBCQ\
+\newblock In {\Bem Proceedings of the 2015 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 328--338}, Lisbon, Portugal.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Richardson, Dabre, Chu, Cromi{\`{e}}res, Nakazawa, \BBA\
+  Kurohashi}{Richardson et~al.}{2015}]{richardson-EtAl:2015:WAT}
+Richardson, J., Dabre, R., Chu, C., Cromi{\`{e}}res, F., Nakazawa, T., \BBA\
+  Kurohashi, S. \BBOP 2015\BBCP.
+\newblock \BBOQ KyotoEBMT System Description for the 2nd Workshop on Asian
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd Workshop on Asian Translation
+  (WAT2015)}, \mbox{\BPGS\ 54--60}, Kyoto, Japan.
+
+\bibitem[\protect\BCAY{Riesa, Irvine, \BBA\ Marcu}{Riesa
+  et~al.}{2011}]{riesa-irvine-marcu:2011:EMNLP}
+Riesa, J., Irvine, A., \BBA\ Marcu, D. \BBOP 2011\BBCP.
+\newblock \BBOQ Feature-Rich Language-Independent Syntax-Based Alignment for
+  Statistical Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 497--507}, Edinburgh, Scotland,
+  UK. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Shen, Xu, \BBA\ Weischedel}{Shen
+  et~al.}{2008}]{shen-xu-weischedel:2008:ACLMain}
+Shen, L., Xu, J., \BBA\ Weischedel, R. \BBOP 2008\BBCP.
+\newblock \BBOQ A New String-to-Dependency Machine Translation Algorithm with a
+  Target Dependency Language Model.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 577--585},
+  Columbus, Ohio. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Shen, Kawahara, \BBA\ Kurohashi}{Shen
+  et~al.}{2012}]{shen-kawahara-kurohashi:2012:PACLIC}
+Shen, M., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2012\BBCP.
+\newblock \BBOQ A Reranking Approach for Dependency Parsing with Variable-sized
+  Subtree Features.\BBCQ\
+\newblock In {\Bem Proceedings of the 26th Pacific Asia Conference on Language,
+  Information, and Computation}, \mbox{\BPGS\ 308--317}, Bali, Indonesia.
+  Faculty of Computer Science, Universitas Indonesia.
+
+\bibitem[\protect\BCAY{Shen, Liu, Kawahara, \BBA\ Kurohashi}{Shen
+  et~al.}{2014}]{shen-EtAl:2014:P14-2}
+Shen, M., Liu, H., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2014\BBCP.
+\newblock \BBOQ Chinese Morphological Analysis with Character-level POS
+  Tagging.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 253--258}.
+
+\bibitem[\protect\BCAY{Shen, Chu, Cromieres, \BBA\ Kurohashi}{Shen
+  et~al.}{2015}]{Shen2015a}
+Shen, Y., Chu, C., Cromieres, F., \BBA\ Kurohashi, S. \BBOP 2015\BBCP.
+\newblock \BBOQ Cross-language Projection of Dependency Trees for Tree-to-tree
+  Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 29th Pacific Asia Conference on Language,
+  Information and Computing (PACLIC2015)}, \mbox{\BPGS\ 80--88}, Shanghai,
+  China.
+
+\bibitem[\protect\BCAY{Shen, Chu, Cromieres, \BBA\ Kurohashi}{Shen
+  et~al.}{2016}]{shen-EtAl:2016:WMT}
+Shen, Y., Chu, C., Cromieres, F., \BBA\ Kurohashi, S. \BBOP 2016\BBCP.
+\newblock \BBOQ Cross-language Projection of Dependency Trees with Constrained
+  Partial Parsing for Tree-to-Tree Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st Conference on Machine Translation},
+  \mbox{\BPGS\ 1--11}, Berlin, Germany. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Spreyer \BBA\ Kuhn}{Spreyer \BBA\
+  Kuhn}{2009}]{spreyer-kuhn:2009:CoNLL}
+Spreyer, K.\BBACOMMA\ \BBA\ Kuhn, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Data-Driven Dependency Parsing of New Languages Using
+  Incomplete and Noisy Training Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 13th Conference on Computational Natural
+  Language Learning (CoNLL-2009)}, \mbox{\BPGS\ 12--20}, Boulder, Colorado.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Zhang, Jiang, Aw, Li, Tan, \BBA\ Li}{Zhang
+  et~al.}{2008}]{zhang-EtAl:2008:ACLMain3}
+Zhang, M., Jiang, H., Aw, A., Li, H., Tan, C.~L., \BBA\ Li, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A Tree Sequence Alignment-based Tree-to-Tree Translation
+  Model.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 559--567},
+  Columbus, Ohio. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Zhao, Song, Kit, \BBA\ Zhou}{Zhao
+  et~al.}{2009}]{zhao-EtAl:2009:ACLIJCNLP1}
+Zhao, H., Song, Y., Kit, C., \BBA\ Zhou, G. \BBOP 2009\BBCP.
+\newblock \BBOQ Cross Language Dependency Parsing using a Bilingual
+  Lexicon.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 55--63}, Suntec, Singapore.
+  Association for Computational Linguistics.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor[:]{Chenhui Chu}{
+Chenhui Chu received his B.S. in Software Engineering from Chongqing University in 2008, 
+and M.S., and Ph.D. in Informatics from Kyoto University in 2012 and 2015, respectively.
+He is currently a researcher of Japan Science and Technology Agency (JST).
+His research interests include natural language processing, especially machine translation.
+}
+
+\bioauthor[:]{Yu Shen}{
+Yu Shen received his B.S. in Mathematics from Shanghai Jiao Tong University in 2013, 
+and M.S. in Informatics from Kyoto University in 2016, respectively.
+He is currently an algorithm engineer of Alibaba Group.
+His research interests include natural language processing, especially machine translation.
+}
+
+\bioauthor[:]{Fabien Cromieres}{
+Fabien Cromieres received his M.S. in Informatics from Joseph Fourier University in 2005, and 
+Ph.D. in Informatics from Kyoto 
+\linebreak
+University in 2011, respectively.
+He is currently a researcher of Japan Science and Technology Agency (JST).
+His research interests include natural language processing, especially machine translation.
+}
+
+\bioauthor[:]{Sadao Kurohashi}{
+Sadao Kurohashi received the B.S., M.S., and Ph.D. in Electrical
+Engineering from Kyoto University in 1989, 1991 and 1994,
+respectively. He has been a visiting researcher of IRCS, University
+of Pennsylvania in 1994. He is currently a professor of the Graduate
+School of Informatics at Kyoto University. His research interests
+include natural language processing, knowledge
+acquisition/representation, and information retrieval. He received
+the 10th anniversary best paper award from journal of natural language
+processing in 2004, 2009 Funai IT promotion award, and 2009 IBM
+faculty award.
+}
+\end{biography}
+
+\biodate
+
+
+\end{document}

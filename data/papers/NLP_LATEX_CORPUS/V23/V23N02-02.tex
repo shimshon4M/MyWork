@@ -1,0 +1,1065 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\makeatletter
+\renewenvironment{quote}{}{}
+\makeatother
+
+\usepackage{otf} 
+\usepackage{arydshln}
+\newcommand{\ty}{}
+\newcommand{\ngc}{}
+\newcommand{\lh}{}
+
+
+\Volume{23}
+\Number{2}
+\Month{March}
+\Year{2016}
+
+\received{2015}{6}{18}
+\revised{2015}{9}{30}
+\rerevised{2015}{12}{1}
+\accepted{2015}{12}{24}
+
+\setcounter{page}{195}
+
+\jtitle{日本語学習者の作文における誤用タイプの階層的アノテーションに基づく機械学習による自動分類}
+\jauthor{大山　浩美\affiref{Author_1} \and 小町　　守\affiref{Author_2} \and 松本　裕治\affiref{Author_1} } 
+\jabstract{
+近年，様々な種類の言語学習者コーパスが収集され，言語教育の調査研究に利用されている．
+ウェブを利用した言語学習アプリケーションも登場し，膨大な量のコーパスを収集することも可能になってきている．
+学習者が生み出した文には正用だけでなく誤用も含まれており，それらの大規模な誤用文を言語学や教育などの研究に生かしたいと考えている．
+日本語教育の現場では，学習者の書いた作文を誤用タイプ別にし，フィードバックに生かしたい需要があるが，大規模な言語学習者コーパスを人手で分類するのは困難であると考えられる．
+そのような理由から，本研究は機械学習を用いて日本語学習者の誤用文を誤用タイプ別に分類するというタスクに取り組む．
+本研究は，以下の手順で実験を行った．
+まず，誤用タイプが付与されていない既存の日本語学習者コーパスに対し，誤用タイプ分類表を設計し，誤用タイプのタグのアノテーションを行った．
+次に，誤用タイプ分類表の階層構造を利用して自動分類を行う階層的分類モデルを実装した．
+その結果，誤用タイプの階層構造を利用せず直接多クラス分類を行うベースライン実験より13ポイント高い分類性能を得た．
+また，誤用タイプ分類のための素性を検討した．
+機械学習のための素性は，単語の周辺情報，依存構造を利用した場合をベースライン素性として利用した．
+言語学習者コーパスの特徴として，誤用だけではなく正用も用いることができるため，拡張素性として正用文と誤用文の編集距離，ウェブ上の大規模コーパスから算出した正用箇所と誤用箇所の置換確率を用いた．
+分類精度が向上した誤用タイプは素性によって異なるが，全ての素性を使用した場合は分類精度がベースラインより6ポイント向上した．
+}
+\jkeywords{機械学習，誤用タイプ自動分類，日本語学習者，学習者コーパス，誤用コーパス，編集距離，置換確率，階層的アノテーション}
+
+\etitle{Hierarchical Annotation and Automatic Error-Type Classification of Japanese Language Learners' Writing}
+\eauthor{Hiromi Oyama\affiref{Author_1} \and Mamoru Komachi\affiref{Author_2} \and Yuji Matsumoto\affiref{Author_1} } 
+\eabstract{
+Recently, various types of learner corpora have been compiled and utilized for linguistic and educational research. 
+As web-based application programs have been developed for language learners, we can now collect a large amount of language learners' output on the web. 
+These learner corpora include not only correct sentences but also incorrect ones, and we aim to take advantage of the latter for linguistic and educational research. 
+To this end, this study aims to automatically classify incorrect sentences written by learners of Japanese according to error types (or classes) by a machine-learning method.
+First, we annotate a corpus of the learners' writing with error types defined in a tree-structured class set. 
+Second, we implement a hierarchical error-type classification model using the tree-structured class set. 
+As a result, the proposed method performs better in the error-classification task than in the flat-structured multiclass classification baseline model by 13 points. 
+Third, we explore features for error-type classification tasks. 
+We use contextual information and syntactic information, such as dependency relations, as the baseline features. 
+In addition, because a corpus of language learners contains not only correct sentences but also incorrect ones, we propose two extended features: the edit distance between correct usages and incorrect ones and the substitution probability at which characters in a sequence change to other characters.
+Although the performance varies according to error types, the proposed model with all features outperforms the model with the baseline features by six points.
+}
+\ekeywords{Machine Learning, Error Type Classification, Learners of Japanese, Learner Corpora, Error Corpus, Edit Distance, Substitution Probability, Hierarchical Annotation}
+
+\headauthor{大山，小町，松本}
+\headtitle{日本語学習者の作文における誤用タイプの階層的アノテーションに基づく機械学習による自動分類}
+
+\affilabel{Author_1}{奈良先端科学技術大学院大学}{Nara Institute of Science and Technology}
+\affilabel{Author_2}{首都大学東京}{Tokyo Metropolitan University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+近年，ビッグデータに象徴されるように，世の中のデータ量は飛躍的に増大しているが，教育分野ではそれらのデータをまだ十分に活用している状態には至っていない．
+例えば，Lang-8というSNSを利用した言語学習者のための作文添削システムがある．
+現在，このウェブサイトは600,000人以上の登録者を抱えており，90の言語をサポートしている．
+このサイトでは，ユーザーが目標言語で書いた作文を入力すると，その言語の母語話者がその作文を添削してくれる．
+このウェブサービスにより蓄積されたデータは，言語学習者コーパスとして膨大な数の学習者の作文を有している\footnote{http://lang-8.com}.
+それらは言語学習者コーパスとして調査や研究のための貴重な大規模資源となりえるが，それらを教師や学習者がフィードバックや調査分析などに利用したい場合，誤用タイプの分類などの前処理が必要となる．
+
+しかしながら，日本語教師のための学習者コーパスを対象とした誤用例検索システムを構築するというアプリケーションを考えると，誤用タイプに基づいて得られる上位の事例に所望の誤用タイプの用例が表示されればよい．
+つまり，人手で網羅的に誤用タイプのタグ（以後，「誤用タグ」と呼ぶ）を付与することができなくても，一定水準の適合率が確保できるのであれば，自動推定した結果を活用することができる．
+
+そこで，本稿では実用レベル（例えば，8割程度）の適合率を保証した日本語学習者コーパスへの誤用タグ付与を目指し，誤用タイプの自動分類に向けた実験を試みる．
+学習者の作文における誤用についてフィードバックを行ったり，調査分析したりすることは，学習者に同じ誤りを犯させないようにするために必要であり，学習者に自律的な学習を促すことができる\shortcite{holec,auto_umeda}．
+そのため，学習者の例文を誤用タイプ別に分類し，それぞれの誤用タイプにタグを付与した例文検索アプリケーションは教師や学習者を支援する有効なツールとなり得る．
+現在まで，誤用タグ付与作業は人手に頼らざるを得なかったが，\lh\hbox{}のようなウェブ上の学習者コーパスは規模が大きく，かつ日々更新されるため，人手によって網羅的に誤用タグを付与することは困難である．
+誤用タイプの自動分類を行うことで，誤用タグ付与作業を行う際，人手に頼らなくてもよくなり，人間が誤用タグ付与を行う際の判定の不一致や一貫性の欠如などの問題を軽減しうる．
+これまでは，このような誤用タグの自動付与というタスクそのものが認知されてこなかったが，自動化することで大規模学習者コーパスを利活用する道を拓くことができ，新たな応用や基礎研究が発展する可能性を秘めている．
+
+今回，誤用タグが付与されていない既存の日本語学習者コーパスに対し，階層構造をもった誤用タイプ分類表を設計し，国立国語研究所の\ty\hbox{}の事例に対してタグ付け作業を行った．
+次に，階層的に誤用タイプの分類を行う手法を提案し，自動分類実験を行った．
+誤用タイプ分類に用いるベースライン素性として，単語の周辺情報，統語的依存関係を利用した．
+さらに，言語学習者コーパスから抽出した拡張素性として1) 正用文と誤用文の文字列間の編集距離，2) ウェブ上の大規模コーパスから算出した正用箇所と誤用箇所の置換確率を用い，それらの有効性を比較した．
+本研究の主要な貢献は，以下の3点である．
+
+\begin{itemize}
+\item 誤用タグが付与されていない国語研の作文対訳DBに誤用タグを付与し，\ngc\hbox{}を作成した．異なるアノテーターによって付与されたタグの一致率が報告された日本語学習者誤用コーパスは，我々の知る限り他に存在しない．
+\item \ngc\hbox{}を対象に機械学習による誤用タイプ自動分類実験を行い，かつアプリケーションに充分堪えうる適合率を実現した（8割程度）．英語学習者コーパスの誤用タイプの自動分類タスクは過去に提案されている \cite{swanson}が，日本語学習者コーパスの誤用タイプの自動分類タスクに取り組んだ研究はこれが初めてであり，将来的には学習者コーパスを対象とした誤用例検索システムを構築するアプリケーションの開発を目指しているため，その実現化に道筋を付けることができた．
+\item タグの階層構造を利用した階層的分類モデルを提案し，階層構造を利用しない多クラス分類モデルと比較して大幅な精度向上を得られることを示した．また，英語学習者の誤用タイプ自動分類で提案されていた素性に加え，大規模言語学習者コーパスから抽出した統計量を用いた素性を使用し，その有効性を示した．
+\end{itemize}
+
+
+\section{関連研究}
+
+現在，研究・教育目的で利用されている日本語学習者コーパスは，大阪大学の寺村コーパス \cite{teramuraj}\footnote{データ総数4,601文中3,131文が誤用タグ付け済み}，名古屋大学の学習者コーパス \cite{oso/97}\footnote{756名分の作文}，東京外国語大学の「オンライン日本語「誤用コーパス」辞典」\footnote{誤用タグつき作文40名分 http://cblle.tufs.ac.jp/llc/ja\_wrong/index.php?m=default}，筑波大学の「日本語学習者作文コーパス」\cite{rijehoj/2012}\footnote{540名分の作文 http://www34.atwiki.jp/jccorpus/}，大連理工大学の中国人日本語学習者による日本語作文コーパス\cite{shimizu/2004}，国立国語研究所（国語研）で収集された「日本語学習者による日本語作文と，その母語訳との対訳データベース オンライン版」\footnote{http://jpforlife.jp/taiyakudb.html}（以下，作文対訳DB）（データ総数は2009年時点で1,754件）がある．
+
+
+上記の作文対訳DBは，大規模な日本語学習者コーパスの1つであるが，誤用タイプの情報が付与されていなかった．
+上記のコーパスのうち，作文対訳DB以外のコーパスは誤用タグが付与されているが，タグが一部にしかついていなかったり，入手ができなかったり，コーパスそれぞれにおいて誤用タグの分類基準が異なっていたりする．
+また，既存の言語学習者コーパスは言語学や教育の目的で収集されたもので，自動分類や誤用検出・訂正などの機械処理を考慮した設計にはなっていないため，人手アノテーション以外の分類処理には必ずしも向いていない．
+具体的には，コーパスのタグ付けに関するアノテーションの一致率が報告されておらず，機械処理に適した誤用タグ体系になっているかどうか不明である．
+そこで，今回機械学習用に誤用タグを付与した\ngc\hbox{}を作成した．
+
+また，自動で誤用検出，誤用タイプ分類を行うといった言語学習者コーパス整備作業に関する研究は，英語教育においても日本語教育においても様々なタスクで進められている．
+例えば，英語教育において以下のような研究が行われている．
+誤用判定として，英語のスペルミス検出研究 \cite{wilcox}，英語の名詞の可算性（数えられる名詞），不可算性（数えられない名詞）の誤用検出研究 \cite{brockett,nagata06j}，前置詞の誤用検出に関する研究 \cite{chodorow07,deFelice07,defelice08,joel,gamon}，冠詞誤用検出に関する研究\cite{han,defelice08,gamon,yi,nagata05j}がある．
+日本語を対象とする研究では，格助詞を対象とした研究が多い\cite{ookij,oyama/08,imaedaj,nampoj,suzuki/06b,Imamura:ErrorCorrection2012j}．
+さらに，誤用タイプに特に着目せずに文を誤用文と正用文とに分類する研究もある \cite{sun,mizumotoj/13}．
+
+これらの誤用検出タスクにおいて，対象となる誤用タイプは限定されている．
+つまり，誤用タイプがあらかじめわかっていることが前提である．
+さらに，誤用タイプを網羅的にタグ付けするような研究は以下に示す1件を除いて存在しない．
+実際の言語学習者コーパスでは教師によって添削された正用例があったとしても，誤用タイプまで示すことは稀であり，誤用タイプを網羅的にタグ付けし，誤用例を検索できるようにすることは困難である．
+
+誤用タイプ分類タスクを行っているのは， \citeA{swanson}のみである．
+彼らは英語学習者の誤用タグ付きコーパスを用いた教師あり学習による多クラス分類によって，誤用箇所を与えた上で，誤用タグが付与された文を入力とし15クラスの誤用タイプ\footnote{15クラスの誤用タイプは，不足，余剰，置換，動詞のテンス，語順，否定，スペリング，イディオムの誤り（コロケーションの誤り），活用の誤り，文体の誤り，語の派生，可算不可算名詞の誤り，形式の誤り，主語と動詞の一致の誤り，項構成の誤りである．}に分ける実験を最大エントロピー法で行っている．
+しかし，日本語における誤用タイプ分類実験はまだ見られない．
+また，\citeA{swanson}は既存の英語学習者コーパスを用いて自動分類器を学習しているが，自動分類に適した誤用タイプのタグ集合を設計しているわけではない．
+言い換えると，タグの体系が自動分類の精度に与える影響は考慮されていない．
+さらに，彼らの自動分類器で用いられていた素性は誤用・正用の対応に基づく文字列・単語（品詞）情報，そして文脈素性としては直前の単語のみを用いる非常に単純なものであったが，本研究ではそれらに加えて大規模言語学習者コーパスから計算した置換確率と，正用文と誤用文の編集距離，文脈素性として周辺3単語および依存関係も用いた．
+
+
+\section{機械学習による誤用タイプ分類実験}
+
+\subsection{データ}
+
+誤用タイプ分類実験のために\ngc\hbox{}を作成した．
+\ngc\hbox{}は，\ty\hbox{}の中で添削が施された313名の作文中の誤用箇所にタグを付与し，様々な情報を補完したコーパスである\cite{oyamaj/09,oyamaj/12}．
+ファイル数は作文者ごとに313，総文字数は191,994字である．
+\ngc\hbox{}は，\ty\hbox{}に対しアノテーションを行っているため，作文対訳DBとデータは共通しているが，\ty\hbox{}には誤用タグがアノテーションされていない．
+
+
+\subsection{\ngc\hbox{}における誤用タグのアノテーション}
+
+\subsubsection{誤用タグのアノテーション}
+
+先に述べた作文対訳DBへのアノテーションの方法について説明する．
+基本的に作文対訳DBの添削に基づいて誤用タグを付与しており，添削は変更せず，誤用タイプ分類をした後にタグを付与する．
+作文対訳DBの誤用箇所に\verb|<goyo>|タグを設け，そのタグ内に添削された正用箇所を \verb|crr|属性にて示し，誤用タイプを示す \verb|type|属性を付与した．
+誤用を正用にするために複数の誤りを修正する必要がある場合，それぞれ \verb|typeN|（ただしNは自然数で，順不同）という属性を用いて明示した．
+また，文章中で複数の添削が相互に依存関係を持っている場合がありうるが，依存関係のアノテーションは今回のタグの精緻化という独立した別のタスクとして切り出すことが可能なため，今回のアノテーションでは依存関係は考慮しない．例えば，以下の例文を考える．
+
+\begin{quote}
+\begin{verbatim}
+<s>それで，<goyo type1="sem" type2="not/kj" crr="常に">まいにち</goyo>がいこくのえんじょがいります．</s>
+\end{verbatim}
+\end{quote}
+
+上記の例で，誤用として添削者によって添削された「まいにち」を\verb|<goyo>|タグで囲み，添削者による正用例「常に」を \verb|crr|属性で示す．
+この誤用を正用にするためには，「まいにち→つねに」と「つねに→常に」を訂正する必要があるため，誤用タイプは，この事例では語彙選択 (\verb|"sem"|) と表記・漢字 (\verb|"not/kj"|) の2種類を付与している．
+
+
+\subsubsection{誤用タイプ表の設計方針}
+
+誤用タイプ表の設計方針を立てる際に，英語学習者の話し言葉を集めたSSTコーパス，日本語学習者の作文を集めた名古屋大学の学習者コーパス \cite{oso/97}，大連理工大学の中国人日本語学習者による日本語作文コーパス\cite{shimizu/2004}，さらに\citeA{ichikawa97,ichikawaj00}による「日本語誤用例文小辞典」を基にした．
+
+SSTコーパスは，学習者の誤用が多岐にわたるため，体系的な分類が比較的容易な文法的・語彙的誤りに対して，独自の誤用タイプ表を構築し，
+    人手でタグ付与を行っている (石田，伊佐原，齋賀，Thepchai，成田，内元，和泉 2003)\nocite{ishidaj/03}．
+SSTコーパスの誤用タイプ表は，品詞を第1階層に有し，「名詞，動詞，助動詞，形容詞，副詞，前置詞，冠詞，代名詞，接続詞，関係詞，疑問詞」とに分かれている．
+さらに，品詞の第1階層の下は第2階層に「活用の誤り，格の誤り，単複の誤り，語彙選択の誤り」など文法的・語彙的ルールとに細分化される．
+また，ある誤用タイプは各品詞のカテゴリーにまたがっている場合もある．
+例えば，「活用の誤り」は「名詞」，「動詞」，「副詞」，「代名詞」のそれぞれの下位分類に属している．
+「語彙選択の誤り」も複数のカテゴリーに属している．
+このように，品詞の階層カテゴリーの下位階層にそれぞれ同様のタイプが存在すると，誤用タグ付与のアノテーターが意識しなければならないタグが増大するため，人手によるタグ付与作業が煩雑になる．
+そこで，我々は多クラスのタグ付けをするのではなく，多ラベルのタグ付けをするように NAIST誤用コーパスを設計し，複雑な階層カテゴリーを把握しなくてもタグ付けが可能なようにした．
+ただし，SSTコーパスでの品詞の分類は，自動分類をする際に素性として取り出しやすく有効な素性となりうる．
+そのため，\ngc\hbox{}でも品詞による分類を第1階層に持つようにした．
+
+
+誤用タグを構築する際に誤用タイプ分類の方法として，\shortciteA{shimizu/2004}では，誤用タグの構築方法を2つあげている．
+\begin{enumerate}
+\item 言語学的な特定の文法記述に基づき誤用を分類し誤用タグを構築している場合
+\item 実際の誤用分析で抽出された誤用タイプに基づいてタグを構築する場合
+\end{enumerate}
+名古屋大学の学習者コーパス \shortcite{oso/97}は，上記 (1) の方法に従い，言語学的な特定の文法記述に基づき誤用を分類し誤用タグを構築しているが，「脱落，付加，混同，誤形成，位置」などの分類はない．
+
+大連理工大学の中国人学習者による日本語作文コーパス\shortcite{shimizu/2004}は，上記 (2) の方法に従い，中国人日本語学習者の作文を添削し，独自の誤用タグを設計，付与している．
+\shortciteA{shimizu/2004}では，大連工業大学の日本語学習者の作文を誤用分析した結果から抽出した誤用に基づく誤用タイプを用いているため，\shortciteA{oso/97}や\citeA{ichikawa97,ichikawaj00}とは異なる「指示詞」，「形式名詞」，「数量詞」，「漢語」などの誤用タイプが見られる．
+
+\citeA{ichikawa97,ichikawaj00}も，上記 (2) の方法に従い，日本語学習者の作文によく見られる誤用をムード，テンス，アスペクトなどの8つの主要分類に分け，その次に細分化された86の項目に分ける（表\ref{tbl:goyo-type-ichikawa}）．
+\shortciteA{ichikawaj01}では，さらに，下位項目のそれぞれについてさらに「脱落，付加，混同，誤形成，位置，その他」の6種類に分類している．
+
+\begin{table}[b]
+\caption{市川の誤用分類}
+\label{tbl:goyo-type-ichikawa}
+\input{02table01.txt}
+\end{table}
+
+それらの言語学習者コーパスの誤用タイプ分類を基礎に，\ngc\hbox{}では全76種の誤用タイプ分類を構築した．
+その全誤用タイプは，付録B「誤用タイプ76項目」（表\ref{tbl:goyo-type-76-koumoku}）に示す．
+表~\ref{tbl:goyo-type-76-koumoku-more}は，「誤用タイプ76項目」のタグにおいてさらに細かく説明を加えた表である．
+\shortciteA{shimizu/2004}の誤用タイプ分類には，\citeA{ichikawa97,ichikawaj00}にはないが，必要だと考えられる誤用タグが見られるため，それらを含めた．
+しかし，\shortciteA{shimizu/2004}では，「は／が」の使用誤りの項目と「助詞」を分けていたりと項目の選出には彼ら独自の理由が見られる．
+また，中国人日本語学習者を対象にしているため，中国人特有の誤用タイプが見られる．
+\ngc\hbox{}の誤用タイプ分類については，そのような点を割愛し，「指示詞」，「形式名詞」，「数量詞」など詳細かつ重要な誤用タグを含めた．
+
+\shortciteA{ichikawa97,ichikawaj00}の分類も，日本語学習者がよく誤りやすい項目を基に構成されている．
+表\ref{tbl:goyo-type-ichikawa}にあるムードは表\ref{tbl:goyo-type-76-koumoku}の76の項目中の「モダリティ」に含めている．
+テンス，アスペクト，自動詞，他動詞，ヴォイスなどの項目は本稿では「動詞」の下位項目にまとめている．
+また，取り立て助詞，格助詞，連体助詞，複合助詞は「助詞」の下位項目にしている．
+連用修飾，連体修飾は，「名詞修飾節」の項目に入れている．
+従属節は，「接続」の項目に含まれている．
+しかし，\shortciteA{ichikawa97,ichikawaj00}では「脱落，付加，混同（本稿では，不足，余剰，置換）」などをそれぞれの下位項目のさらに下の項目に分類しているが，本稿では，「Nobu \{{\bf * $\phi$ / という}\}レストランに行きました」{\kern-0.25zw}\footnote{*は誤用例を示す．} のような，タグを新たに設定しにくい，もしくは修正部分が長く，誤用分類しにくい添削を「脱落，付加」に入れた．
+作文対訳DBにも，\shortciteA{ichikawa97,ichikawaj00}の分類を採用すると，助詞の下位項目に「不足，余剰」などの項目を持つ事例がある．
+しかし，付録A，「不足」の項目で述べているように，それらは少数である．
+そのため，本コーパスでは，「不足，余剰」を各分類の下位項目ではなく，独立した項として新たに設立した．
+本研究で使用した誤用タグの構築方法について詳しくは \shortciteA{oyamaj/09,oyamaj/12}を参照されたい．
+
+
+\subsubsection{本稿における実験に使用した誤用タイプ}
+
+実験に使用した誤用タイプは，表\ref{tbl:error-type}に示した17種である．
+全誤用タイプ76種が階層的に定義され，その第1階層の23種から17種を選択して使用した．
+全誤用タイプを第1階層までまとめ上げた誤用タイプと研究に必要な誤用タイプとを選択した．
+誤用タイプのそれぞれの説明は付録A「誤用タイプ項目」に詳細に示す．
+
+\begin{table}[t]
+\caption{\ngc\hbox{}における誤用タイプ表（17種＋非使用の6種） }
+\label{tbl:error-type}
+\input{02table02.txt}
+\par\vspace{4pt}\small 表中の$\phi$ は，要素がないことを示す．*は，誤用例を指す．
+\par\vspace{-0.5\Cvs}
+\end{table}
+
+表 \ref{tbl:error-type}において，上位17種の誤用タイプを実験に利用した．
+下位の「名詞」や「名詞修飾」などの誤用タイプは今回事例数が少なかっため，実験対象としなかった．
+「モダリティ」は，意味や文の作者の主観に起因する場合が多いので，文脈情報や依存情報よりも意味を扱える素性を考えるべきであるので，今回は困難であると考え実験対象としなかった．
+「モダリティ」の場合は，稿を改めて「モダリティ」を中心に必要な素性を追加した実験を行いたいと考えている．
+「成句」は，きまったフレーズ（「〜たり〜たり」など）がうまく使えなかった誤りを含む．
+「全文変換」は，文がすべて書き換えられている誤用事例である．
+「成句」や「全文変換」も，今回誤用タイプ分類実験の対象としなかった．
+「成句」はフレーズの要素が「〜たり〜たり」などのように離れているものが多く，アラインメントを取ることが困難であった．
+また，「全文変換」も同様で，文全体を書き換えているので誤用箇所の特定が難しかったことが理由である．
+「その他」についても今回実験に用いた誤用タイプよりもより詳細で個別的な誤用タイプであり，個々が少数事例のものもあったので今回対象外とした．
+
+上記以外にも，研究に必要な「``だ'' の誤用」，「否定」，「副詞」，「代名詞」，「コロケーション」を誤用タイプに含めて実験を行った．
+「``だ'' の誤用」，「否定」，「副詞」，「代名詞」の誤用タイプにおいては，作文対訳DBやKYコーパス\cite{kyj}\footnote{KYコーパスは，英語，韓国語，中国語を母語とする日本語学習者各30名位，計90名のインタビューが収集された話し言葉コーパスである．}を対象とした研究の中で「``だ'' の誤用」\cite{hunt,ou}，「副詞」\cite{asada07,asada08,matsuda}，「否定」\shortcite{mine,yoshinaga}，「代名詞」\shortcite{tyou}などに関する研究が見られ，言語学習者コーパスを利用したこのような研究がこれから増えてくると思われるからである．
+「否定」と「コロケーション」に関しては，\shortciteA{swanson}における誤用タイプ15種にも含まれている．
+「コロケーション」は，コーパスデータを利用する利点があり，重要な誤用タイプだと考えられる\cite{terashima}．
+語彙選択の誤りとコロケーションの誤りとを明確に区別し，語彙選択の誤りでは，単語単位のみを対象とした．
+コロケーションの誤りでは，「形容詞＋名詞」のようなコロケーションも見られるが「名詞＋格助詞＋動詞」の誤りのみを対象とした．
+
+
+\subsubsection{アノテーター間の一致率}
+
+誤用タグは 2人のアノテーターによって付与された．
+2人ともアノテーターとして5年以上勤務している．
+コーパス中の一部のデータ（170文）を対象に2人に同じデータへの誤用タグの付与を依頼し，$\kappa$値\cite{kappa}によりその2人のタグ付け一致率を計った．
+タグ付けの対象とした170文は，誤用タイプ17種をそれぞれ10文ずつ抽出した（10文×17種）．
+それは，全体の約1.2\%に当たる．
+アノテーターに1位に選ぶ誤用タイプと次に選ぶ誤用タイプまで（2位まで）を選択してもらった．
+表\ref{tbl:error-type}の誤用タイプにおける一致率は，1位までの場合$\kappa$ = 0.602 であった．
+2位までの場合，$\kappa$ = 0.654であった．
+$\kappa$が0.81〜1.00の間にあればほぼ完全な一致，0.61〜0.80の間にあれば実質的に一致しているとみなされることから，今回は実質的に一致していると考えられる\cite{kappa}．
+信頼度の高いコーパスを作成するためには，付与したタグがアノテーター間で異なる「タグの不一致」の問題をできるだけ解決した方がよい．
+付与したタグの一致率が高ければ，そのタグは一貫性が高く，信頼性が高いタグセットであることが言える．
+
+
+\subsubsection{階層構造誤用タイプ分類表を使用した階層的誤用タイプ分類}
+
+先行研究の\citeA{swanson}では，誤用タイプ分類実験にフラットな構造の分類表を使用していたので，
+\citeA{oyama/2013}でもフラットなタイプの誤用タイプ分類表を用いたが，人間はどのように誤用タイプを分類するのか分析するために，誤用タイプ分類に向けた予備実験を行った．
+
+11人の現役の日本語教師に依頼し，テストデータから無作為に選んだ20文について誤用タイプ分類を行わせた．
+その後，日本語教師各個人に対して聞き取り調査を行い，ある誤用文に対してある誤用タイプに分類する理由を聞いた．
+この分類実験の結果，次のようなことがわかった．
+
+\begin{enumerate}
+\item 日本語教師は，多くの誤用文を「語彙選択」 に分類しやすい．
+\item 日本語教師は，「動詞」と他の誤用タイプを混同しやすい．
+\item 日本語教師は，誤用タイプを判断する際に1文すべて与えられていても誤用箇所と正用箇所で主に判断している．
+\item 日本語教師は，誤用箇所と正用箇所の次に参考にする素性は，依存構造である．
+\end{enumerate}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-2ia2f1.eps}
+\end{center}
+\caption{階層構造誤用タイプ分類表}
+\label{fig:tree-tagset}
+\end{figure}
+
+日本語教師に行った実験では，「語彙選択」が他の誤用タイプ（助詞，動詞，コロケーションなどの誤用タイプ）に最も間違われやすかった．
+これは，「語彙選択」が最も選択を迷う項目であるということを示している．
+聞き取り調査の結果，日本語教師は誤用タイプを判断する際に1文すべて与えられていても誤用箇所と正用箇所などで主に判断していることがわかった．
+さらに，日本語教師は，最小の素性で判断しきれない場合，前後2単語，前後3単語先をみるより，依存している単語は何かに焦点を当てていた．
+「助詞」の誤りかどうか判断に迷った時は，それが依存している動詞を見ている．「副詞」の誤りかどうかの分類も同様である．
+この結果を受け，「語彙選択」は，どの誤用タイプにも入りやすく，この点が分類を妨げている要因と考えたため，17種の誤用タイプをさらに3階層に分類し直し，図\ref{fig:tree-tagset}に示す構造に変更した．
+
+上記のような流れを受けて，本実験において3段階の階層構造に基づく分類を行った．
+\citeA{hosokawaj93}では，\citeA{teramuraj72}の誤用の領域を基にし誤用を分類しており，1) 語彙レベルの誤用，2) 文構成レベルの誤用，3) 談話レベルの誤用の3レベルを立てている．
+談話レベルまで扱うのは今回の実験の範疇にないので，\citeA{hosokawaj93}の分類に従い，第2段階を語彙レベルか文構成レベルかに分類した．
+図\ref{fig:tree-tagset}で見られるように，第1段階で「不足」，「余剰」，「置換」とに分類する．
+第2段階では，「置換」内部において「文法的誤用」であるか「語彙的誤用」であるかの2値分類を行った．
+第3段階では，前段階で成功した事例において「文法的誤用」と「語彙的誤用」のそれぞれのグループ内において，多クラス分類を行った．
+
+
+\subsection{実験方法}
+
+誤用タイプ自動分類実験は，先行研究の \shortciteA{swanson}にならい，機械学習法を用いた分類実験を行った．
+3.2節で説明したように誤用タイプ分類実験のデータとして言語学習者が書いた誤用文と正用文に文単位の対応をつけ，誤用タイプを付与した\ngc\hbox{}を用意した．
+実験には，そのコーパスから誤用箇所，正用箇所や誤用タイプラベルを取り出し，さらに素性を抽出し使用した．
+また，誤用タイプ表（表\ref{tbl:error-type}）を階層構造化し実験を行った（図\ref{fig:tree-tagset}）．
+
+\ngc\hbox{}から，13,152事例を取り出し，10分割交差検定を行った．
+1つの文に別々の誤用が2つ以上ある場合は，1誤用につき1事例として取り出した．
+
+
+\subsubsection{実験の流れ}
+
+実験の概要を図\ref{fig:jikken-outline}に示す．
+まず，\ngc\hbox{}から正用文と誤用文のペアを取り出す．
+それらの2種類の文から，対応する誤用箇所 $(x)$ と，正用箇所 $(y)$，誤用タイプ $(t)$ の3つ組のラベル ($x$, $y$, $t$) を取り出す．
+その後，その事例ごとに素性を付与する．
+ベースラインの素性として，誤用箇所，正用箇所の表層の語彙素と，誤用箇所，正用箇所の形態素解析結果，周辺単語情報（前後1から3単語），依存関係情報を付与した．
+テストデータにおいても同様の素性を取り出し，分類判定実験に使用した．
+分類実験には，最大エントロピー法\footnote{http://homepages.inf.ed.ac.uk/lzhang10/maxent\_toolkit.html}を利用し，多クラス分類を試みた\footnote{事例は，複数の誤用タイプに分類される事もあり，その場合，複数の誤用タグを付与しているが，今回それらの事例数は全体の3\%にすぎなかったため，本研究の分類においては多ラベル分類ではなく多クラス分類と見なした．}．
+最大エントロピー法は確率値を出力することができるため，閾値を用いて予測結果を調整しやすく，英語・日本語の誤用検出・訂正で広く用いられている\cite{suzuki/06b,swanson}．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[scale=1.1]{23-2ia2f2.eps}
+\end{center}
+\caption{機械学習による誤用タイプ分類実験の流れ}
+\label{fig:jikken-outline}
+\end{figure}
+
+
+
+\subsubsection{素性}
+
+この節では，実験で使用した事例と素性について説明する．
+表\ref{tbl:features}は，今回使用した全ての素性をまとめたものである．
+例として，誤用を含む文「英語 \underline{を（誤）}\underline{ $\rightarrow$ が（正）}わかる．」をあげる．
+誤用箇所「を」が{\it x}，正用箇所「が」が{\it y}，「助詞」の誤用が{\it t}という3つ組みのラベルが1事例として抽出される．
+
+\begin{itemize}
+\item （誤）英語  \underline{{\bf を}} わかる
+\item （正）英語  \underline{{\bf が}} わかる
+\item  誤用タイプ：「助詞 (P)」使用の誤用
+\end{itemize}
+
+依存関係情報は，
+誤用箇所の単語にかかる文節内の単語のbag-of-wordsおよび誤用箇所の単語からかかる文節内の単語のbag-of-wordsを用いた．
+誤用箇所内が複数の文節にまたがる場合，その全ての文節内の全ての単語のbag-of-wordsを用いた．
+さらに，係り元・係り先の文節内にある全形態素の語彙素を用いた．
+例えば，「$\ast$私はりんごを\underline{{\bf 食べった}}」という文において「食べった」が誤用箇所の場合，誤用箇所に係っている文節内の係り元の「私」，「は」，「りんご」，「を」を素性として利用している．
+
+\begin{table}[t]
+\caption{誤用タイプ分類実験に用いた素性と具体例：「英語　を（誤）$\rightarrow$ が（正）わかる．」の例文における素性}
+\label{tbl:features}
+\input{02table03.txt}
+\end{table}
+
+形態素解析には，UniDic--2.1.2辞書\footnote{http://osdn.jp/projects/unidic/}とMeCab--0.994\footnote{http://taku910.github.io/mecab/}を利用し，依存構造解析器 CaboCha--0.68\footnote{http://taku910.github.io/cabocha/}で形態素情報と依存関係を抽出した．
+
+言語学習者コーパスには，ひらがな文字が多く含まれたり，辞書に存在しないような単語が出現したりする．
+そのためにアライメントに失敗し，分類精度に影響する．
+そこで，言語学習者コーパスにおける誤用による影響を軽減するために次の2つの拡張素性を用いた実験も行った．
+
+
+\subsubsection*{編集距離素性}
+
+2つの文字列がどの程度異なっているかを示す距離である編集距離を用いた．
+正用文と誤用文において動的計画法によるマッチングを用いて置換対の抽出を行い \cite{fujinoj}，誤用文には存在するが正用文には存在しない文字列を余剰箇所とみなした．
+同様に，正用文には存在するが誤用文には存在しない文字列を不足箇所とみなした．
+ある文字列がある文字列に置き換えられている場合，置換箇所とした．
+その際に，置換，不足，余剰の誤りの編集距離をいずれも1と定義し，編集距離は実数値素性として用いた．
+
+
+\subsubsection*{置換確率}
+
+拡張素性として，Lang-8から抽出した正用箇所と誤用箇所のペアの置換確率を利用した．
+Lang-8には，言語学習者の書いた誤用文と添削された正用文とが大量に含まれている．
+この置換確率は，Lang-8のような大規模な言語学習者コーパスを利用したことから得られる一つの新しい知見である．
+Lang-8から抽出した正用箇所と誤用箇所のペアから，誤用はどのように訂正されているか（誤用置換確率）と正用文はどのような誤用から訂正されているか（正用置換確率）を計算し，利用した．
+Lang-8において取り出されたペアは796,403ペアである．
+
+例えば，「を」が誤用で「が」が正用である場合の誤用置換確率の式は以下のようになる．
+\begin{equation}
+P （ 正用=が | 誤用=を ） = \frac{P （正用=が ， 誤用=を）}{P （ 誤用=を） } \label{eq:chikan_goyo}
+\end{equation}
+「が」が誤用で「は」が正用である場合の正用置換確率の式は以下のようになる．
+\begin{equation}
+P （ 誤用=が|正用=は ） = \frac{P （ 誤用=が， 正用=は）}{P （ 正用=は ） } \label{eq:chikan_seiyo}
+\end{equation}
+
+
+\subsubsection{評価尺度}
+
+評価尺度としてF値を利用した．
+再現率は対象とする各誤用タイプの中で正しく分類された誤用タイプを指し，適合率は，システムがある誤用タイプだと分類したもののうち正解を当てた率である．
+F値はそれらの調和平均を表している．
+\begin{gather} 
+ 再現率 = \frac{正しく分類された事例数}{各誤用タイプの全事例数}×100 \\[1.5ex]
+ 適合率 = \frac{正しく分類された事例数}{システムがある誤用タイプだと分類した事例数}×100 \\[1.5ex]
+ F値 = \frac{2 \times 適合率 \times 再現率}{適合率 + 再現率}
+\end{gather}
+
+
+\section{実験結果}
+
+\subsection{階層構造を使用した場合の実験結果}
+
+\ngc\hbox{}における誤用タイプ分類実験の10分割交差検定による結果について述べる．
+表 \ref{tbl:with_wthot_hier}は，階層構造を使用した場合と使用しなかった場合とを比較した表である．
+簡単のため前後1単語の素性を用いた場合をW1，前後2単語までの素性を用いた場合をW2，前後3単語までの素性を用いた場合をW3とする．
+最後の行は，全体のマクロ平均を示す．
+この表で分かるように，階層構造を利用したことで分類性能（F値）が全体的に49.6から62.4へと向上した．
+また，F値で80以上を達成した誤用タイプは「助詞」，「不足」，「余剰」の3つのみであったが，階層構造を利用することにより，「語彙選択」，「表記」，「動詞」，「指示詞」も新たに F 値が80を超え，実用的な精度で自動推定が行えることが分かった．
+
+\begin{table}[t]
+\caption{階層構造を使用した場合と使用しなかった場合の実験結果（10分割交差検定）（F値）}
+\label{tbl:with_wthot_hier}
+\input{02table04.txt}
+\end{table}
+
+「不足」と「余剰」の値は，階層構造を使用した場合において階層構造を使用しなかった場合より精度が下がっている．
+「不足」と「余剰」の誤用タイプは第1階層において「不足」か「余剰」か「置換」の3値分類をする．
+その際，「不足」は1,441事例，「余剰」は1,177事例，「置換」は10,534事例となり，「置換」の事例数は，「不足」と「余剰」の事例数よりもはるかに多くなる，
+これが，「不足」と「余剰」の階層構造を使用した場合での精度を下げる原因となったと考えられる．
+
+
+\subsection{編集距離，置換確率を加えた実験結果}
+
+編集距離，置換確率を加えた誤用タイプ分類実験の結果を表\ref{tbl:new-ngc}に示す．
+ベースライン (BL.) は，誤用タイプの構造が階層構造であり周辺素性および依存関係情報を付加した素性とし，表 \ref{tbl:with_wthot_hier}における「階層構造あり」の結果を用いた．
+さらに，拡張素性として，1) ベースライン + 編集距離 (edit)，2) ベースライン + 置換確率 (sub.)（F値）を示した．
+ALLは，それら全ての拡張素性を付加したものである．
+表\ref{tbl:new-ngc}の最下行はマクロ平均値を表し，
+表\ref{tbl:new-ngc}より編集距離を加えることで4.1ポイントの分類性能の上昇，置換確率を加えることで3.4ポイントの上昇が見られる．
+それら拡張素性を合わせた素性 (ALL) においては6ポイントの上昇が見られる．
+
+表\ref{tbl:new-ngc-mic}は，階層ごとの分類の難しさを示している．
+まず1行目は「不足」か「余剰」か「置換」かの多値分類での平均値である．
+2行目は「文法的誤用」における多値分類，3行目は，「語彙的誤用」における多値分類での平均値である．
+
+\begin{table}[t]
+\caption{\ngc\hbox{}における誤用タイプごとの分類実験結果（10分割交差検定）（F値）}
+\label{tbl:new-ngc}
+\input{02table05.txt}
+\end{table}
+\begin{table}[t]
+\caption{各階層における分類実験結果（10分割交差検定）（F値）}
+\label{tbl:new-ngc-mic}
+\input{02table06.txt}
+\end{table}
+
+表\ref{tbl:new-ngc-mic}のマクロ平均値において，第1段階（余剰，不足，置換）実験において編集距離を加えることで1.8ポイントの上昇，置換確率を加えることで2.4ポイントの上昇が見られる．
+ALLでは，2.5ポイントの上昇が見られる．
+文法タイプ内実験において編集距離を加えることで0.8ポイントの下がっているが，置換確率を加えることで2.4ポイントの上昇が見られる．
+ALLでは，1.2ポイントの上昇が見られる
+語彙タイプ内実験において編集距離を加えることで4.0ポイントの上昇，置換確率を加えることで3.4ポイントの上昇が見られる．
+ALLでは，6.3ポイントの上昇が見られる．
+
+
+\section{分類実験に関する考察}
+
+この節では，どの素性がどのように自動分類に役立つかについて考察する．
+「不足」，「余剰」，「語彙選択」，「表記」，「助詞」，「動詞」は事例数が多く，全体の事例の91\%を占めている．
+そのため，それらについて説明する\footnote{「助詞」は事例数が最も多く，素性を付加しなくても精度も高いため，対象から除いた．}．
+
+全体的に編集距離素性と置換確率素性を入れた実験 (ALL) において精度の向上が見られる．
+個別に見ると「語彙選択」，「表記」と「余剰」において，編集距離素性を用いた実験で精度の向上が見られる．
+
+「語彙選択」において漢字同士の誤用は数多く見られる．
+置換確率を入れるとさらに半数程度改善している（成功事例中44.8\%）．
+語彙の選択誤りは多種多様であるため，Lang-8のような巨大なコーパスから置換確率を計算したとしても出現しない可能性もある．
+そのような場合においても編集距離素性が効果があったと考えられる．
+下に例を示す．
+
+\begin{quote}
+《語彙選択 (SEM)》このたばこという物はどうして人々の\underline{必用（誤）$\rightarrow$ 必需品（正）}になっているのがわからない．
+\end{quote}
+
+「語彙選択」の場合，ひらがなやカタカナを漢字に変換する（またはその逆）事例の精度も上がっていた（成功事例中41.8\%）．
+日本語学習者の作文ではひらがな，カタカナ，漢字の混合もよく見られる．
+ひらがなやカタカナと漢字では，表記が長くなるか短くなるかで編集距離が異なるため，その差が素性の効果に影響したと考えられる．
+
+\begin{quote}
+《語彙選択 (SEM)》いろいろな飾りが大好きだからたばこを買う代わりにほしがっている\underline{飾り物（誤）$\rightarrow$ アクセサリー（正）}を買った方がいい．
+\end{quote}
+
+「表記」の事例において編集距離素性で精度の向上が見られる事例を分析する．
+最も向上した事例のパターンは，以下のようなひらがなが漢字に変更された事例である ．
+そのような事例が編集距離素性を入れたことで分類に成功しており，成功事例の半分を占めていた（55.9\%）．
+
+\begin{quote}
+《表記 (NOT)》家の外と中を\underline{そうじ（誤）$\rightarrow$ 掃除（正）}しました．
+\end{quote}
+
+次に，「余剰」の事例を見る．
+比較的文字列数が長い物が成功するようになっている．
+これは，編集距離の素性の効果だと考える．
+
+\begin{quote}
+《余剰 (AD)》私はその中で\underline{いろいろな食べもの（誤）$\rightarrow$ $\phi$（正）}一番好きなものはレマンです．
+\end{quote}
+
+次に，置換確率素性を用いた実験で精度の向上が見られた場合を検証する．
+全ての素性を組み合わせた実験 (ALL) において，分類に成功した事例と失敗した事例においての置換確率が利用可能である場合を比較した．
+分類に成功した事例においては，置換確率が出現した場合が69.9\%であるのに対し，分類に失敗した事例中では，57.8\%となっており，置換確率値があった方が分類に成功していることが分かる．
+
+以下では置換確率素性を用いた実験で精度の向上が見られた「不足」，「動詞」の事例を見る．
+まず，「動詞」において置換確率を付加したことで分類に成功した事例を見る．
+
+\begin{quote}
+《動詞 (V)》個人的には，軽い生活磁器よりも韓国のたましいが感じ\underline{る（誤）$\rightarrow$ られる（正）}非生活磁器が気に入りました．\\
+ 誤用置換確率 = 0.046， 正用置換確率 = 0.475
+\end{quote}
+
+上記の例は，「ベースライン＋編集距離」の実験では，「文体」に分類されていた．
+「動詞」と「文体」が共に文末の誤りであることから，お互い間違われる事例が多いが，誤用箇所「る」正用箇所「られる」の誤用正用パターンがLang-8中に出現し，置換確率が得られたことで分類が成功したと考えられる．
+「文体」は，付録Aにあるように，通常「です・ます体」か「だ・である体」で統一されているかどうかの誤用である．
+この添削文は\ty\hbox{}の添削に基づいており，日本語教師が添削を施している\footnote{正用に添削する際には日本語教師が文章全体を見て添削しておりその結果を用いているので，本研究での誤用タイプ分類問題においては文章全体を見なくてもよい．}．
+その際，日本語教師によって誤用箇所の「る」が「ます」に修正されている．
+誤用タグを付与するときに，その添削にそってタグをつけている．
+よって，誤用箇所が「る」であり，正用箇所が「ます」である事例（またはその反対）が多く出現しており，「文体」に特徴的なパターンとして認識されている．
+
+「不足」，「余剰」の場合の性能についての考察をする．
+「不足」と「余剰」は一見誤用文字列・正用文字列の長さで簡単に判別できるように思われるが，もし不足しているものあるいは余剰に書かれているものが助詞とはっきりわかるものであれば，助詞へ分類されており（付録参照），誤用文字列・正用文字列の長さを見ただけでは必ずしも判断できない．
+そして，助詞はタグ全体の1/4を占める誤用タイプ（「不足」と「余剰」はそれぞれ全体の11\%と9\%）であるため，「不足」「余剰」の分類性能に影響を及ぼしたのではないかと思われる．
+
+また，「不足」より「余剰」の分類精度が低いことに関して，「不足」と「余剰」の事例が分類に失敗する場合を比べてみると，「余剰」の方に10ポイントほど多く，他の誤用タイプ（助詞や``だ'' の誤用など）に含まれる可能性のある事例が含まれていた．
+前の段落で書いたように，これが「不足」と「余剰」の分類精度に影響したと考えられる．
+「不足」と「余剰」の分類精度において差が見られたが，全ての素性を入れた実験においては3.6\%の差であり，ベースラインと比較すると差が減っている．
+これは，拡張素性によって正用例と誤用例の文字列を考慮することができるようになり，より助詞の誤用等と区別しやすくなったからではないかと考えられる．
+
+さらに，全体に共通する傾向として，文脈長を長くすることが必ずしも分類性能の向上につながっていない，ということが確認できる．
+\citeA{swanson}も文脈に関する素性は直前の1単語しか使っていないが，これは英語学習者の誤用タイプ分類タスクにおいても文脈の情報が寄与していない可能性がある．
+誤用の発生している箇所の周辺は形態素解析が失敗しやすいことに加え，そもそも言語学習者の作文自身の形態素解析が困難であることが背景にあると考えられる．
+言語学習者のテキストに頑健な形態素解析器の作成は今後の課題である．
+
+
+\section{おわりに}
+
+本稿では，大規模コーパスを言語資源として活用するために，コーパス整備タスクの1つとして日本語学習者コーパスへの誤用タグ付与のための半自動的な処理を目指し，誤用タイプの自動分類に向けた実験を試みた．
+
+まず，日本語学習者の誤用タグつきコーパスを設計し，誤用タグ付与作業を行った．
+作成したコーパスのアノテーター間の $\kappa$ 値は 0.602 であり，高い一致率であった．
+また，作成したコーパスを用い，最大エントロピー法によって誤用タグの自動分類タスクに取り組んだ．
+素性にはベースラインとして単語の周辺情報と依存関係を利用した．
+さらに，誤用タイプ分類表を階層構造にし，
+分類性能の向上を計った．
+誤用文の性質を考慮し，拡張素性として「ベースライン+編集距離」，「ベースライン+置換確率」を付加した結果，分類性能を向上させることができた．
+その結果，F 値のマクロ平均は49.6から68.4に向上した．
+事例数が少なく十分な精度が得られていない誤用タイプも存在するが，初の誤用タイプ自動分類器において実用的な精度と考えられる．
+F 値80を達成していた誤りタイプはベースライン法では「助詞」，「脱落」，「余剰」の3種類のみであったのに対し，階層構造を利用することによって新たに「語彙選択」，「表記」，「動詞」，「指示詞」が，置換確率を用いることで新たに「形容詞」が，それぞれ F 値80を達成することができ，自動化に向けて大きく前進することができた．
+事例数の少ない誤用タイプは精度も低いので，その問題を解決するためにセルフトレーニングを用いて，事例を増やし，精度向上を図ることも現在検討中である．
+
+今回，Lang-8 のように正用文と誤用文の両方が大量に存在するが誤用タイプが不明な場合を想定し，誤用文を考慮に入れた素性を試したが，誤用箇所および正用例が示されていない言語学習者コーパスも多数存在する．
+そのような場合，誤用タイプ分類の前に誤用検出・訂正をする必要がある．
+本研究により，正用例が誤用タイプ分類に貢献することが示されたが，誤用タイプが誤用検出・訂正に影響を与えている可能性も考えられる．
+そこで，誤用タグに関しては，誤用タイプ分類と誤用検出・訂正を同時に行う手法を今後検討していきたい．
+さらに，言語教育現場でどのように使用されるかを考慮に入れたタグの使いやすさの評価のためには，他の誤用タグと比較してどのように自動分類性能が異なるかなども考慮に入れるべきであるが，自動分類に対応できる誤用タイプの構築を目指しているため本稿では対象とせず，今後の課題とした．
+
+現在，様々な言語学習者コーパスが存在するが，学習者コーパスをそのまま用いるには情報が足りないため，誤用検出をしたり，誤用タイプに分類し誤用タグを付与したりと前処理をしなければならない．
+機械学習による誤用タイプ分類の精度が高くなれば，研究のために利用できる学習者コーパスの量が増え，大規模なコーパスでさらに普遍的な現象なども見ることが可能になると考えられる．
+
+
+
+\acknowledgment
+
+\lh\hbox{}という貴重な資料を提供して頂いた株式会社\lh\hbox{}社長喜洋洋氏に感謝申し上げます．
+論文に対して貴重なご意見を頂いた査読者の方と編集委員の方にも感謝申し上げます．
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{浅田}{浅田}{2007}]{asada07}
+浅田和泉 \BBOP 2007\BBCP.
+\newblock 日本語学習者作文コーパスにみる多義的副詞の習得について.\
+\newblock \Jem{熊本大学社会文化科学研究科 2007年度プロジェクト研究報告}, {\Bbf
+  7}, \mbox{\BPGS\ 79--96}.
+
+\bibitem[\protect\BCAY{浅田}{浅田}{2008}]{asada08}
+浅田和泉 \BBOP 2008\BBCP.
+\newblock 中国人日本語学習者の副詞の語順.\
+\newblock \Jem{熊本大学社会文化科学研究科 2008年度プロジェクト研究報告}, {\Bbf
+  8}, \mbox{\BPGS\ 37--58}.
+
+\bibitem[\protect\BCAY{Brockett, Dolan, \BBA\ Gamon}{Brockett
+  et~al.}{2006}]{brockett}
+Brockett, C., Dolan, W., \BBA\ Gamon, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Correcting ESL Errors Using Phrasal SMT Techniques.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics (ACL)}, \mbox{\BPGS\ 249--256}, Sydney, Australia.
+
+\bibitem[\protect\BCAY{Carletta}{Carletta}{1996}]{kappa}
+Carletta, J. \BBOP 1996\BBCP.
+\newblock \BBOQ Assessing Agreement on Classification Tasks: The Kappa
+  Statistic.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 22}  (2), \mbox{\BPGS\
+  249--254}.
+
+\bibitem[\protect\BCAY{張}{張}{2010}]{tyou}
+張希朱 \BBOP 2010\BBCP.
+\newblock
+  話者を表す「私は」の用法について：日本語母語話者と日本語学習者の意見文を比較して.\
+\newblock \Jem{学校教育学研究論集}, {\Bbf 22}, \mbox{\BPGS\ 23--35}.
+
+\bibitem[\protect\BCAY{Chodorow, Tetreault, \BBA\ Han}{Chodorow
+  et~al.}{2007}]{chodorow07}
+Chodorow, M., Tetreault, J., \BBA\ Han, N.-R. \BBOP 2007\BBCP.
+\newblock \BBOQ Detection of Grammatical Errors Involving Prepositions.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th ACL--SIGSEM Workshop on
+  Prepositions}, \mbox{\BPGS\ 45--50}, Prague, Czech Public.
+
+\bibitem[\protect\BCAY{De~Felice \BBA\ Pulman}{De~Felice \BBA\
+  Pulman}{2007}]{deFelice07}
+De~Felice, R.\BBACOMMA\ \BBA\ Pulman, S. \BBOP 2007\BBCP.
+\newblock \BBOQ Automatically Acquiring Models of Prepositional Use.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th ACL--SIGSEM Workshop on
+  Prepositions}, \mbox{\BPGS\ 45--50}, Prague, Czech Public.
+
+\bibitem[\protect\BCAY{De~Felice \BBA\ Pulman}{De~Felice \BBA\
+  Pulman}{2008}]{defelice08}
+De~Felice, R.\BBACOMMA\ \BBA\ Pulman, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A Classifier-based Approach to Preposition and Determiner Error
+  Correction in L2.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics (COLING 2008)}, \mbox{\BPGS\ 169--176}, Manchester,
+  U.K.
+
+\bibitem[\protect\BCAY{藤野\JBA 水本\JBA 小町\JBA 永田\JBA 松本}{藤野 \Jetal
+  }{2012}]{fujinoj}
+藤野拓也\JBA 水本智也\JBA 小町守\JBA 永田昌明\JBA 松本裕治 \BBOP 2012\BBCP.
+\newblock 日本語学習者の作文の誤り訂正に向けた単語分割.\
+\newblock \Jem{言語処理学会第18回年次大会}, \mbox{\BPGS\ 26--29}.
+
+\bibitem[\protect\BCAY{Gamon, Gao, Brockett, Klementiev, Dolan, Belenko, \BBA\
+  Vanderwende}{Gamon et~al.}{2008}]{gamon}
+Gamon, M., Gao, J., Brockett, C., Klementiev, A., Dolan, W., Belenko, D., \BBA\
+  Vanderwende, L. \BBOP 2008\BBCP.
+\newblock \BBOQ Using Contextual Speller Techniques and Language Modelling for
+  ESL Error Correction.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Joint Conference on
+  Computational Linguistics (IJCNLP 2008)}, \mbox{\BPGS\ 449--456}, Hyderabad,
+  India.
+
+\bibitem[\protect\BCAY{Han, Chodorow, \BBA\ Leacock}{Han et~al.}{2006}]{han}
+Han, N.~R., Chodorow, M., \BBA\ Leacock, C. \BBOP 2006\BBCP.
+\newblock \BBOQ Detecting Errors in English Article Usage by Non-Native
+  Speakers.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 12}  (2), \mbox{\BPGS\
+  115--129}.
+
+\bibitem[\protect\BCAY{Holec}{Holec}{1981}]{holec}
+Holec, H. \BBOP 1981\BBCP.
+\newblock {\Bem Autonomy and foreign language learning}.
+\newblock Pergamon Press, Oxford.
+
+\bibitem[\protect\BCAY{細川}{細川}{1993}]{hosokawaj93}
+細川英雄 \BBOP 1993\BBCP.
+\newblock 留学生日本語作文における格関係表示の誤用について.\
+\newblock \Jem{早稲田大学日本語研究教育センター紀要}, {\Bbf 5}, \mbox{\BPGS\
+  70--89}.
+
+\bibitem[\protect\BCAY{市川}{市川}{1997}]{ichikawa97}
+市川保子 \BBOP 1997\BBCP.
+\newblock \Jem{日本語誤用例文小辞典}.
+\newblock 凡人社.
+
+\bibitem[\protect\BCAY{市川}{市川}{2000}]{ichikawaj00}
+市川保子 \BBOP 2000\BBCP.
+\newblock \Jem{続・日本語誤用例文小辞典　接続詞・副詞}.
+\newblock 凡人社.
+
+\bibitem[\protect\BCAY{市川}{市川}{2001}]{ichikawaj01}
+市川保子 \BBOP 2001\BBCP.
+\newblock 日本語の誤用研究.\
+\newblock 国際交流基金日本語グループ\JED, \Jem{日本語教育通信} (40 \JEd).,
+  \mbox{\BPGS\ 14--15}. 国際交流基金.
+
+\bibitem[\protect\BCAY{今枝\JBA 河合\JBA 石川\JBA 永田\JBA 桝井}{今枝 \Jetal
+  }{2003}]{imaedaj}
+今枝恒治\JBA 河合敦夫\JBA 石川裕司\JBA 永田亮\JBA 桝井文人 \BBOP 2003\BBCP.
+\newblock 日本語学習者の作文における格助詞の誤り検出と訂正.\
+\newblock \Jem{情報処理学会研究報告 コンピュータと教育研究会報告}, \mbox{\BPGS\
+  39--46}. 情報処理学会.
+
+\bibitem[\protect\BCAY{今村\JBA 齋藤\JBA 貞光\JBA 西川}{今村 \Jetal
+  }{2012}]{Imamura:ErrorCorrection2012j}
+今村賢治\JBA 齋藤邦子\JBA 貞光九月\JBA 西川仁 \BBOP 2012\BBCP.
+\newblock 識別的系列変換を用いた日本語助詞誤りの訂正.\
+\newblock \Jem{言語処理学会第18回年次大会}, \mbox{\BPGS\ 18--21}.
+
+\bibitem[\protect\BCAY{石田\JBA 伊佐原\JBA 齋賀\JBA {S. Thepchai}\JBA 成田\JBA
+  内元\JBA 和泉}{石田 \Jetal }{2003}]{ishidaj/03}
+石田亨\JBA 伊佐原均\JBA 齋賀豊美\JBA {S. Thepchai}\JBA 成田真澄\JBA
+  内元清貴\JBA 和泉恵美 \BBOP 2003\BBCP.
+\newblock 適合型コミュニケーションの研究開発.\
+\newblock \Jem{平成15年度通信・放送機構研究発表会}, \mbox{\BPGS\ 572--581}.
+
+\bibitem[\protect\BCAY{蔭山ハント}{蔭山ハント}{2004}]{hunt}
+蔭山ハント悠子 \BBOP 2004\BBCP.
+\newblock \Jem{新・はじめての日本語教育 1　日本語教育の基礎知識}.
+\newblock アスク, 東京.
+
+\bibitem[\protect\BCAY{鎌田\JBA 山内}{鎌田\JBA 山内}{1999}]{kyj}
+鎌田修\JBA 山内博之 \BBOP 1999\BBCP.
+\newblock KYコーパス Ver 1.1.\
+\newblock \JTR, 第二言語としての日本語の習得に関する総合研究グループ.
+\newblock \texttt{http://www.opi.jp/shiryo/ky\_corp.html}.
+
+\bibitem[\protect\BCAY{李\JBA 林\JBA 宮岡\JBA 柴崎}{李 \Jetal
+  }{2012}]{rijehoj/2012}
+李在鎬\JBA 林\UTF{70AB}情\JBA 宮岡弥生\JBA 柴崎秀子 \BBOP 2012\BBCP.
+\newblock 言語処理の技術を利用したタグ付き日本語学習者コーパスの構築.\
+\newblock \Jem{2012年度日本語教育学会春季大会予稿集}.
+
+\bibitem[\protect\BCAY{松田\JBA 森\JBA 金村\JBA 後藤}{松田 \Jetal
+  }{2006}]{matsuda}
+松田真希子\JBA 森篤嗣\JBA 金村久美\JBA 後藤寛樹 \BBOP 2006\BBCP.
+\newblock 日本語学習者の名詞句の誤用と言語転移.\
+\newblock \Jem{留学生教育}, {\Bbf 11}, \mbox{\BPGS\ 45--53}.
+
+\bibitem[\protect\BCAY{峰}{峰}{2011}]{mine}
+峰布由紀 \BBOP 2011\BBCP.
+\newblock 言語処理の発達の観点からみたナイデとナクテの習得過程.\
+\newblock In {\Bem 7th International Conference on Practical Linguistics of
+  Japanese (ICPLJ7)}, \mbox{\BPGS\ 92--93}, San Francisco, U.S.A.
+
+\bibitem[\protect\BCAY{水本\JBA 小町\JBA 永田\JBA 松本}{水本 \Jetal
+  }{2013}]{mizumotoj/13}
+水本智也\JBA 小町守\JBA 永田昌明\JBA 松本裕治 \BBOP 2013\BBCP.
+\newblock
+  日本語学習者の作文自動誤り訂正のための語学学習SNSの添削ログからの知識獲得.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 28}  (4), \mbox{\BPGS\ 420--432}.
+
+\bibitem[\protect\BCAY{永田\JBA 井口\JBA 脇寺\JBA 河合\JBA 桝井\JBA 井須}{永田
+  \Jetal }{2005}]{nagata05j}
+永田亮\JBA 井口達也\JBA 脇寺健太\JBA 河合敦夫\JBA 桝井文人\JBA 井須尚紀 \BBOP
+  2005\BBCP.
+\newblock 前置詞情報を利用した冠詞誤り検出.\
+\newblock \Jem{電子情報通信学会論文誌}, {\Bbf J88-D-I}  (4), \mbox{\BPGS\
+  873--881}.
+
+\bibitem[\protect\BCAY{永田\JBA 若菜\JBA 河合\JBA 森広\JBA 桝井\JBA 井須}{永田
+  \Jetal }{2006}]{nagata06j}
+永田亮\JBA 若菜崇宏\JBA 河合敦夫\JBA 森広浩一郎\JBA 桝井文人\JBA 井須尚紀 \BBOP
+  2006\BBCP.
+\newblock 可算／不可算名詞の判定に基づいた英文の誤り検出.\
+\newblock \Jem{電子情報通信学会論文誌}, {\Bbf J89-D-8}, \mbox{\BPGS\
+  1777--1790}.
+
+\bibitem[\protect\BCAY{南保\JBA 乙武\JBA 荒木}{南保 \Jetal }{2007}]{nampoj}
+南保亮太\JBA 乙武北斗\JBA 荒木健治 \BBOP 2007\BBCP.
+\newblock 文節内の特徴を用いた日本語助詞誤りの自動検出・校正.\
+\newblock \Jem{情報処理学会研究報告 自然言語処理研究報告}, \mbox{\BPGS\
+  107--112}. 情報処理学会.
+
+\bibitem[\protect\BCAY{大木\JBA 大山\JBA 北内\JBA 末永\JBA 松本}{大木 \Jetal
+  }{2011}]{ookij}
+大木環美\JBA 大山浩美\JBA 北内啓\JBA 末永高志\JBA 松本裕治 \BBOP 2011\BBCP.
+\newblock
+  非日本語母国話者の作成するシステム開発文書を対象とした助詞の誤用判定.\
+\newblock \Jem{言語処理学会第17回年次大会}, \mbox{\BPGS\ 1047--1050}.
+
+\bibitem[\protect\BCAY{大曽\JBA 杉浦\JBA 市川\JBA 奥村\JBA 小森\JBA 白井\JBA
+  滝沢\JBA 外池}{大曽 \Jetal }{1997}]{oso/97}
+大曽美恵子\JBA 杉浦正利\JBA 市川保子\JBA 奥村学\JBA 小森早江子\JBA 白井英俊\JBA
+  滝沢直宏\JBA 外池俊幸 \BBOP 1997\BBCP.
+\newblock 日本語学習者の作文コーパス：電子化による共有資源化.\
+\newblock \Jem{言語処理学会第3回年次大会論文集}, \mbox{\BPGS\ 131--145}.
+
+\bibitem[\protect\BCAY{大山}{大山}{2009}]{oyamaj/09}
+大山浩美 \BBOP 2009\BBCP.
+\newblock 日本語学習者コーパスのための誤用タグの構築について.\
+\newblock \Jem{国文研究}, {\Bbf 54}, \mbox{\BPGS\ 102--114}.
+
+\bibitem[\protect\BCAY{大山\JBA 小町\JBA 松本}{大山 \Jetal }{2012}]{oyamaj/12}
+大山浩美\JBA 小町守\JBA 松本裕治 \BBOP 2012\BBCP.
+\newblock 日本語学習者の作文における誤用タグつきコーパスの構築について—NAIST
+  誤用コーパスの開発—.\
+\newblock \Jem{第一回テキストアノテーションワークショップ}.
+
+\bibitem[\protect\BCAY{Oyama, Komachi, \BBA\ Matsumoto}{Oyama
+  et~al.}{2013}]{oyama/2013}
+Oyama, H., Komachi, M., \BBA\ Matsumoto, Y. \BBOP 2013\BBCP.
+\newblock \BBOQ Towards Automatic Error Type Classification of Japanese
+  Language Learners' Writings.\BBCQ\
+\newblock In {\Bem Proceedings of the 27th Pacific Asia Conference on Language,
+  Information, and Computation (PACLIC 27)}, \mbox{\BPGS\ 163--172}, Taipei,
+  Taiwan.
+
+\bibitem[\protect\BCAY{Oyama, Matsumoto, Asahara, \BBA\ Sakata}{Oyama
+  et~al.}{2008}]{oyama/08}
+Oyama, H., Matsumoto, Y., Asahara, M., \BBA\ Sakata, K. \BBOP 2008\BBCP.
+\newblock \BBOQ Construction of an Error Information Tagged Corpus of Japanese
+  Language Learners and Automatic Error Detection.\BBCQ\
+\newblock In {\Bem Proceedings of the Computer Assisted Language Instruction
+  Consortium}, San Francisco, U.S.A. CALICO.
+
+\bibitem[\protect\BCAY{清水\JBA 宋\JBA 孟\JBA 杜\JBA 壇辻}{清水 \Jetal
+  }{2004}]{shimizu/2004}
+清水政明\JBA 宋哲\JBA 孟慶栄\JBA 杜鳳剛\JBA 壇辻正剛 \BBOP 2004\BBCP.
+\newblock
+  中国人日本語学習者対訳作文コーパスの構築における誤りタグの構築について.\
+\newblock \Jem{日本語言文化教学与研究国際学術研討会}.
+
+\bibitem[\protect\BCAY{Sun, Liu, Cong, Zhou, Xiong, Lee, \BBA\ Lin}{Sun
+  et~al.}{2007}]{sun}
+Sun, G., Liu, X., Cong, G., Zhou, M., Xiong, Z., Lee, J., \BBA\ Lin, C. \BBOP
+  2007\BBCP.
+\newblock \BBOQ Detecting Erroneous Sentences using Automatically Mined
+  Sequential Patterns.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 81--88}, Prague, Czech
+  Public.
+
+\bibitem[\protect\BCAY{Suzuki \BBA\ Toutanova}{Suzuki \BBA\
+  Toutanova}{2006}]{suzuki/06b}
+Suzuki, H.\BBACOMMA\ \BBA\ Toutanova, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Learning to Predict Case Makers in Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics (ACL)}, \mbox{\BPGS\ 1049--1056}, Sydney,
+  Australia.
+
+\bibitem[\protect\BCAY{Swanson \BBA\ Yamangil}{Swanson \BBA\
+  Yamangil}{2012}]{swanson}
+Swanson, B.\BBACOMMA\ \BBA\ Yamangil, E. \BBOP 2012\BBCP.
+\newblock \BBOQ Correction Detection and Error Type Selection as an ESL
+  Educational Aid.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference of the North American Chapter
+  of the Association for Computational Linguistics (NAACL)}, \mbox{\BPGS\
+  357--361}, Montreal, Canada.
+
+\bibitem[\protect\BCAY{寺嶋}{寺嶋}{2013}]{terashima}
+寺嶋弘道 \BBOP 2013\BBCP.
+\newblock
+  日本語教育におけるコーパスの応用—データ駆動型学習とその実践方法の考察—.\
+\newblock \Jem{ポリグロシア}, \mbox{\BPGS\ 91--103}.
+
+\bibitem[\protect\BCAY{寺村}{寺村}{1972}]{teramuraj72}
+寺村秀夫 \BBOP 1972\BBCP.
+\newblock \Jem{日本語の文法　上・下}.
+\newblock 国立国語研究所.
+
+\bibitem[\protect\BCAY{寺村}{寺村}{1990}]{teramuraj}
+寺村秀夫 \BBOP 1990\BBCP.
+\newblock 外国人学習者の日本語誤用例集接続詞・副詞.\
+\newblock \JTR, 大阪大学・国立国語研究所.
+
+\bibitem[\protect\BCAY{Tetreault \BBA\ Chodorow}{Tetreault \BBA\
+  Chodorow}{2008}]{joel}
+Tetreault, J.\BBACOMMA\ \BBA\ Chodorow, M. \BBOP 2008\BBCP.
+\newblock \BBOQ The Ups and Downs of Preposition Error Detection in ESL
+  Writing.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics (COLING 2008)}, \mbox{\BPGS\ 865--872}, Manchester,
+  U.K.
+
+\bibitem[\protect\BCAY{梅田}{梅田}{2005}]{auto_umeda}
+梅田康子 \BBOP 2005\BBCP.
+\newblock 学習者の自律性を重視した日本語教育コースにおける教師の役割.\
+\newblock \Jem{愛知大学　言語と文化}, {\Bbf 12}, \mbox{\BPGS\ 59--77}.
+
+\bibitem[\protect\BCAY{王}{王}{2003}]{ou}
+王国華 \BBOP 2003\BBCP.
+\newblock 中国人日本語学習者が間違えやすい表現について.\
+\newblock \Jem{北陸大学紀要}, {\Bbf 27}, \mbox{\BPGS\ 115--122}.
+
+\bibitem[\protect\BCAY{Wilcox-O'Hearn, Hirst, \BBA\ Budanitsky}{Wilcox-O'Hearn
+  et~al.}{2008}]{wilcox}
+Wilcox-O'Hearn, A., Hirst, G., \BBA\ Budanitsky, A. \BBOP 2008\BBCP.
+\newblock \BBOQ Real-word Spelling Correction with Trigrams: A Reconsideration
+  of the Mays, Damerau, and Mercer Model.\BBCQ\
+\newblock In Gelbukh, A.\BED, {\Bem Proceedings of 9th International Conference
+  on Intelligent Text Processing and Computational Linguistics
+  (CICLing-2008)(Lecture Notes in Computer Science Vol.~4919)}, \mbox{\BPGS\
+  605--616}, Berlin. Springer.
+
+\bibitem[\protect\BCAY{Yi, Gao, \BBA\ Dolan}{Yi et~al.}{2008}]{yi}
+Yi, X., Gao, J., \BBA\ Dolan, W. \BBOP 2008\BBCP.
+\newblock \BBOQ A Web Based English Proofing System for ESL Users.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Joint Conference on
+  Computational Linguistics (IJCNLP 2008)}, \mbox{\BPGS\ 619--624}, Hyderabad,
+  India.
+
+\bibitem[\protect\BCAY{吉永}{吉永}{2013}]{yoshinaga}
+吉永尚 \BBOP 2013\BBCP.
+\newblock 「ナイデ」と「ナクテ」の相違について.\
+\newblock \Jem{園田学園女子大学論文集}, {\Bbf 47}, \mbox{\BPGS\ 133--140}.
+
+\end{thebibliography}
+
+
+\appendix
+
+\section{誤用タイプ項目}
+\label{tbl:goyo-type-koumoku}
+
+{\bf 助詞 (P)} は，助詞の不足，余剰，誤った助詞の選択であり，複合助詞の誤用も含まれる．
+「に関する」や「について」などの複合助詞はしばしば誤用を引き起こす原因となる．
+表\ref{tbl:error-type}以外の例として「宇宙 {\bf に関した} 仕事をする」ではなく「*宇宙 {\bf に関して} 仕事をする」といった誤用も見られる．
+これは，「仕事」を修飾しているので，「に関して」ではなく「に関した」とならなければならない．
+
+{\bf 語彙選択 (SEM)}は，一単語内での誤った選択で，ふさわしい語彙を選べなかった（例えば，「国民」を「人民」と書いた）誤りである．
+ 表 \ref{tbl:error-type} にある例では， 誤用は「*{\bf 部分}の人」で，正用は「{\bf 一部}の人」であり，英語では ``some people'' となる．
+
+ {\bf 表記 (NOT)}には，ひらがな，かたかな，漢字に関する誤りなどが入る．
+ 
+ {\bf 不足 (OM)} は，不足している単語，句があれば，このタイプに分類される．
+日本語において未知の固有名詞について説明するときには「という」をつけるが（例：「 Nobu{\bf という} レストランに行きました」），日本語学習者はそれを落としやすい（「 *Nobu {\bf φ}レストランに行きました」）．
+ただし，それが「助詞」や「形容詞」などにも入る事例は，そちらを優先する．
+さらに，「不足の助詞」や「不足の形容詞」の場合，「助詞」や「形容詞」に分類している．
+判断がつきにくい事例の場合，（例えば，「の」については，複数の用法がある）．
+その場合は「不足」や「余剰」に入れる
+
+ {\bf 動詞 (V)}カテゴリーの誤用には，下位分類として動詞の活用，自動詞か他動詞か，受け身の誤り，テンスアスペクトの誤り，「〜ている」の不適切な使用が含まれる．
+「〜ている」はアスペクトと深く関わる問題であるため，誤用として多く見られる．
+そのため，上級の日本語学習者でさえ「日本に住んでいる」がなかなか使えず，「*日本に住む」という場合がある．
+
+{\bf 余剰 (AD)}  は，余分な単語や表現などの付加を指す．
+「不足」と同様に，「助詞」や「形容詞」などにも入る事例は，そちらを優先する．
+判断のつきにくい事例においては，「不足」の場合と同様の扱いをする．
+日本語学習者は，「*天気が寒くて」という文を作りたがるが，日本語では，「天気が」にわざわざ言及せず，「（今日は）寒くて」とする．
+
+{\bf 文体 (STL)}は，「です・ます体」に関する誤りを指す．
+日本語の作文では，文末の「です・ます体」か「だ・である体\footnote{論文などの堅い書き言葉ではこちらが好まれる．}」の一致を重要視するため，このような誤りが日本語学習者の作文でしばしば見られる．
+
+{\bf 名詞化 (NOM)}の誤りとは，動詞を名詞化するときの「の」と「こと」に関する誤用である．
+日本語において，英語の ``to watch/watching''  などのように名詞化するときに，「の」を使う場合と「こと」を使う場合とがある．
+例えば，「*趣味は英語をみる{\bf の}です」の文では，「の」は不適切であり，また，「*鳥が飛ぶ{\bf こと}をみました」では，「こと」は不自然となる．
+「の」と「こと」の使い分けは，文脈によって決まっている．
+
+{\bf 接続 (CONJ)} は，文同士，または単語同士を接続させるときに見られる誤用のことである．
+日本語では，``because'' に相当する表現として，「ので」や「から」があるが，文脈，話し言葉，書き言葉の違いによって使用が異なる．
+
+
+{\bf 形容詞 (ADJ)}は，形容詞に関係する誤用を指す．
+形容詞の活用の誤用，選択の誤用などが含まれる．
+日本語の形容詞は活用するため，活用がない言語を母語に持つ学習者にはこの間違いが多い．
+表 \ref{tbl:error-type} にあるように，「*僕は太{\bf くて}人ですから」は名詞を修飾しているので，「くて」と変換するのは誤りである．
+実際は，「僕は太{\bf い}人です」としなければならないが，活用の区別がついておらず，「太くて」と書いてしまう学習者が多々いる．
+
+{\bf 指示詞 (DEM)} は，「こ・そ・あ」に関する誤用を指す．
+他の言語では，この区別が2つしかない場合もあり，日本語学習者にとって使い分けが難しい項目の一つである．
+
+{\bf 語順 (ORD)}は，誤った語順を指す．
+日本語では助詞があるため文節の出現順が自由である．
+しかし，名詞と助詞の語順は固定している．
+例えば，英語のような語順「*より 7 月」ではなく「7 月より」が正しい．
+
+{\bf コロケーション (COL)} は，1単語内の誤りである「語彙選択 (SEM)」とは異なり，「名詞＋助詞＋動詞」といった組み合わせについての誤りは，こちらへ分類される．
+例えば，学習者は「*影響（名詞） + を（助詞） +くれる（動詞）」と書くが，日本人教師は「影響（名詞） + を（助詞） + 及ぼす（動詞）」に訂正している．
+それは3つの要素間の共起関係が影響していると見られる．
+
+{\bf ``だ'' の使用 (AUX)}は，日本語の複文における従属節に付与するコピュラ``だ'' の不適切な使用を指す．
+例えば，「$\ast$あの人は，きれいと思います」のような文における「だ」の不使用誤りなどが含まれる．
+さらに，「*あの人はきれいですと思います」という文もこのタイプに含まれる．
+
+{\bf 否定 (NEG)}は，「打ち消し」の意味を表す表現形式での誤りを指す．これには，否定辞「〜ない」の使用誤りや「なくて」と「ないで」の使い分けの誤りなどが含まれる．
+表 \ref{tbl:error-type} にあるように，否定理由を表す時には「なくて」を使用し（「家にいられ{\bf なくて}，外へ行きました」），否定付帯状況を示すときには「ないで」を使用する（「傘をもた{\bf ないで}，外へ行きました」）．
+
+{\bf 副詞 (ADV)} の誤用は，副詞句の使用誤りや副詞語彙の選択誤りなどを指す．形容詞に「に」や「と」を添えて，副詞を作り出すことがある．
+どちらを使うかはその副詞ごとに決まっている．
+例えば，「のんびり {\bf と}過ごした」とは言えても，「$\ast$のんびり {\bf に}過ごした」 とは言えない．
+日本語学習者はこの「に」か「と」かで迷う場合が多い．
+
+{\bf 代名詞 (PRON)} に関する誤用は代名詞に関する誤りで，例えば，「$\ast$彼{\bf たち}」は不適切で，「彼{\bf ら}」としなくてはならない．
+
+
+\section{誤用タイプ76項目}
+
+　　　　　　　　　　　　　　　　　　　　　
+
+
+\begin{table}[h]
+\vspace{-2\Cvs}
+\caption{誤用タイプ76項目}
+\label{tbl:goyo-type-76-koumoku}
+\input{02table07-1.txt}
+\end{table}
+
+\clearpage
+\begin{table}[h]
+\input{02table07-2.txt}
+\end{table}
+
+\clearpage
+\begin{table}[h]
+\input{02table07-3.txt}
+\end{table}
+
+\clearpage
+\begin{table}[h]
+\input{02table07-4.txt}
+\par\vspace{4pt}
+\small * これは\verb|"v"|（動詞）というカテゴリーの中で\verb|"othr"|（others: 他の単語）から\verb|"vol"|（volitional form: 意向形）へと添削されたことを示している．
+\end{table}
+
+
+\clearpage
+
+
+\begin{table}[h]
+\caption{誤用タイプ76項目におけるタグの説明}
+\label{tbl:goyo-type-76-koumoku-more}
+\input{02table08.txt}
+\end{table}
+
+
+
+\newpage
+\begin{biography}
+\bioauthor{大山　浩美}{
+1998年熊本県立大学大学院日本語日本文学課程修了．
+2001年イギリスランカスター大学言語学部修士課程修了．
+2010年奈良先端科学技術大学院大学情報科学研究科博士後期課程指導認定退学．
+現在，同大学研究員．
+研究テーマは自然言語処理技術を用いた教育支援，第二言語習得，教育工学，日本語教育などである．
+日本語教育学会員，日本語文法学会員，教育システム情報学会員．
+}
+\bioauthor{小町　　守}{
+2005年東京大学教養学部基礎科学科科学史・科学哲学分科卒．
+2007年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+2008年より日本学術振興会特別研究員 (DC2)．
+2010年博士後期課程修了．博士（工学）．同年より同研究科助教を経て，
+2013年より首都大学東京システムデザイン学部准教授．
+大規模なコーパスを用いた意味解析および統計的自然言語処理に関心がある．
+情報処理学会，人工知能学会，言語処理学会，電子情報通信学会，ACL各会員．
+}
+\bioauthor{松本　裕治}{
+1977年京都大学工学部情報工学科卒．
+1979年同大学大学院工学研究科修士課程情報工学専攻修了．
+同年電子技術総合研究所入所．
+1984〜85年英国インペリアルカレッジ客員研究員．
+1985〜87年（財）新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，
+1993年より奈良先端科学技術大学院大学教授．
+工学博士．
+専門は自然言語処理．
+情報処理学会，
+人工知能学会，
+言語処理学会，
+AAAI， ACL， ACM各会員．
+情報処理学会フェロー．
+ACL Fellow．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

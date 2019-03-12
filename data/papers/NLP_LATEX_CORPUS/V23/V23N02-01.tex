@@ -1,0 +1,867 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+
+
+
+
+\Volume{23}
+\Number{2}
+\Month{March}
+\Year{2016}
+
+\received{2015}{9}{2}
+\revised{2015}{11}{5}
+\accepted{2015}{12}{3}
+
+\setcounter{page}{175}
+
+\jtitle{集合分割問題に基づく系列アラインメントのモデル化}
+\jauthor{西野　正彬\affiref{ntt} \and 鈴木　　潤\affiref{ntt} \and 梅谷　俊治\affiref{ou} \and 平尾　　努\affiref{ntt} \and 永田　昌明\affiref{ntt}}
+\jabstract{2つの系列が与えられたときに，系列の要素間での対応関係を求めること
+を系列アラインメントとよぶ．系列アラインメントは，自然言語処理分野においても
+文書対から対訳関係にある文のペアを獲得する対訳文アラインメント等に広く利用さ
+れる．既存の系列アラインメント法は，アラインメントの単調性を仮定する方法か，
+もしくは連続性を考慮せずに非単調なアラインメントを求める方法かのいずれかであっ
+た．しかし，法令文書等の対訳文書に対する対訳文アラインメントにおいては，単調
+性を仮定せず，かつ対応付けの連続性を考慮できる手法が望ましい．本論文では，あ
+る大きさの要素のまとまりを単位として系列の順序が大きく変動する場合にアライン
+メントを求めるための系列アラインメント法を示す．手法のポイントは，系列アライ
+ンメントを求める問題を組合せ最適化問題の一種である集合分割問題として定式化し
+て解くことで，要素のまとまりの発見と対応付けとを同時に行えるようにした点にあ
+る．さらに，大規模な整数線形計画問題を解く際に用いられる技法である列生成法を
+用いることで，高速な求解が可能であることも同時に示す．
+}
+\jkeywords{系列アラインメント，組合せ最適化，列生成法}
+
+\etitle{Sequence Alignment as a Set Partitioning Problem}
+\eauthor{Masaaki Nishino\affiref{ntt} \and Jun Suzuki\affiref{ntt} \and  Shunji Umetani\affiref{ou} \and \\Tsutomu Hirao\affiref{ntt} \and Masaaki Nagata\affiref{ntt}}
+\eabstract{Sequence alignment, which involves aligning elements of two
+given sequences, occurs in many natural language processing (NLP) tasks such
+as sentence alignment.  Previous approaches for solving sequence alignment
+problems in NLP can be categorized into two groups. The first group assumes
+monotonicity of alignments; the second group does not assume monotonicity or
+consider the continuity of alignments. However, for example, in aligning
+sentences of parallel legal documents, it is desirable to use a sentence
+alignment method that does not assume monotonicity but can consider
+continuity.  Herein, we present a method to align sequences where block-wise
+changes in the order of sequence elements exist.  Our method formalizes a
+sequence alignment problem as a set partitioning problem, a type of
+combinatorial optimization problem, and solves the problem to obtain an
+alignment.  We also propose an efficient algorithm to solve the optimization
+problem by applying column generation.
+}
+\ekeywords{Sequence Alignment, Combinatorial Optimization, Column Generation}
+
+\headauthor{西野，鈴木，梅谷，平尾，永田}
+\headtitle{集合分割問題に基づく系列アラインメントのモデル化}
+
+\affilabel{ntt}{日本電信電話株式会社 NTT コミュニケーション科学基礎研究所}{NTT Communication Science Laboratories, Nippon Telegraph and Telephone Corporation}
+\affilabel{ou}{大阪大学大学院情報科学研究科}{Graduate School of Information Science and Technology, Osaka University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+\textbf{系列アラインメント}とは，2つの系列が与えられたときに，その構成要素間の
+対応関係を求めることをいう．系列アラインメントは特にバイオインフォマティクス
+においてDNAやRNAの解析のために広く用いられているが，自然言語処理においてもさ
+まざまな課題が系列アラインメントに帰着することで解かれている．代
+表的な課題として\textbf{対訳文アラインメン
+ト}\cite{moore02:_fast,braune10:_improv,quan-kit-song:2013:ACL2013}があげら
+れる．対訳文アラインメントは対訳関係にある文書対が与えられたときに，文書対の中か
+ら対訳関係にある文のペアをすべて見つけるタスクである．統計的機械翻訳においては，対訳コー
+パスにおいてどの文がどの文と対訳関係にあるかという文対文での対応関係が与えら
+れているという前提のもとで学習処理が実行されるが，実際の対訳コーパスでは文書
+対文書での対応付けは得られていても文対文の対応付けは不明なものも多い．その
+ため，対訳文書間での正しい対訳文アラインメントを求めることは精度のよいモデルを推
+定するための重要な前処理として位置づけられる．統計的機械翻訳以外の，
+例えば言語横断的な情報検索~\cite{nie1999cross}などの課題においても対訳文書間
+の正しい文アラインメントを求めることは重要な前処理として位置づけられる．また，
+対訳文アラインメントのほかにも，対訳文書に限定されない文書間の対応付けタスクも系列アラインメントとして
+解かれている~\cite{qu-liu:2012:ACL2012,孝昭15,要一12}．
+
+
+
+自然言語処理のタスクにおける系列アラインメント問題を解く手法は，対応付けの
+\textbf{単調性}を仮定する方法とそうでない方法とに大別される．単調性を仮定する系
+列アラインメント法は特に対訳文アラインメントにおいて広く用いられる方法であり，
+対訳関係にある二つの文章における対応する文の出現順序が大きく違わないことを前
+提として対応付けを行う．すなわち，対訳関係にある文書のペア$F$，$E$に対し，
+$F$の$i$番目の文$f_i$に$E$の$j$番目の文$e_j$が対応するとしたら，$F$の$i+1$番
+目の文に対応する$E$の文は，（存在するならば）$j+1$番目以降であるという前提の
+もとで対応付けを行っていた．この前提は，例えば小説のように文の順序が大きく変
+動すると内容が損なわれてしまうような文書に対しては妥当なものである．一方で単
+調性を仮定しない方法は~\cite{qu-liu:2012:ACL2012,孝昭15,要一12}などで用いられ
+ており，文間の対応付けの順序に特に制約を課さずに系列アラインメントを求める．
+図~\ref{fig:prevwork}は，それぞれ単調性を仮定した系列アラインメント，仮定しな
+い系列アラインメントの例を表している．白丸が系列中のある要素を表現しており，
+要素の列として系列が表現されている．図では2つの系列の要素間で対応付けがとら
+れていることを線で示している．単調性を仮定した対応付け手法では，対応関係を表
+す線は交差しない．一方で仮定しない手法では交差することが分かる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-2ia1f1.eps}
+\end{center}
+\caption{既存の系列アラインメント法によるアラインメント例}
+\label{fig:prevwork}
+\end{figure}
+
+系列アラインメントにおいて単調性を仮定することは，可能なアラインメントの種類
+数を大きく減少させる一方で，動的計画法による効率的な対応付けを可能とする．先
+述したように，対訳文アラインメントを行う際に単調性を仮定することは多くの対訳
+文書に対しては妥当な仮定である．しかし，単調性を仮定することが妥当でない対訳
+文書も存在する．例えば文献~\cite{quan-kit-song:2013:ACL2013}では，単調性が成
+り立たない文書の例として法令文書を挙げている．そのほかにも例えば百科事典や
+Wikipediaの記事のように一つの文書が独立な複数の文のまとまりからなる場合には，
+文のまとまりの出現順序が大きく変動しても内容が損なわれないことがある．このよ
+うな文書においては，文の順序が大きく変動しないという前提は必ずしも正しいもの
+ではないため，既存の単調性を仮定した系列アラインメント法では正しい対訳文アラ
+インメントが行えない可能性が高い．
+
+一方で，単調性を仮定しない既存のアラインメント法では非単調な対応付けを実現で
+きるものの，対応付けの\textbf{連続性}を考慮することが難しいという問題がある．対
+応付けの連続性とは，$f_i$が$e_j$と対応付けられているならば，$f_{i+1}$は$e_j$
+の近傍の要素と対応付けられる可能性が高いとする性質のことで
+ある\footnote{\ref{sec:setpart}節以降の提案手法の説明では，説明を簡単にする
+ために，対応付けに順方向の連続性がある場合，すなわち$f_i$と$e_j$
+  が対応付けられているならば$f_{i+1}$は$e_{j}$より後ろにある近傍の要素と対
+  応付けられやすい場合のみを扱っている．しかし，実際には提案法は順方向に連続性
+  がある場合と同様に逆方向の
+  連続性がある場合の対応付けを行うこともできる．逆方向の連続性とは，$f_i$と$e_j$が
+  対応付けられているならば，$f_{i+1}$は$e_{j}$以前の近傍の要素と対応付けられ
+  る可能性が高いとする性質のことである．}．もし対応付けにおいて連続性を考慮しないとすると，系列$F$中のある要素
+$f_i$とそれに隣接する要素$f_{i+1}$とが，それぞれ$E$中で離れた要素と対応付け
+られてもよいとすることに相当する．対応付けの単調性を仮定できるような対訳文書
+の対訳文アラインメントについては，明らかに対応付けの連続性を考慮する必要があ
+る．さらに，単調性が仮定できないような文書のペアに対する対訳文アラインメント
+においても，ある文とその近傍の文が常に無関係であるとは考えにくい．以上より，
+文アラインメントにおいては連続性を考慮することが不可欠である．また，対訳文ア
+ラインメント以外の系列アラインメントを用いるタスクにおいても，対応付けの対象
+となる系列は時系列に並
+んだ文書等，何らかの前後のつながりを仮定できるものが多いことから，連続性を考
+慮する必要がある．
+
+単調性を仮定できない文アラインメントの例を示す．図\ref{fig:hourei}は，
+文献~\cite{quan-kit-song:2013:ACL2013}の検証で用いられている Bilingual Laws
+Information System (BLIS) \footnote{http://www.legistlation.gov.hk}コーパ
+スに含まれる対訳文書における
+文アラインメントの例である．BLISは香港の法令文書の電子データベースであり，
+対訳関係にある英語・中国語の文書を保持している．図に示す対訳文は用語の定義を行っている箇所である．両言語の文を比べると，定義する用語の順番が英語と中国語とで異なっ
+ており，結果として，局所的には連続なアラインメントが非単調に出現する対訳文書となっている．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-2ia1f2.eps}
+\end{center}
+\caption{法令文書における非単調な対訳文アラインメントの例}
+\label{fig:hourei}
+\end{figure}
+
+本論文では系列の連続性を考慮しつつ，かつ非単調な系列アラインメントを求めるた
+めの手法を提案する．このような系列アラインメント法は，単調性を仮定できない文
+書対の対訳文アラインメントを求める際に特に有効であると考える．仮に文書$F$の文が
+$E$の任意の文と対応してもよいとすれば，ある文のペアの良さを評価するスコアを
+適切に設定することによって，問題を二部グラフにおける最大重みマッチング問
+題 \cite{korte08:_combin_optim}として定式化して解くことができる．しかし，$F$
+のある文が$E$の任意の文と対応してもよいという前提では，近傍の文間のつながり
+を無視して対応付けを行うことになる．実際の文書ではすべての文がその近傍の文と
+無関係であるとは考えにくいため，正しい対応付けが行えない可能性が高い．そこで，
+提案手法では対訳文アラインメントを組合せ最適化の問題の一つである\textbf{集合分割問
+題}として定式化して解く．集合分割問題は，ある集合$S$とその部分集合族$S_1,
+\ldots, S_N$が与えられたときに，スコアの和が最大となるような$S$の分割
+$\mathcal{D} \subseteq \{S_1, \ldots, S_N\}$を見つける問題である．ここで
+$\mathcal{D}$が$S$の分割であるとは，$S = \cup_{S_i \in \mathcal{D}} S_i$かつ
+$i\neq j$ならば任意の$S_i, S_j \in \mathcal{D}$について$S_i \cap S_j =
+\emptyset$となることをいう．2つの系列$F$, $E$のある部分列に対する単調な系列
+アラインメントの集合を$S_1, \ldots, S_N$として表現することで，部分列に対する
+アラインメントの集合$S_1, \ldots, S_N$から系列全体の分割となるような部分集合
+を選択する問題として$F$, $E$全体に対する系列アラインメントを求めることができ
+る．
+
+また，本論文では集合分割問題としての系列アラインメントの定式化とともに，その高速
+な求解法も同時に示す．提案する集合分割
+問題に基づく定式化を用いると，
+系列$F$, $E$に含まれる要素の数が増加するに伴い，急激に厳密解の求解に時間がか
+かるようになるとい
+う課題がある．これは，それぞれの系列に含まれる要素の総数を$|F|$, $|E|$とす
+ると，集合分割問題に出現する変数の数\footnote{集合分割問題における変数の数
+は，可能な$F$, $E$の部分系列のペアの総数と等しい．詳細は\ref{sec:setpart}章
+を参照．}が$O(|F|^{2}|E|^{2})$となるためである．集
+合分割問題はNP困難であり，変数の数が増加すると各変数に対応する重みの計算お
+よび整数線形計画法ソルバを用いた求解に時間がかかるようになる．本論文ではこの課
+題に対処するために，多くの変数が問題中に出現する大規模な線形計画問題を解く際に用いられる，
+\textbf{列生成法} \cite{lubbecke05:_selec_topic_colum_gener} を用いることで高速な系
+列アラインメントを実現する近似解法も同時に提案する．列生成法は大規模な問題の
+解を，出現する変数の個数を制限した小さな問題を繰り返し解くことによって求める
+手法である．列生成法を用いることによって，そのままでは変数の数が膨大となり解
+くことができなかった問題を解くことができる．なお，列生成法を用いることで線形
+計画問題の最適解を得られることは保証されているが，整数線形計画問題については
+解を得られることは必ずしも保証されていない．そこで本論文では列生成法で
+得られた近似解を実験によって最適解と比較し，よい近似解が得られていることを確認する．
+
+なお，以下では説明を簡単にするために特に対訳文書の対訳文アラインメントに話題を限
+定して説明を進める．ただし，系列の要素間のスコアさえ定まれば提案法を用いて
+任意の系列のペアに対する系列アラインメントを行うことが可能である．
+
+
+\section{関連研究}
+
+対訳文アラインメントに関しては，これまで，文の長さを対応付けに利用する方法
+\cite{gale93:_progr_align_senten_bilin_corpor}，語の翻訳確率と文の長さを利用
+する方法\cite{moore02:_fast,braune10:_improv}などが提案されてきているが，ほ
+とんどの方法でアラインメントの単調性を仮定している．単調性を仮定することによっ
+て動的計画法によって効率的に対訳文アラインメントを求めることができるという利点は
+あるが，序章で述べたように単調性が成り立たない文書対に対しては正しいアライン
+メントを求めることができないという欠点がある．Dengらは系列マッチングとクラス
+タリングをあわせて利用することで，文の順序が入れ替わる場合でも対訳文アラインメン
+トを行える手法を提案している\cite{deng07:_segmen}．しかし，Dengらの手法は，あ
+る隣接する二つの文の順序が入れ替わるなど，順序の入れ替わりが小さい範囲で起き
+ることを想定した手法であり，より大きな範囲での順序の入れ替わりには対処できな
+い．
+
+対訳文間の単調性を仮定しない，非単調な対訳文アラインメントを求めるための手法とし
+て，近年Quanらは半教師あり学習の枠組みに基づく文対応付け手法を提案している
+\cite{quan-kit-song:2013:ACL2013}．彼らの手法は基本的には二部グラフマッチン
+グに基づくアラインメント法であるが，各文書における文間の類似度合いを対応付け
+のための目的関数に用いている点が特徴的である．Quanらの手法と比較すると，提案
+法は文のまとまり単位のアラインメントをより明示的に意識した手法となっているこ
+とが異なる．Quanらの手法は隣り合う文間の関係を明示的には考慮しないため，対訳
+文書間で文の出現順序が全く異なる文書により適している．また，Quanらの手法は二
+部グラフマッチングに基づく手法のため多対多のアラインメントには対応できないが，
+提案法は内部で呼び出す既存の単調性を仮定した対訳文アラインメント法を多対多のマッ
+チングを考慮するものに変更することによって，容易に多対多の対訳文アラインメントを
+行うように拡張できる点も異なる．
+
+対訳文アラインメント以外にも，さまざまな自然言語処理のタスクが系列アラインメント
+問題として定式化され解かれている．例えば質問応答ウェブサイトにおける質問と回答との対応付
+け~\cite{qu-liu:2012:ACL2012}や，ウェブサイトにおけるレビュー文とそれに対する
+返答のペア~\cite{孝昭15}，条例文~\cite{要一12}の対応付けといったタスクなどが
+ある．
+
+対訳文アラインメント以外の自然言語処理における重要な系列アラインメント問題の
+適用先として，単語アラインメントが挙げられる．単語アラインメント問題に関して
+は非単調なアラインメントを求めるための手法が数多く提案されてきている．
+Brownらは，原言語の各単語は必ず目的言語のある単語に対応付けられるなどの
+制約のもとで，生成モデルに基づいた単語の非単調なアラインメントを行っている
+\cite{brown93}．また，Wuは反転トランスダクション文法に基づいた非単調な単語ア
+ラインメント法を提案している\cite{Wu:1997:SIT:972705.972707}．これらのうち，
+\cite{brown93}は単語アラインメントに固有の性質を扱っており，本論文で扱ってい
+る対訳文アラインメントに直接適用するのは難しい．また，反転トランスダクション
+文法に基づく手法は，提案法に類似の非単調な対訳文アラインメントを実現可能な文
+法規則を設計できる．しかし，反転トランスダクション文法では連続な文間の非単調
+なアラインメントの形態が制限される点が提案手法と異なる．
+
+
+\section{単調性を仮定した対訳文アラインメント法}
+\label{sec:monotone}
+
+提案法の説明の準備として，単調性を仮定した動的計画法に基づく既存の対訳文アライ
+ンメント法について説明する．
+単調性を仮定した対訳文アラインメント
+法では，対訳文書$F$, $E$のある文のペア$s \in F$, $t \in E$が対応付けられた時のス
+コア$S(s, t)$が与えられたときに\footnote{なお，対訳文アラインメントの手法によっては
+多対多の対応付けのスコアも加味することによって，多対多の対応付けが可能なもの
+も存在する．}，スコアの総和が最大となる
+ような単調な対訳文アラインメントを求める．
+アラインメントの単調性を仮定すると，最適な系列アラインメントは動的計画法を用いることで高速に求める
+ことができる．
+
+これまでにさまざまなスコア$S(s, t)$の定義が提案されてきているが，代表的
+な対訳文アラインメント法であるMooreによる手法\cite{moore02:_fast}では，
+文の長さと文中の語の翻訳確率とを用いることでペアのスコアを定義し，
+対訳文アラインメントに含まれるペアのスコアが最大となるようにアラインメントを求め
+る．具体的には，$s \in F$である文$s$と$t \in E$である文$t$とのペアのスコア
+$S(s, t)$を
+\begin{equation}
+ S(s, t) 
+	= \frac{P(m_s, m_t)}{(m_s + 1)^{m_t}}\Biggl(\prod_{j=1}^{m_t}\sum_{i=1}^{m_s} tr(t_j|s_i)\Biggr)
+	\Biggl(\prod_{i=1}^{m_s}u(s_i)\Biggr)
+\label{eq:moore}
+\end{equation}
+として定める．ここで，$m_s$, $m_t$はそれぞれ文$s$, $t$に含まれる単語の総数で
+ある．また，$s_i$, $t_j$はそれぞれ$s$の$i$番目の語，$t$の$j$番目の語を表す．
+$tr(t_j|s_i)$は語$s_i$が$t_j$に翻訳される確率である．$u(s_i)$は語$s_i$の文書
+中での相対頻度を表す．$P(m_s, m_t) $は，文の長さ（語の数）に応じてスコアを定
+める関数であり，ポアソン分布を用いて
+\begin{equation}
+ P(m_s, m_t) = \frac{\exp{(-m_sr)}(m_sr)^{m_t}}{m_t!}
+\end{equation}
+として定義される．$r$はパラメータである．各確率分布は~\cite{brown93}にある手
+法によってデータから推定できる．
+
+
+\section{集合分割問題に基づく対訳文アラインメントのモデル化}
+\label{sec:setpart}
+
+本論文で提案する対訳文アラインメント法の概観を示す．提案法のポイントは，
+文書を連続する文のまとまりに分割してアラインメントを求める点にある．
+すなわち，対訳文書のそれぞれを同数の文のまとまりに分割したのち，
+ \begin{enumerate}
+  \item どの文のまとまり同士が対応付けられるか
+  \item 対応付けられた文のまとまりのペアの中で，どの文のペアが対応付けられるか
+ \end{enumerate}
+を同時に求めることで対応付けを行う．このときに(1)について非単調な対応付け，
+(2)については単調な対応付けを行うことによって，連続性を考慮した非単調な対応
+付けを実現する．
+それぞれの文書を3つのまとまりに分割したときの提案法による対訳文アラインメン
+トの様子を図\ref{fig:align_example}に示す．図中の白い丸がひとつの文に対応し
+ている．また，複数の丸を囲む四角が文のまとまりを表す．図より，文のまとまり同
+士の対応付けにおいては非単調な対応付けを行っていることと，文のまとまりに含ま
+れている文同士の対応付けにおいては単調な対応付けを行っていることが分かる．文
+のまとまりに含まれる文同士の対応付けは，既存の単調な対訳文アラインメント法に
+よって行われる．つまり，対応付けられる各文書を1つのまとまりだとみなした場合
+は，文書全体で単調な対応付けを行うことになるため，提案手法は既存の対訳文アラ
+インメント法と同等である．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-2ia1f3.eps}
+\end{center}
+\hangcaption{提案法による対訳文アラインメントの概観．各文書を3つの連続する文のまとまりに分割し，文のまとまり間で非単調な対応付けを行っている．対応付けられた文のまとまりのペアに含まれる文間では，単調な対応付けを行っている．結果として文書全体に対する対訳文アラインメントが得られている．}
+\label{fig:align_example}
+\end{figure}
+
+以下で用いる記法について述べる．対応付けをとる対象の2つの文書を$F$, $E$とし，
+それぞれ$|F|$，$|E|$個の文からなるとする．$f_i$を$F$に含まれる$i$番目の文，
+$e_k$を$E$に含まれる$k$番目の文とする．$F$の$i$番目から$j$番目までの連続する
+文の集合を$f_{ij} \subseteq F$とする．ただし$1 \leq i \leq j \leq |F|$である．
+同様に，$e_{kl} \subseteq E$は$E$の$k$番目から$l$番目までの連続する文の集合と
+する．ただし$1 \leq k \leq l \leq |E|$である．また，$a_{ijkl}$を文のまとまり
+のペア$(f_{ij}, e_{kl})$を表現するために用い，$f(a_{ijkl}) = f_{ij}$,
+$e(a_{ijkl}) = e_{kl}$と定義する．
+
+文のまとまり$f_{ij}$と$e_{kl}$のペアに対して，既存の単調性を仮定した対訳文アラインメ
+ント法を適用することによって得られる文アラインメントのスコアを
+$\mathrm{seqMatch}(f_{ij}, e_{kl})$とする．すなわち，$f_{ij}$，$e_{kl}$間
+のある単調なアラインメントを$X$, すべての単調な対訳文アラインメントの集合を$\mathcal{A}_{ijkl}$とすると，
+$\mathrm{seqMatch}(f_{ij}, e_{kl})$は
+\begin{equation}
+\mathrm{seqMatch}(f_{ij}, e_{kl}) = \max_{X \in \mathcal{A}_{ijkl}}
+ \sum_{(s, t) \in X} S(s, t)
+\end{equation}
+として定義される．
+
+
+
+\subsection{集合分割問題に基づく定式化}
+
+前節で定義した$\mathrm{seqMatch}(f_{ij}, e_{kl})$は，文のまとまり$f_{ij}$と
+$e_{kl}$のペアに対する対応付けスコアであるとみなすことができる．このスコアを
+用いて文のまとまり同士の一対一の対応付けを求める．文のまとまり同士の対応付け
+を求めることができれば，
+それに含まれる文間の対応付けは$\mathrm{seqMatch}(f_{ij}, e_{kl})$を求める際
+に既に求めてあるため，結果として対訳文アラインメントが得られる．
+可能なすべての文のまとまりのペア$a_{ijkl}$の集合を$\mathcal{M}$とすると，あ
+る文アラインメントは，$\mathcal{M}$の部分集合であり，かつ文書対の分割となっ
+ているような文のまとまりのペアの集合$A \subseteq \mathcal{M}$と
+して表現できる．ただし，$A$に含まれる任意の文のまとまりのペア
+$a, a^{\prime} \in A$について$f(a) \cap f(a^{\prime}) = \emptyset$かつ$e(a)
+\cap e(a^{\prime}) = \emptyset$であり，$\cup_{a \in A}f(a) = F$かつ$\cup_{a
+\in A}e(a) = E$を満たすものとする．上記の条件を満たす$A$の集合を
+$\mathcal{A}$とすると，対訳文アラインメントを求める問題は，
+\begin{equation}
+ \hat{A} = \mathop{\rm argmax}_
+ {A \in \mathcal{A}}\left\{\mathrm{score}( A)\right\}
+\label{eq:ast}
+\end{equation}
+として，マッチングのスコアを最大とする$\hat{A}$を求める問題として定式化する
+ことができる．ここで$\mathrm{score}(A)$は，$F$と$E$に対する分割
+$A$を定めたときのスコアであり，以下のように定義する．
+\begin{equation}
+ \mathrm{score}(A) = \lambda^{K} \prod_{a \in A} \mathrm{seqMatch}(f(a), e(a))
+\label{eq:sub}
+\end{equation}
+ここで$K$は$A$中に含まれる文のまとまりのペアの総数，$\lambda$はペアの個数に
+応じて課されるペナルティを表すパラメタであり，$0 < \lambda \leq 1$を満たすよ
+うに設定する．$\lambda=1$とすると解に出現する文のまとまりのペアの個数に制限
+をつけないことに相当するため，文の連続性を考慮しないアラインメントが得られる．
+一方で$\lambda$に小さな値を設定することは，解に出現する文のまとまりの個数に
+対して大きなペナルティを与えることに相当するため，できるだけ小ない個数の文の
+まとまりが解に含まれるようになる．$\lambda$をある程度以上小さな値に設定する
+と常に1つの文のまとまりのペアに分割されるようになる．これは既存の単調な対訳文ア
+ラインメントと等しい．
+
+式(\ref{eq:sub})の対数をとると，$\mathrm{score}(A)$は文のまとまりのペア$a$に対する線形式に置き換えることができる．よって，
+ここでの対訳文アラインメント問題は整数線形
+計画問題(ILP)として定式化することができる．ILPによる定式化は，
+\begin{align}
+ \mbox{maximize} & \sum_{ijkl} (w_{ijkl} + \log \lambda) y_{ijkl} \label{eq:obj}\\
+ \mbox{subject to} & \sum_{i,j: i\leq x \leq j}\sum_{kl} y_{ijkl} = 1 ~~~~~\forall x : 1 \leq x
+  \leq |F| \label{eq:cond1}\\
+&\sum_{ij}\sum_{k,l: k \leq x \leq l} y_{ijkl} = 1 ~~~~~\forall x : 1 \leq x
+  \leq |E| \label{eq:cond2}\\
+ & y_{ijkl} \in \{0, 1\} ~~~~~~~~~~~~\forall i,j,k,l 
+\label{eq:lasteq}
+\end{align}
+となる．ここで，$w_{ijkl}$は$\log{\mathrm{seqMatch}(f_{ij}, e_{kl})}$の値で
+ある．$y_{ijkl}$は文のまとまりのペア$a_{ijkl}$をアラインメントに含むことを表す変数であり，$y_{ijkl} =1$のと
+きは$a_{ijkl}$が対訳文アラインメントに含まれるとする．制約
+(\ref{eq:cond1}) は，$F$中の$x$番目の文を含むすべての文のまとまりのペア$a_{ijkl}$のうち，
+必ず1つだけが解に選択されることを保証するものである．(\ref{eq:cond2}) は
+同様の制約を$E$に課したものであり，これら2つの制約を併せて $F$と$E$に含まれる各文が最
+終的に得られた文のまとまり同士の対応付けのいずれか1つに必ず含まれることを保
+証する．今回用いた定式化は，任意のペア$(f_{ij}, e_{kl})$に対応する
+集合の集まりである集合族に対する\textbf{集合分割問題}となっている．
+なお，提案法は既存の単調な文アラインメント法として，多対多のアラインメントを
+求めることができる手法を用いることによって，非単調な多対多のアラインメントを
+実現することができる\footnote{多対多のアラインメントのほかには，例えば
+$f_1$-$e_4$, $f_2$-$e_3$, $f_3$-$e_2$, $f_4$-$e_1$といったような逆順で単調
+なアラインメントを解の一部として含むようにすることも可能である．具体的には式(3)において
+seqMatch($f_{ij}, e_{kl}$) を通常順，逆順の全ての可能な対応付けからスコアを最
+大にするものを選択するように修正すればよい．逆順の単調なアラインメントは，片
+方の系列を逆順にしたうえで，単調性を仮定した動的計画法によるアラインメント法
+を実行することで求めることができる．}．
+
+
+\section{列生成法}
+\label{sec:colgen}
+
+式~(\ref{eq:obj})から~(\ref{eq:lasteq})からなる整数線形計画問題はすべての文
+のまとまりのペア数に対応する数の変数を含む．このようなペアは
+$|F||E|(|F|+1)(|E|+1)/4$種類存在するため，文の数が増加すると整数線形計画問題
+に含まれる変数の数が急増し，解を求めるのに時間がかかるという問題がある．本論
+文では列生成法~\cite{lubbecke05:_selec_topic_colum_gener}を用いた近似解法を導
+入することでこの問題に対応する．一般的な整数線形計画問題の解法では，すべての変
+数を求解時に明示的に扱って解を求めるが，列生成法では目的関数の増加に寄
+与する可能性がある変数を逐次的に追加しながら問題を解くことで解を求める．最適
+解において非ゼロとなる変数の数が問題全体で扱う変数の数に対して
+非常に小さい場合，最適解においてゼロとなる変数を考慮せずに解が得られる可能性が高いことから，
+列生成法によって高速に解を得られることが期待できる．
+
+以下，列生成法に基づく解法の詳細を述べる．列生成法を導入するにあたり，いくつ
+かの概念を定義する．まず，式~(\ref{eq:obj})から~(\ref{eq:lasteq})からなる整
+数線形計画問題を線形緩和した問題，つまり制約$a_{ijkl} \in \{0, 1\}$を$0 \leq
+a_{ijkl} \leq 1$へと緩和した問題を主問題 (Master problem: MP) とよぶ．主問題
+に含まれるすべての変数の集合を$\mathcal{M}$とする．MPからいくつかの変数を取
+り除いた問題を\textbf{制限された主問題} (Restricted master problem: RMP) とよぶ．
+RMPに出現する変数の集合を$\mathcal{M}^{\prime} \subseteq \mathcal{M}$と表す．
+ある線形計画問題の双対問題とは，もとの問題の各変数にそれぞれ対応する制
+約条件と，もとの問題の各制約条件に対応する変数からなる線形計画問題のことであ
+る．RMPに対しても双対問題を考えることができる．双対問題においてRMPにおける文
+$f_n$に関する制約に対応する変数を$u_n$, $e_m$に関する制約に対応する変数を
+$v_m$とする．線形計画問題が最適解を持つのであれば，最適解の値はそれは双対問
+題の最適解の値と一致することが知られており，RMPの最適解を単体法を用いて得る
+ことができたならば，双対問題の最適解も容易に計算可能である．
+
+列生成法はRMPの求解とRMPに追加する変数を求める問題とを繰り返し解くことでMPを
+解く．追加する変数を求める問題は\textbf{列生成部分問題}とよばれ，具体的には$a_{ijkl}
+\in \mathcal{M} \setminus \mathcal{M}^{\prime}$であるような$a_{ijkl}$の
+\pagebreak
+うち，
+\begin{equation}
+\label{eq:1}
+\overline{w}_{ijkl}  = w_{ijkl} + \log \lambda - \sum_{n=i}^{j}\hat{u}_{n} - \sum_{m=k}^{l}\hat{v}_{m}
+\end{equation}
+を最大とするものを一つ求める問題である．
+ここで，$\hat{u}_n$はRMPの双対問題の最適解における変数$u_n$の値，
+$\hat{v}_m$は変数$v_m$の値とする．
+以下では$\overline{w}_{ijkl}$のことを\textbf{被約費用}とよ
+ぶ．あるRMPを解いた後に各変数に対する被約費用がすべて負となるとき，RMPの最適
+解はMPの最適解となることが知られている．最適解において多くの変数の値がゼロと
+なるような問題においては，出現する変数の数がMPよりも大幅に少ないRMPを解くこ
+とでMPの最適解が得られることが期待できるため，列生成法は大規模な最適化問題を
+高速に解くことができる．
+
+列生成部分問題を解くことを考える．前述のとおり，変数は$|F||E|(|F|+1)(|E|+1)/4$個あるため，その全てについ
+て被約費用を求めるのは困難である．しかし，スコア$w_{ijkl}$が
+\ref{sec:monotone}章で述べたように動的計画法によっ
+て求められること，および被約費用の式~(\ref{eq:1})において$\hat{u}_n$, $\hat{v}_m$が対応す
+る文ごとにそれぞれ独立に作用していることを利用すると，最大の被約費用を
+Smith-Waterman法~\cite{smith81:_ident_common_molec_subseq}に類似した動的計画
+法によって求めることができる．Smith-Waterman法はバイオインフォマティクスの分野で提案された，配
+列の局所アラインメントを求めるためのアル
+ゴリズムであり，動的計画法に基づいて長さ$N$, $M$の二本の配列に対する局所アラインメントを$O(NM)$時間で求めることができる．ここで局所アラインメント
+とは，二本の配列の可能な部分配列間の系列アラインメントのうち，スコアを最大と
+するもののことである．
+動的計画法は以下の局所アラインメントの再帰的な定義に沿って計算する．なお，以
+下では説明を簡単にするため，提案法内で利用する単調なアラインメントを求める手
+法が一対一のアラインメントのみを求めると仮定している．しかし，多対多のアライ
+ンメントを求めることができる手法を利用した場合であっても，下記の再帰式を
+容易に拡張することが可能である\footnote{逆順の単調なアラインメントを含むとき
+も同様に，列生成法に対応する事が可能である．}．
+
+$q[j,l]$をその末尾の要素がそれぞれ$f_j, e_l$であるような文のまとまりのペアの
+被約費用$\overline{w}_{ijkl}$ ($1 \leq i \leq j$, $1 \leq k \leq l$)の最大値
+とすると，$q[j,l]$は
+\begin{equation}
+ \label{eq:recursion}
+ q[j,l] = \max \left\{
+           \begin{array}{l}
+            \log \lambda \\
+            q[j-1,l-1] + S(f_j, e_l) - \hat{u}_j - \hat{v}_l \\
+            q[j-1,l] + S(f_j) - \hat{u}_j \\
+            q[j,l-1] + S(e_l) - \hat{v}_l
+           \end{array}
+          \right.
+\end{equation}
+として再帰的に計算することができる．なお$q[0,0] = \log \lambda$とする．ここで$S(f_j, e_l)$, $S(f_j)$, $S(e_l)$は，
+既存の単調性を仮定した（例えば \cite{moore02:_fast}など）対訳文アラインメント法にお
+いて利用されるスコアであり，それぞれ文$f_j$と文$e_l$とを対応付
+けたときのスコア，$f_j$を$E$のどの文とも対応させなかったときのスコア，$e_l$を
+$F$のどの文とも対応させなかったときのスコアである．最上段の選択肢$\log
+\lambda$は，$f_{j+1}$, $e_{l+1}$を開始位置とする文のまとまりのペアの被約費用が，
+$f_{j}$, $e_{l}$を含む文のまとまりのペアの被約費用よりも必ず大きくなるときに
+選択される．
+すべての$1 \leq j \leq
+|F|$, $1 \leq l \leq |E|$について動的計画法によって$q[j,l]$を計算したのちに，それらのうち最大値
+をとることで被約費用の最大値を求めることができる．さらに，
+$q[j, l]$を計算する際に (\ref{eq:recursion})のどの式をもとに計算したかを記憶しておけば，
+最大値をとる$q[j, l]$からバックトラッキングを実行することによって被約費用を最大とする
+$x_{ijkl}$を求めることができる．すなわち，(\ref{eq:recursion})の4種類の
+選択肢のうち，下3種類の選択肢のいずれかが利用されたのであればそれぞれの式中
+に出現している$q[j-1, l-1]$, $q[j-1, l]$, $q[j, l-1]$のいずれかに遷移し，
+バックトラッキングを続ける．もし最上段の選択肢$\log \lambda$が利用されたので
+あれば，そこでバックトラッキングを終了する．バックトラッキングを終了したとき
+の状態を$q[j^\prime, l^\prime]$とすると，$i = j^{\prime} + 1$，$k =
+l^{\prime} + 1$，として$i$と$k$が求まる．
+すべての$q[j, l]$を計算する動的計画法は
+$O(|F||E|)$，バックトラッキングは高々$O(|F| + |E|)$時間で
+実行できるため，Smith-Waterman法によって被約費用を最大とするアイテムを効率的
+に選択できる．
+
+\begin{figure}[b]
+\vspace{-0.5\Cvs}
+\begin{center}
+\includegraphics{23-2ia1f4.eps}
+\end{center}
+\caption{列生成法を用いた近似アルゴリズム}
+\label{fig:colgen}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+列生成法の手順を図~\ref{fig:colgen}に示す．まずRMPに含まれる変数の集合
+を$\mathcal{M}^{\prime} = \{x_{1|F|,1|E|}\}$として初期化する (line 1)．$x_{1|F|,1|E|}$はすべての
+文からなる文のまとまりであり，実行可能解であることから，以降のRMPは必ず実行
+可能解をもつことが保証される．以降，RMPの求解\footnote{RMPは線形計画問題で
+あるため効率的に解ける．また，各繰り返しにおいて前回RMPを解いたときの解
+を初期解とすることで高速に解を求めることができることが知られている．} (line 3)
+とSmith-Waterman法による列生成部分問題の求解 (line 4) 
+とを繰り返す．もしすべての変数で被約費用が負となったら (line 5) ，そ
+の時点でMPの最適解が得られていることになるので，最後に現在のRMPに整数制約を追加し
+たうえで整数線形計画問題を解いて得られた解を出力する (line 8) ．
+ここで，RMPに整数制約を追加して得られた解が必ずしも元のMPに整数制約を追加
+して得られた解と一致するわけではないことに注意する必要がある．すなわち，提案
+法はヒューリスティクスであり，必ずしも厳密な最適解を得られるわけではない．そ
+こで検証によって厳密解との差を評価する．
+
+
+\section{検証}
+
+\subsection{検証設定}
+
+提案手法の有効性を検証する．非単調な系列アラインメントはいくつかの研究で検証
+されているが，正解の対応付けが公開されていないことから，今回は検証のためのデー
+タとして文対応が既知である日本語と英語の対訳文書から生成した人工データを用い
+た．対訳文書はそれぞれ約25,000文からなる．この文書から取り出した2,500文から
+文の長さが一定以上に長いものと短いものとを除いたものをテストデータを生成する
+元データ，残りを翻訳確率等を推定するための訓練データとして用いた．
+
+テストデータの生成手順は以下のとおりとする．まず，元データのそれぞれの文書集
+合から，$K$個の対応関係にある連続する文のまとまりをランダムに取り出す．なお，
+対応関係にある文のまとまりには，対訳関係になっていない文も含まれる．その後，
+取り出した文のまとまりをランダムに並べなおしたのちに，各まとまりに含まれる文
+を順に並べることで文のまとまり単位での移動があるデータセットを作成した．テス
+トデータの文の数は日本語，英語ともに60文とし，まとまりの数は$K = 1, 3, 6,
+12, 20$と
+した．このデータセットを以下では対称データセットとよぶ．$K=1$のときは単調な
+対訳文アラインメントを求める問題となっている．
+次に，日本語と英語の
+文の数が異なるデータセットも同様に作成した．こちらでは日本語の文数を60文，英
+語の文数を40文とし，日本語の20文は対応する文が存在しないようにした．日本語の
+まとまりの数は$K=3, 6, 12$とし，英語のまとまりの数は日本語のまとまりの数の
+$2/3$とした．このデータセットを以下では非対称データセットとよぶ．最後に，日
+本語と英語からそれぞれ60文選ぶが，そのうち対応関係にあるのは40文であり，残り
+の日本語・英語の20文は対応する文が存在しないようなデータも作成した．以下では
+対応なしデータセットとよぶ．文のまとまりの数は$K=3, 6, 12$とし，そのうち
+$1/3$については対応する文が存在しないものとした．
+
+
+
+比較対象として，Mooreらによる系列マッチングに基づく手法(Moore)と，二部グ
+ラフの重み最大マッチングとして解いた方法(BM)とを用いた．なお，重み最大マッチ
+ングにおける対応付けの重みは式(\ref{eq:moore})を用いた．
+評価はMoore\cite{moore02:_fast}にならって，文の対応付けの再現率(recall)，
+適合率(precision)，F値(F-measure)を算出した．対称，非対称の各データセットについて，異なる$K$
+ごとに5つのデータセットを生成し，その平均値を最終的な評価値とした．
+翻訳確率の算出にはGIZA++\cite{och03}を用いた．整数線形計画問題のソルバとして
+ILOG CPLEXを用いた．文のまとまりの個数に対するペナルティ$\lambda$は，
+$\lambda = 0.1$と$\lambda = 0.01$の2種類を試した．
+
+
+\subsection{結果}
+
+\begin{table}[b]
+\caption{再現率，適合率，F値の比較（対称データ）}
+\label{tab:result1}
+\input{01table01.txt}
+\end{table}
+\begin{table}[b]
+\caption{再現率，適合率，F値の比較（非対称データ）}
+\label{tab:result2}
+\input{01table02.txt}
+\end{table}
+
+実験結果を表\ref{tab:result1}, \ref{tab:result2}，\ref{tab:result3} に示す．表中のSP + ILPは
+集合分割問題を整数線形計画問題ソルバで解いた結果，
+SP + CGは集合分割問題を列生成法で解いた結果を表す．また，BMは二部グラフマッチング
+によって対訳文アラインメントを行った結果，MooreはMooreらの手法~\cite{moore02:_fast}を適用した結果をそれぞれ表
+す．
+表より，対称データセットで$K=1$の場合を除く，いずれのデー
+タセット，および$K$の値においても，$\lambda = 0.1$としたときの提案手法（厳密
+解）が2種類のベースラインよりも高いF値を示していることが分かる．対称デー
+タセットで$K=1$の場合は単調な対訳文アラインメントとなることから， 単調性を仮
+定するMooreの手法の方がやや高いF値を示している．しかし，提案法との差分は0.003ポイントと小
+さい．
+次に$\lambda$の値の違いによる影響を厳密解同士で比較すると，いずれのデー
+タセットにおいても$K=1, 3$のときは$\lambda = 0.01$の方が$\lambda = 0.1$のときより
+もやや高いF値を示し，一方で$K=6, 12, 20$のときには$\lambda = 0.1$の方が高い値を
+示していることが分かる．
+これは，$\lambda$が文のまとまりの個数に対するペナルティであり，
+$\lambda$が小さいほど大きなペナルティを与えていることによって説明できる．つま
+り，$K$が小さいときは文のまとまりの個数が小さくなりがちな$\lambda = 0.01$の方
+がよい結果を出力し，$K$が大きいときはより多くのまとまりが出現することを許容す
+る$\lambda = 0.1$の方がよい結果を出力していると考えられる．
+Mooreによる対応付け手法は単調性を仮定した手法であるため，他の方法と比べると極
+端にF値が悪くなっているのが確認できる．
+
+\begin{table}[t]
+\caption{再現率，適合率，F値の比較（対応なしデータ）}
+\label{tab:result3}
+\input{01table03.txt}
+\end{table}
+
+次に提案手法で厳密解を求めたときと，列生成法による近似解を求めたときとの結果
+を比較する．
+再現率，適合率，F値の低下度合いは，今回の検証では最大で$0.08$ポイント程度の低下に
+おさまっていることが確認できた．特に$\lambda = 0.1$のときはいずれのデータに
+対しても$0.03$ポイント程度の低下におさまっている．
+なお，表\ref{tab:result1}では列生成法のほうが厳密解法よりも再現率，適合率，F値が大きくなる結果が得
+られているが，これは目的関数と評価指標とが必ずしも一致するわけではないことに
+起因すると考えられる．
+
+
+厳密解法と列生成法との平均計算時間の比較を表~\ref{tab:time}に示す．表より，CPLEXで数十秒か
+ら数百秒かかっていた問題が列生成法によって数秒で解けていることが確認できる．
+すべてのデータで30倍から400倍程度の高速化が達成できたが，特に変数の総数が多い
+対称データ，対応なしデータではほぼすべての設定で100倍以上の高速化が確認できた．
+表~\ref{tab:numval}に利用された変数の数を示す．集合分割問題をそのまま整数線
+形計画問題ソルバによって解くと，今回扱ったような数十文程度の対応付けであって
+も$10^{6}$個程度の変数を明示的に扱う必要がある．扱う変数の個数が多いほどソル
+バによる求解には時間がかかるため，文の数が増加するとさらに求解に時間がかかる
+可能性が高い．一方で列生成法を用いた場合は，最適解において非零になる可能性が
+ある変数しか扱わないため，最終的に利用された変数は$10^{3}$個程度となり，問題
+をソルバで素朴に解いた場合と比較して利用される変数の数が大幅に少ないことが分
+かる．問題中に出現する変数の個数が少ないとソルバによって高速に解を求めること
+が可能であるため，列生成法は高速に動作したと考えられる．
+
+\begin{table}[t]
+\caption{実行時間の比較}
+\label{tab:time}
+\input{01table04.txt}
+\end{table}
+
+提案法はNP困難問題である集合分割問題を解いているため，厳密解法の実行時
+  間は問題サイズに対して指数的に増加する．一方で，既存の単調性を仮定した動的
+  計画法に基づく対訳文アラインメント法は，問題サイズに対して多項式時間で動作
+  する．そのため，提案法は列生成法による近似解法を用いたとしても実行時間的に
+  は既存手法に対する優位性はない．一方で，対訳文アラインメントはおもに対訳文
+  コーパスを作成するために用いられる技術であり，コーパス生成に用いるために問
+  題とならない速度で動作することが重要である．実験結果が示すように，列生成
+  法による対訳文アラインメント法は数十文からなる対訳文書の文アラインメントを
+  数秒で行うことができるため，提案法は十分に実用に足る技術であるといえる．
+
+\begin{table}[p]
+\caption{出現した変数の数の比較}\label{tab:numval}
+\input{01table05.txt}
+\end{table}
+\begin{figure}[p]
+\vspace{1\Cvs}
+\begin{center}
+\includegraphics{23-2ia1f5.eps}
+\end{center}
+\caption{入力サイズを変化させたときの実行時間の変化}
+\label{fig:runtime}
+\end{figure}
+
+
+最後に，対称データにおいて入力文のサイズを変化させたときの，厳密解法と列生成
+法の実行時間の変化を図~\ref{fig:runtime}に示す．図の横軸が入力のサイズであり，
+縦軸が実行時間を表す．なお，実行時間が3,600秒を超えたら実験を打ち切りとしてい
+る．入力サイズが大きくなるほど，列生成法と厳密解法の差が広がる傾向があること
+が分かる．
+
+
+
+\section{おわりに}
+
+本論文では，対応付けの連続性を考慮しつつ非単調な系列アラインメントを求めるた
+めの方法を提案した．集合分割問題として定式化し，整数線形計画法を
+用いて解くことによって，既存手法では対応付けをとるのが難しい状況でも対応付け
+ができることを示した．このような方法は，特に単調性を仮定できないような
+文書対に対する対訳文アラインメントにおいて効果的である．
+さらに，数理計画法の分野で大規模な問題を解く際に利用さ
+れる技法である列生成法を適用することによって，最適化問題を解くときに扱わなけ
+ればならない変数の数および各変数のスコアの計算に必要となる動的計画法の実行回
+数を劇的に減らすことができ，結果として高速な求解を可能とした．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Braune \BBA\ Fraser}{Braune \BBA\
+  Fraser}{2010}]{braune10:_improv}
+Braune, F.\BBACOMMA\ \BBA\ Fraser, A. \BBOP 2010\BBCP.
+\newblock \BBOQ Improved Unsupervised Sentence Alignment for Symmetrical and
+  Asymmetrical Parallel Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 81--89}.
+
+\bibitem[\protect\BCAY{Brown, Petra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{brown93}
+Brown, P.~F., Petra, S. A.~D., Pietra, V. J.~D., \BBA\ Mercer, R.~L. \BBOP
+  1993\BBCP.
+\newblock \BBOQ The Mathematics of Statistical Machine Translation: Parameter
+  Estimation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  263--311}.
+
+\bibitem[\protect\BCAY{Deng, Kumar, \BBA\ Byrne}{Deng
+  et~al.}{2007}]{deng07:_segmen}
+Deng, Y., Kumar, S., \BBA\ Byrne, W. \BBOP 2007\BBCP.
+\newblock \BBOQ Segmentation and Alignment of Parallel Text for Statistical
+  Machine Translation.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 13}  (3), \mbox{\BPGS\
+  235--260}.
+
+\bibitem[\protect\BCAY{Gale \BBA\ Church}{Gale \BBA\
+  Church}{1993}]{gale93:_progr_align_senten_bilin_corpor}
+Gale, W.~A.\BBACOMMA\ \BBA\ Church, K.~W. \BBOP 1993\BBCP.
+\newblock \BBOQ A Program for Aligning Sentences in Bilingual Corpora.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (1), \mbox{\BPGS\
+  75--102}.
+
+\bibitem[\protect\BCAY{Korte \BBA\ Vygen}{Korte \BBA\
+  Vygen}{2008}]{korte08:_combin_optim}
+Korte, B.~H.\BBACOMMA\ \BBA\ Vygen, J. \BBOP 2008\BBCP.
+\newblock {\Bem Combinatorial Optimization: Theory and Algorithms}.
+\newblock Springer Verlag.
+
+\bibitem[\protect\BCAY{L{\"{u}}bbecke \BBA\ Desrosiers}{L{\"{u}}bbecke \BBA\
+  Desrosiers}{2005}]{lubbecke05:_selec_topic_colum_gener}
+L{\"{u}}bbecke, M.~E.\BBACOMMA\ \BBA\ Desrosiers, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Selected Topics in Column Generation.\BBCQ\
+\newblock {\Bem Operations Research}, {\Bbf 53}  (6), \mbox{\BPGS\ 1007--1023}.
+
+\bibitem[\protect\BCAY{Moore}{Moore}{2002}]{moore02:_fast}
+Moore, R.~C. \BBOP 2002\BBCP.
+\newblock \BBOQ Fast and Accurate Sentence Alignment of Bilingual
+  Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of AMTA'02}, \mbox{\BPGS\ 135--144}.
+
+\bibitem[\protect\BCAY{Nie, Simard, Isabelle, \BBA\ Durand}{Nie
+  et~al.}{1999}]{nie1999cross}
+Nie, J.-Y., Simard, M., Isabelle, P., \BBA\ Durand, R. \BBOP 1999\BBCP.
+\newblock \BBOQ Cross-language Information Retrieval Based on Parallel Texts
+  and Automatic Mining of Parallel Texts from the Web.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval},
+  \mbox{\BPGS\ 74--81}. ACM.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{och03}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Systematic Comparison of Various Statistical Alignment
+  Models.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{Qu \BBA\ Liu}{Qu \BBA\ Liu}{2012}]{qu-liu:2012:ACL2012}
+Qu, Z.\BBACOMMA\ \BBA\ Liu, Y. \BBOP 2012\BBCP.
+\newblock \BBOQ Sentence Dependency Tagging in Online Question Answering
+  Forums.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  554--562}, Jeju Island, Korea. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Quan, Kit, \BBA\ Song}{Quan
+  et~al.}{2013}]{quan-kit-song:2013:ACL2013}
+Quan, X., Kit, C., \BBA\ Song, Y. \BBOP 2013\BBCP.
+\newblock \BBOQ Non-Monotonic Sentence Alignment via Semisupervised
+  Learning.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  622--630}, Sofia, Bulgaria. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Smith \BBA\ Waterman}{Smith \BBA\
+  Waterman}{1981}]{smith81:_ident_common_molec_subseq}
+Smith, T.~F.\BBACOMMA\ \BBA\ Waterman, M.~S. \BBOP 1981\BBCP.
+\newblock \BBOQ Identification of Common Molecular Subsequences.\BBCQ\
+\newblock {\Bem Journal of Molecular Biology}, {\Bbf 147}, \mbox{\BPGS\
+  195--197}.
+
+\bibitem[\protect\BCAY{竹中\JBA 若尾}{竹中\JBA 若尾}{2012}]{要一12}
+竹中要一\JBA 若尾岳志 \BBOP 2012\BBCP.
+\newblock 地方自治体の例規比較に用いる条文対応表の作成支援.\
+\newblock \Jem{自然言語処理}, {\Bbf 19}  (3), \mbox{\BPGS\ 193--212}.
+
+\bibitem[\protect\BCAY{角田\JBA 乾\JBA 山本}{角田 \Jetal }{2015}]{孝昭15}
+角田孝昭\JBA 乾孝司\JBA 山本幹雄 \BBOP 2015\BBCP.
+\newblock 対をなす二文書間における文対応関係の推定.\
+\newblock \Jem{自然言語処理}, {\Bbf 22}  (1), \mbox{\BPGS\ 27--58}.
+
+\bibitem[\protect\BCAY{Wu}{Wu}{1997}]{Wu:1997:SIT:972705.972707}
+Wu, D. \BBOP 1997\BBCP.
+\newblock \BBOQ Stochastic Inversion Transduction Grammars and Bilingual
+  Parsing of Parallel Corpora.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 23}  (3), \mbox{\BPGS\
+  377--403}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{西野　正彬}{
+2008年京都大学大学院情報学研究科修士課程修了．
+同年，日本電信電話株式会社入社．現在，コミュニケーション科学基礎研究所研究員．
+自然言語処理，アルゴリズムの研究に従事．
+博士（情報学）．情報処理学会，人工知能学会，言語処理学会，ACL各会員．
+}
+\bioauthor{鈴木　　潤}{
+1999年慶應義塾大学理工学部数理科学科卒業．
+2001年同大学院理工学研究科計算機科学専攻修士課程修了．
+同年，日本電信電話株式会社入社．2005年奈良先端大学院大学博士後期課程修了．
+2008--2009年 MIT CSAIL客員研究員．
+現在，NTTコミュニケーション科学基礎研究所に所属．博士（工学）．
+主として自然言語処理，機械学習に関する研究に従事．
+ACL，情報処理学会，言語処理学会各会員． 
+}
+\bioauthor{梅谷　俊治}{
+1998年大阪大学大学院基礎工学研究科博士前期課程修了．
+2002年京都大学大学院情報学研究科博士後期課程指導認定退学．
+博士（情報学）．
+豊田工業大学助手，電気通信大学助教を経て，現在，大阪大学大学院情報科学研究科准教授．
+組合せ最適化の研究に従事．日本オペレーションズ・リサーチ学会，情報処理学会，人工知能学会，INFORMS，MOS，AAAI各会員． 
+ }
+\bioauthor{平尾　　努}{
+1995年関西大学工学部電気工学科卒業．1997年奈良先端科学技術大学院大学情
+報科学研究科博士前期課程修了．同年株式会社 NTT データ入社．2000年より
+NTT コミュニケーション科学基礎研究所に所属．博士（工学）．自然言語処理の
+研究に従事．言語処理学会，情報処理学会，ACL各会員．}
+ \bioauthor{永田　昌明}{
+1987年京都大学大学院工学研究科修士課程修了．
+同年，日本電信電話株式会社入社．現在，コミュニケーション科学研究所 主
+幹研究員（上席特別研究員）．工学博士．統計的自然言語処理の研究に従事．電
+子情報通信学会，情報処理学会，人工知能学会，言語処理学会，ACL各会員．
+}
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

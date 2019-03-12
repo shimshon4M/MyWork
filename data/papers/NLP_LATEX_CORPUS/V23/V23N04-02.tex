@@ -1,0 +1,891 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath,amssymb}
+
+\usepackage{mathtools}
+\usepackage{bm}
+\newcommand{\argmax}{}
+
+
+\Volume{23}
+\Number{4}
+\Month{September}
+\Year{2016}
+
+\received{2016}{1}{5}
+\revised{2016}{4}{20}
+\accepted{2016}{6}{9}
+
+\setcounter{page}{353}
+
+\jtitle{統語ベース翻訳のための構文解析器の自己学習}
+\jauthor{森下　　睦\affiref{Author_1} \and 赤部　晃一\affiref{Author_1} \and 波多腰優斗\affiref{Author_2} \and Graham Neubig\affiref{Author_1} \and\\ 吉野幸一郎\affiref{Author_1} \and 中村　　哲\affiref{Author_1}}
+\jabstract{
+構文情報を考慮する機械翻訳手法である統語ベース翻訳では，構文解析器の精度が翻訳精度に大きな影響を与えることが知られている．
+また，構文解析の精度向上を図る手法の一つとして，構文解析器の出力を学習データとして用いる構文解析器の自己学習が提案されている．
+しかし，構文解析器が生成する構文木には誤りが存在することから，自動生成された構文木が常に精度向上に寄与するわけではない．
+そこで本論文では，機械翻訳における自動評価尺度を用いて，このような誤った構文木を学習データから取り除き，自己学習の効果を向上させる手法を提案する．
+具体的には，解析された$n$-best構文木それぞれを用いて統語ベース翻訳を行い，それぞれの翻訳結果に対し，自動評価尺度でリスコアリングする．
+この中で，良いスコアを持つ構文木を自己学習に使用することで，構文構造はアノテーションされていないが，対訳が存在するデータを用いて，構文解析・機械翻訳の精度を向上させることができる．
+実験により，本手法で自己学習したモデルを用いることで，統語ベース翻訳システムの翻訳精度が2つの言語対で有意に向上し，また構文解析自体の精度も有意に向上することが確認できた．
+}
+\jkeywords{機械翻訳，構文解析，自己学習}
+
+\etitle{Parser Self-Training for Syntax-Based Machine Translation}
+\eauthor{Makoto Morishita\affiref{Author_1} \and Koichi Akabe\affiref{Author_1} \and Yuto Hatakoshi\affiref{Author_1} \and Graham Neubig\affiref{Author_1}\and Koichiro Yoshino\affiref{Author_1}\and Satoshi Nakamura\affiref{Author_1}} 
+\eabstract{
+In syntax-based machine translation, it is known that the accuracy of parsing greatly affects the translation accuracy.
+Self-training, which uses parser output as training data, is one method to improve the parser accuracy.
+However, because automatically generated parse trees often include errors, these parse trees do not always contribute to improving accuracy.
+In this paper, we propose a method for removing noisy incorrect parse trees from the training data to improve the effect of self-training by using automatic evaluation metrics of translations.
+Specifically, we perform syntax-based machine translation using $n$-best parse trees, then we re-scoring parse trees based on the automatic evaluation score of translations.
+By using the parse trees that have higher score among the candidates for self-training, we can improve parsing and machine translation accuracy by using parallel corpora that are not annotated syntax structure.
+In experiments, using higher score parse trees for self-training, we found that our self-trained parsers significantly improve a state-of-the-art syntax-based machine translation system in two language pairs, 
+and self-trained parsers significantly improve the accuracy of the parsing itself.
+}
+\ekeywords{Machine Translation, Syntax Parsing, Self-Training}
+
+\headauthor{森下，赤部，波多腰，Neubig, 吉野，中村}
+\headtitle{統語ベース翻訳のための構文解析器の自己学習}
+
+\affilabel{Author_1}{奈良先端科学技術大学院大学}{Nara Institute of Science and Technology}
+\affilabel{Author_2}{奈良先端科学技術大学院大学, 現在セイコーエプソン株式会社}{Nara Institute of Science and Technology, \mbox{currently with Seiko Epson Corporation}}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{sec:introduction}
+
+統計的機械翻訳 (Statistical Machine Translation, SMT) では，翻訳モデルを用いてフレーズ単位で翻訳を行い，並べ替えモデルを用いてそれらを正しい語順に並べ替えるフレーズベース翻訳 (Phrase Based Machine Translation) \cite{koehn03phrasebased}，
+構文木の部分木を翻訳に利用する統語ベース翻訳 \cite{yamada01syntaxmt} などの翻訳手法が提案されている．
+一般的に，フレーズベース翻訳は英仏間のような語順が近い言語間では高い翻訳精度を達成できるものの，日英間のような語順が大きく異なる言語間では翻訳精度は十分でない．
+このような語順が大きく異なる言語対においては，統語ベース翻訳の方がフレーズベース翻訳と比べて高い翻訳精度を達成できることが多い．
+
+統語ベース翻訳の中でも，原言語側の構文情報を用いるTree-to-String (T2S) 翻訳 \cite{liu06treetostring} は，高い翻訳精度と高速な翻訳速度を両立できる手法として知られている．
+ただし，T2S翻訳は翻訳に際して原言語の構文解析結果を利用するため，翻訳精度は構文解析器の精度に大きく依存する \cite{neubig14acl}．
+この問題を改善する手法の一つとして，複数の構文木候補の集合である構文森をデコード時に利用するForest-to-String (F2S) 翻訳 \cite{mi08forestrule} が挙げられる．
+しかし，F2S翻訳も翻訳精度は構文森を作成した構文解析器の精度に大きく依存し，構文解析器の精度向上が課題となる \cite{neubig14acl}．
+
+構文解析器の精度を向上させる手法の一つとして，構文解析器の自己学習が提案されている \cite{mcclosky2006effective}．
+自己学習では，アノテーションされていない文を既存のモデルを使って構文解析し，自動生成された構文木を学習データとして利用する．
+これにより，構文解析器は自己学習に使われたデータに対して自動的に適応し，語彙や文法構造の対応範囲が広がり，解析精度が向上する．
+しかし，自動生成された構文木は多くの誤りを含み，それらが学習データのノイズとなることで自己学習の効果を低減させてしまうという問題が存在する．
+
+Katz-Brownら \cite{katzbrown11targetedselftraining} は構文解析器の自己学習をフレーズベース翻訳のための事前並べ替えに適用する手法を提案している．
+フレーズベース翻訳のための事前並べ替えとは，原言語文の単語を目的言語の語順に近くなるように並べ替えることによって，機械翻訳の精度を向上させる手法である．
+この手法では，構文解析器を用いて複数の構文木候補を出力し，この構文木候補を用いて事前並べ替えを行う．
+その後，並べ替え結果を人手で作成された正解並べ替えデータと比較することによって，各出力にスコアを割り振る．
+これらの並べ替え結果のスコアを基に，構文木候補の中から最も高いスコアを獲得した構文木を選択し，この構文木を自己学習に使用する．
+このように，学習に用いるデータを選択し，自己学習を行う手法を標的自己学習(Targeted Self-Training)という．
+Katz-Brownらの手法では，正解並べ替えデータを用いて，自己学習に使用する構文木を選択することで，誤った並べ替えを行う構文木を取り除くことができ，学習データのノイズを減らすことができる．
+また，Liuら \cite{liu12emnlp} は，単語アライメントを利用して構文解析器の標的自己学習を行う手法を提案している．
+一般に，構文木と単語アライメントの一貫性が取れている場合，その構文木は正確な可能性が高い．
+そのため，この一貫性を基準として構文木を選択し，それらを用いて構文解析器を学習することでより精度が向上することが考えられる．
+
+以上の先行研究を基に，本論文では，機械翻訳の自動評価尺度を用いた統語ベース翻訳のための構文解析器の標的自己学習手法を提案する．
+提案手法は，構文解析器が出力した構文木を基に統語ベース翻訳を行い，その翻訳結果を機械翻訳の自動評価尺度を用いて評価し，この評価値を基にデータを選択し構文解析器の自己学習を行う．
+統語ベース翻訳では，誤った構文木が与えられた場合，翻訳結果も誤りとなる可能性が高く，翻訳結果を評価することで間接的に構文木の精度を評価することができる．
+以上に加え，提案手法は大量の対訳コーパスから自己学習に適した文のみを選択し学習を行うことで，自己学習時のノイズを減らす効果がある．
+
+Katz-Brownらの手法と比較して，提案手法は事前並べ替えだけでなく統語ベース翻訳にも使用可能なほか，機械翻訳の自動評価尺度に基づいてデータの選択を行うため，対訳以外の人手で作成された正解データを必要としないという利点がある．
+これにより，既存の対訳コーパスが構文解析器の標的自己学習用学習データとして使用可能になり，構文解析器の精度やF2S翻訳の精度を幅広い分野で向上させることができる．
+また，既に多く存在する無償で利用可能な対訳コーパスを使用した場合，本手法におけるデータ作成コストはかからない．
+さらに，Liuらの手法とは異なり，翻訳器を直接利用することができる利点もある．
+このため，アライメント情報を通して間接的に翻訳結果への影響を計測するLiuらの手法に比べて，直接的に翻訳結果への影響を構文木選択の段階で考慮できる．
+
+実験により，提案手法で学習した構文解析器を用いることで，F2S翻訳システムの精度向上と，構文解析器自体の精度向上が確認できた
+\footnote{本論文では，\textit{IWSLT 2015: International Workshop on Spoken Language Translation} で発表した内容 \cite{morishita15iwslt} に加え，翻訳システムの人手評価を実施した結果をまとめた．
+}．
+
+
+\section{Tree-to-String翻訳}
+\label{sec:t2s_mt}
+
+SMTでは，原言語文$\bm{f}$が与えられた時に，目的言語文$\bm{e}$へと翻訳される確率$Pr(\bm{e}|\bm{f})$を最大化する$\hat{\bm{e}}$を推定する問題を考える．
+\begin{equation}
+\hat{\bm{e}}\coloneqq \argmax_{\bm{e}} Pr(\bm{e}|\bm{f})
+\end{equation}
+
+様々な手法が提案されているSMTの中でも，T2S翻訳は原言語文の構文木$T_{\bm{f}}$を使用することで，原言語文に対する解釈の曖昧さを低減し，原言語と目的言語の文法上の関係をルールとして表現することで，より精度の高い翻訳を実現する．
+T2S翻訳は下記のように定式化される．
+\begin{align}
+\hat{\bm{e}}&\coloneqq \argmax_{\bm{e}} Pr(\bm{e}|\bm{f}) \\
+&=\argmax_{\bm{e}} \sum_{T_{\bm{f}}} Pr(\bm{e}|\bm{f},T_{\bm{f}}) Pr(T_{\bm{f}}|\bm{f}) \\
+&\simeq \argmax_{\bm{e}} \sum_{T_{\bm{f}}} Pr(\bm{e}|T_{\bm{f}}) Pr(T_{\bm{f}}|\bm{f}) \\
+&\simeq \argmax_{\bm{e}} Pr(\bm{e}|\hat{T}_{\bm{f}})
+\end{align}
+ただし， $\hat{T}_{\bm{f}}$ は構文木の候補の中で，最も確率が高い構文木であり，下記の式で表される．
+\begin{equation}
+\label{eq:best_tree}
+\hat{T}_{\bm{f}} = \argmax_{T_{\bm{f}}} Pr(T_{\bm{f}}|\bm{f})
+\end{equation}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-4ia2f1.eps}
+\end{center}
+\caption{日英T2S翻訳における翻訳ルールの例}
+\label{fig:t2s_example}
+\vspace{-1\Cvs}
+\end{figure}
+
+図\ref{fig:t2s_example}に示すように，T2S翻訳\footnote{具体的には，木トランスデューサ (Tree Transducers) を用いたT2S翻訳．}で用いられる翻訳ルールは，置き換え可能な変数を含む原言語文構文木の部分木と，目的言語文単語列の組で構成される．
+図\ref{fig:t2s_example}の例では，$x_{0}$，$x_{1}$が置き換え可能な変数である．
+これらの変数には，他のルールを適用することにより翻訳結果が挿入され，変数を含まない出力文となる．
+訳出の際は，翻訳ルール自体の適用確率や言語モデル，その他の特徴などを考慮して最も事後確率が高い翻訳結果を求める．
+また，ビーム探索などを用いることで確率の高い$n$個の翻訳結果を出力することが可能であり，これを$n$-best訳という．
+
+T2S翻訳では，原言語文の構文木を考慮することで，語順が大きく異なる言語対の翻訳がフレーズベース翻訳と比べて正確になる場合が多い．
+しかし，T2S翻訳は翻訳精度が構文解析器の精度に大きく依存するという欠点がある．
+この欠点を改善するために，複数の構文木を構文森と呼ばれる超グラフ(Hyper-Graph)の構造で保持し，複数の構文木を同時に翻訳に使用するF2S翻訳 \cite{mi08forestrule} が提案されている．
+この場合，翻訳器は複数ある構文木の候補から構文木を選択することができ，翻訳精度の改善が期待できる \cite{zhang12helporhurt}．
+F2S翻訳は$\bm{e}$と$T_{\bm{f}}$の同時確率の最大化として下記のように定式化される．
+\begin{align}
+\label{eq:forest_to_string}
+\langle \hat{\bm{e}}, \hat{T}_{\bm{f}} \rangle &\coloneqq \argmax_{\langle \bm{e}, T_{\bm{f}} \rangle} Pr(\bm{e}, T_{\bm{f}}|\bm{f}) \\
+&\simeq \argmax_{\langle \bm{e}, T_{\bm{f}} \rangle} Pr(\bm{e}|T_{\bm{f}}) Pr(T_{\bm{f}}|\bm{f})
+\end{align}
+
+しかし，\ref{sec:introduction}節で述べたとおりF2S翻訳であっても翻訳精度は構文森を生成する構文解析器の精度に大きく依存する．
+そこで，この問題を解決するため，自己学習によって構文解析器の精度を向上する手法について説明する．
+
+
+\section{構文解析の自己学習}
+
+\subsection{自己学習の概要}
+
+構文解析器の自己学習とは，既存のモデルで学習した構文解析器が解析・生成した構文木を学習データとして用いることで，構文解析器を再学習する手法である．
+言い換えると，自己学習対象の各文に対して，式(\ref{eq:best_tree})に基づいて確率が最も高い構文木$\hat{T_{\bm{f}}}$を求め，この構文木を構文解析器の再学習に用いる．
+この手法は追加のアノテーションを必要としないため，構文解析器の学習データ量が大幅に増え，解析精度が向上する．
+
+Charniakは，Wall Street Journal (WSJ) コーパス \cite{marcus93penntreebank} によって学習された確率文脈自由文法 (Probabilistic Context-Free Grammar, PCFG) モデルを用いた構文解析器では，自己学習の効果は得られなかったと報告している \cite{Charniak97}．
+一方で，潜在クラスを用いることで構文解析の精度を向上させた PCFG-LA (PCFG with Latent Annotations) モデルは自己学習により大幅に解析精度が向上することが知られている \cite{huang2009self}．
+これは，PCFG-LAモデルを用いることで自動生成された構文木の精度が比較的高くなることに加え，PCFG-LAモデルが通常のPCFGモデルと比べて多くのパラメータを持つので，学習データが増加する恩恵が大きいことが理由として挙げられる．
+これらの先行研究を基にして，本論文ではPCFG-LAモデルを用いた構文解析器の自己学習を考える．
+
+
+\subsection{機械翻訳における構文解析器の自己学習と効果}
+
+\subsubsection{事前並べ替えのための標的自己学習}
+\label{sec:mt_selftrain}
+
+\ref{sec:introduction}節でも述べたように，構文解析器の自己学習により機械翻訳精度を改善した研究が存在する．
+Katz-Brownらは，自己学習に使用する構文木を外部評価指標を用いて選択する手法を提案し，これにより翻訳精度自体も向上したと報告している \cite{katzbrown11targetedselftraining}．
+この手法の概要を図\ref{fig:katz-brown}に示す．
+この研究では，構文解析器により複数の構文木候補を自動生成し，これらの候補を基にした事前並べ替えの結果が人手で作成した正解並べ替えデータに最も近いものを選択し，自己学習に使用する．
+これにより，構文木の候補からより正しい構文木を選択することができるため，自己学習の効果が増すと報告されている．
+このように一定の基準を基に学習データを選択し，自己学習を行う手法を標的自己学習(Targeted Self-Training)という．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-4ia2f2.eps}
+\end{center}
+  \caption{事前並べ替えのための標的自己学習手法}
+  \label{fig:katz-brown}
+\end{figure}
+
+事前並べ替えでは，構文木$T_{\bm{f}}$に基づいて，並べ替えられた原言語文$\bm{f}'$を生成する並べ替え関数$\text{reord}(T_{\bm{f}})$を定義し，システムによる並べ替えを正解並べ替え$\bm{f}'^{*}$と比較するスコア関数$\text{score}(\bm{f}'^{*}, \bm{f}')$で評価する．
+学習に使われる構文木$\bar{T}_{\bm{f}}$は，構文木の候補$\bm{T_f}$から以下の式によって選択される．
+\begin{equation}
+\bar{T}_{\bm{f}}=\argmax_{T_{\bm{f}} \in {\bm{T}_{\bm{f}}}} {\rm score}(\bm{f}'^{*}, \text{reord}(T_{\bm{f}}))
+\end{equation}
+
+本論文ではこれらの先行研究を基に，統語ベース翻訳のための構文解析器の標的自己学習手法を提案する．
+\ref{sec:proposed_method}節以降において，提案手法の詳細を示し，実験により提案手法の効果を検証する．
+
+
+\subsubsection{フロンティアノードを利用した構文解析器の標的自己学習}
+\label{sec:frontier_node}
+
+統語ベース翻訳を利用して構文解析器の標的自己学習を行う手法として，フロンティアノード (Frontier Node) を利用する手法が提案されている \cite{liu12emnlp}．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-4ia2f3.eps}
+\end{center}
+\caption{5つのフロンティアノードを含む構文木の例}
+\label{fig:frontier_node_tree}
+\end{figure}
+
+一般に，構文木と単語アライメントの一貫性が取れている場合，その構文木は正確な可能性が高い．
+この一貫性を評価する指標として，フロンティアノードの数が挙げられる．
+フロンティアノードとは，対象ノードから翻訳ルールを抽出できるノードのことを指す．
+例として，5つのフロンティアノードを持つ構文木を図\ref{fig:frontier_node_tree}に示す．
+図中の灰色で示されたノードがフロンティアノードである．
+各ノード中の数字は上から順にスパン(span)，補完スパン(complement span)を示している\footnote{スパンおよび補完スパンは，文献によってはアライメントスパン(alignment span)，補完アライメントスパン(complement alignment span)とも称される．}．
+ノードNのスパンとは，ノードNから到達可能な全ての目的言語単語の最小連続単語インデックスの集合であり，
+ノードNの補完スパンとは，NおよびNの子孫ノード以外のノードに対応する，目的言語単語インデックスの和集合とする\footnote{フロンティアノードについての詳細は\cite{galley06syntaxmt}を参照．}．
+フロンティアノードは，スパンと補完スパンが重複しておらず，かつスパンがnullでないという条件を満たすノードのことを指す \cite{galley06syntaxmt}．
+フロンティアノードの数が多いほど，構文木と単語アライメントの一貫性が取れているといえる．
+
+例えば，「助詞のP」のスパンは3-5であり，``of this restaurant''に対応する．
+また，補完スパンは1-2, 4であり，``the speciality'', ``this''に対応する．
+この場合，3-5のスパンと，4の補完スパンが部分的に重複しているためフロンティアノードではない．
+
+Liuらの手法では，構文解析結果の5-bestの中からフロンティアノードの数が最も多くなる構文木を選択し，選ばれた構文木を自己学習に使用する．
+これにより，5-best中で最も精度が高いと考えられる構文木を選択することができ，従来の自己学習手法よりも効果が高くなる．
+この手法で自己学習した構文解析器により，統語ベース翻訳の翻訳精度が有意に改善されたと報告されている．
+本論文では，Liuらの手法も比較対象として実験を行う\footnote{
+Liuらは翻訳器が強制的に参照訳を出力するforced decodingを用いる手法も提案しているが，これを実現するために特殊なデコーダが必要であり，翻訳に用いるデコーダ自体に大幅な変更を加える必要がある．
+そのため，フロンティアノードに基づく手法や本研究の提案法に比べて実装が困難である．
+ゆえに，本論文ではフロンティアノードに基づく手法のみを比較対象とした．}．
+
+
+\section{統語ベース翻訳のための構文解析器の標的自己学習}
+\label{sec:proposed_method}
+
+標的自己学習において，どのように自己学習用のデータを選択するかは最も重要な点である．
+本論文ではF2S翻訳の精度を向上させるために，自己学習に使用する構文木および文の選択法をいくつか提案する．
+構文木の選択法を用いることで，一つの文の構文木候補から精度向上につながる構文木を選択し，文の選択法を用いることで，コーパス全体から精度向上に有効な文のみを選択する．
+以降ではそれぞれの手法について説明する．
+
+
+\subsection{構文木の選択法}
+\label{sec:tree_selection}
+
+\ref{sec:mt_selftrain}節で述べたように，Katz-Brownらによって提案された標的自己学習手法 \cite{katzbrown11targetedselftraining} では，自動生成された構文木と人手で作成した正解並べ替えデータを比較することにより，
+$n$-best候補の中から最も
+評価値の高い構文木を選択する．
+しかし，人手で正解並べ替えデータを作成するには大きなコストがかかるため，この手法のために大規模なデータセットを作成することは現実的でない．
+一方で，統計的機械翻訳は対訳コーパスの存在を前提としており，対訳データは容易に入手できることが多い．
+そこで，この問題を解決するために，対訳コーパスのみを使用して構文木を選択する方法を2つ提案する．
+一つは，翻訳器によって選択された1-best訳に使われた構文木を自己学習に使用する手法である（翻訳器1-best）．
+もう一つは，$n$-best訳の中から，最も参照訳に近い訳（Oracle訳）を自動評価尺度により選択し，Oracle訳に使われた構文木を自己学習に使用する手法である（自動評価尺度1-best）．
+
+
+\subsubsection{翻訳器1-best}
+\label{sec:mt_1best}
+
+\ref{sec:t2s_mt}節でも述べたように，F2S翻訳では，構文森から翻訳確率が高くなる構文木を翻訳器が選択する．
+先行研究では，翻訳ルールや言語モデルの確率を使用することで，F2S翻訳器は構文森から正しい構文木を選択する能力があることが報告されている \cite{zhang12helporhurt}．
+翻訳器の事後確率を用いることで，構文解析器だけでは考慮できない特徴を使用して構文木を選択するため，F2S翻訳器が出力した1-best訳に使われた構文木は，
+構文解析器が出力した1-best構文木よりも自己学習に効果的だと考えられる．
+この際の自己学習に使われる構文木は式(\ref{eq:forest_to_string})の$\hat{T}_{\bm{f}}$となる．
+
+
+\subsubsection{自動評価尺度1-best}
+\label{sec:bleu_1best}
+
+翻訳の際，翻訳器は複数の翻訳候補の中から，最も翻訳確率が高い訳を1-best訳として出力する．
+しかし，実際には翻訳候補である$n$-best訳の方が，翻訳器が出力した1-best訳よりも翻訳精度が高いと考えられる場合が存在する．
+そこで本論文では，翻訳候補の集合$\bm{E}$の中から最も参照訳$\bm{e}^*$に近い訳をOracle訳$\bar{\bm{e}}$と定義し，$\bar{\bm{e}}$に使われた構文木を自己学習に使用する．
+翻訳候補$\bm{e}$と参照訳$\bm{e}^*$の類似度を表す評価関数$\rm{score}(\cdot)$を用いて，Oracle訳$\bar{\bm{e}}$は下記の通り表される．
+\begin{equation}
+\bar{\bm{e}} = \argmax_{\bm{e}\in \bm{E}} {\rm score} (\bm{e}^*,\bm{e})
+\end{equation}
+
+
+\subsection{文の選択法}
+\label{sec:sentence_selection}
+
+\ref{sec:tree_selection}節では，1つの対訳文の$n$-best訳から学習に有用だと考えられる構文木を選択する方法について述べた．
+しかし，正しい訳が$n$-best訳の中に含まれていない場合もあり，これらの例を学習に用いること自体が構文解析器の精度低下を招く可能性がある．
+そのため，$n$-best訳の中に良い訳が含まれていない場合その文を削除するように，学習データ全体から自己学習に用いる文を選択する手法を提案する．
+具体的には，翻訳文の自動評価値が一定の閾値を超えた文のみを学習に使用する（自動評価値の閾値）．
+また，学習データ全体から翻訳精度を改善すると考えられる構文木を選択する手法も提案する．
+具体的には，翻訳器1-best訳とOracle訳の自動評価値の差が大きい文のみを使用する（自動評価値の差）．
+従来の標的自己学習手法では，構文木の選択手法は提案されていたものの，文の選択手法については検討されていなかった．
+本論文では，この文の選択手法についても検討を進める．
+
+文の選択法を使用する場合は，構文木の選択法として，自動評価尺度1-bestを使用する．
+自動評価尺度1-bestを用いて構文木を選択する手法と，文の選択法を組み合わせた提案手法を図にすると，図\ref{fig:proposed_method}のようになる．
+図のように原言語文を構文解析器に入力し，出力された構文森を翻訳器に入力する．
+これにより$n$-best訳と，翻訳に使われた構文木のペアが出力される．
+その後，参照訳を基に自動評価尺度を用いて$n$-best訳をリスコアリングする．
+これを基に学習データを選択し，自己学習を行う．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-4ia2f4.eps}
+\end{center}
+\caption{提案手法の概要}
+\label{fig:proposed_method}
+\end{figure}
+
+
+\subsubsection{自動評価値の閾値}
+\label{sec:bleu_threshold}
+
+本節では，学習のノイズとなる誤った構文木を極力除外するために，自動評価値を基にデータを選択する手法を提案する．
+
+コーパスの中には，翻訳器が正しく翻訳することができず，自動評価値が低くなってしまう文が存在する．
+自動評価値が低くなる原因としては以下のような理由が考えられる．
+\begin{itemize}
+\item 誤った構文木が翻訳に使用された．
+\item 翻訳モデルが原言語文の語彙やフレーズに対応できていない．
+\item 自動評価値を計算する際に用いられる参照訳が，意訳となっていたり，誤っていたりするため，翻訳器が参照訳に近い訳を出力することができない．
+\end{itemize}
+
+このような場合は，たとえOracle訳であっても自動評価値は低くなってしまうことがある．
+これらのデータは，
+F2S翻訳器が正しい構文木を選択することができていない場合や，自動評価尺度が実際の翻訳品質との相関が低い場合があるため，Oracle訳で使われた構文木であっても誤った構文情報を持つ可能性がある．
+そのため，これらのデータを学習データから取り除くことで，学習データ中のノイズが減ると考えられる．
+そこで，より正確な構文木のみを使用するために，Oracle訳の自動評価値が一定の閾値を超えた文のみ学習に使用する手法を提案する．
+自己学習に使用される構文木$T_{f^{(i)}}$の集合は下記の式のように定義される．
+ここで，$t$は閾値，$\bm{e}^{*(i)}$は文$i$の参照訳，$\bar{\bm{e}}^{(i)}$は文$i$のOracle訳，$\bar{\bm{E}}$はOracle訳全体の集合，$\text{score}(e)$は訳の自動評価関数を示す．
+\begin{equation}
+\label{eq:oracle}
+\{T_{f^{(i)}}\ |\ \text{score}(\bm{e}^{*(i)}, \bar{\bm{e}}^{(i)}) \ge t,\ \bar{\bm{e}}^{(i)} \in \bar{\bm{E}}\}
+\end{equation}
+
+
+\subsubsection{自動評価値の差}
+\label{sec:bleu_diff}
+
+本節では，翻訳結果を大きく改善すると考えられる構文木を中心に選択する手法を提案する．
+この際に着目した指標は，翻訳器1-best訳とOracle訳の自動評価値の差である．
+
+構文解析器により誤った構文木が高い確率を持った構文森が出力された場合，翻訳器は誤った構文木を選択し，誤った翻訳を1-best訳として出力することが多い．
+一方，Oracle訳では構文森の中から正しい構文木が使われた可能性が高い．
+そのため，翻訳器1-best訳とOracle訳の自動評価値の差が大きい場合，Oracle訳に使われた構文木を学習データとして使用することで，構文解析器が出力する確率が正しい値へ改善される可能性がある．
+これにより，自己学習した構文解析器を用いた翻訳システムは正しい訳を1-best訳として出力するようになり，翻訳精度が向上すると考えられる．
+
+文を選択するために，翻訳器1-best訳$\hat{\bm{e}}^{(i)}$とOracle訳$\bar{\bm{e}}^{(i)}$の自動評価値の差を表す関数$\text{gain}(\bar{\bm{e}}^{(i)},\hat{\bm{e}}^{(i)})$を定義し，
+式(\ref{eq:oracle})と同様に，自動評価値の差が大きい文の構文木を選択する．
+自動評価値の差を表す関数$\text{gain}(\bar{\bm{e}}^{(i)},\hat{\bm{e}}^{(i)})$は下記のように定義される．
+\begin{equation}
+\text{gain}(\bar{\bm{e}}^{(i)},\hat{\bm{e}}^{(i)})=\text{score}(\bm{e}^{*(i)}, \bar{\bm{e}}^{(i)})-\text{score}(\bm{e}^{*(i)}, \hat{\bm{e}}^{(i)})
+\end{equation}
+
+本手法ではこれに加えて，学習に用いる文の長さの分布をコーパス全体と同様に保つため，Gasc{\'o}ら \cite{gasco2012does} によって提案された下記の式を用いて，文の長さに応じて選択数を調節する\footnote{自動評価値の差を基準に文を選択する手法では，文の長さの分布を考慮しない場合，短い文のみを選択する傾向があり，自己学習が正しく行えないことを予備実験で確認した．これは，短い文の場合，文が少し変わっただけでも自動評価値が大幅に上昇してしまうことが原因である．}．
+以下の式では，$|\bm{e}|$は目的言語文$\bm{e}$の長さ，$|\bm{f}|$は原言語文$\bm{f}$の長さ，$N_{c}(|\bm{e}|+|\bm{f}|)$はコーパス全体で目的言語文，原言語文の長さの和が$|\bm{e}|+|\bm{f}|$となる文の数，$N_{c}$はコーパス全体の文数を表す．
+\begin{equation}
+\label{eq:length_1}
+p(|\bm{e}|+|\bm{f}|)=\frac{N_{c}(|\bm{e}|+|\bm{f}|)}{N_{c}}.
+\end{equation}
+
+$N_{t}$を自己学習データ全体の文数とすると，自己学習データの内，目的言語文，原言語文の長さの和が$|\bm{e}|+|\bm{f}|$となる文数$N_{t}(|\bm{e}|+|\bm{f}|)$は下記の式で表される．
+\begin{equation}
+\label{eq:length_2}
+N_{t}(|\bm{e}|+|\bm{f}|)=p(|\bm{e}|+|\bm{f}|)N_{t}.
+\end{equation}
+
+
+\section{評価}
+
+\subsection{実験設定}
+\label{sec:experimental_setup}
+
+本論文では，
+\pagebreak
+日本語の構文解析器を用いる日英・日中翻訳（それぞれJa-En，Ja-Zhと略す）を対象に実験を行った．
+翻訳データとして，科学論文を抜粋した対訳コーパスであるASPEC\footnote{http://lotus.kuee.kyoto-u.ac.jp/ASPEC}を用いた．
+ASPECに含まれる対訳文数を表\ref{tab:ASPEC}に示す
+\footnote{実際はASPECのJa-En Trainセットは300万文存在する．しかし，このデータは自動的に文対応が取られたため，対応が誤っている文がある．そのため，信頼できる上位200万文のみ使用し，学習データの質を確保した．}．
+自己学習の効果を検証するためのベースラインシステムとして，アジア言語間での翻訳ワークショップ Workshop on Asian Translation 2014 (WAT2014) \cite{nakazawa14wat} において高い精度を示した，Neubigのシステムを用いた \cite{neubig14wat}\footnote{http://github.com/neubig/wat2014}．
+デコーダにはTravatar \cite{neubig13travatar} を用い，F2S翻訳を行った．
+構文解析器には \cite{neubig14acl} で最も高い日英翻訳精度を実現したPCFG-LAモデルに基づくEgret\footnote{http://code.google.com/p/egret-parser}を用い，
+日本語係り受けコーパス (JDC) \cite{mori14jtb} （約7,000文）に対してTravatarの主辞ルールで係り受け構造を句構造に変換\footnote{https://github.com/neubig/travatar/blob/master/script/tree/ja-adjust-dep.pl\\https://github.com/neubig/travatar/blob/master/script/tree/ja-dep2cfg.pl}したものを用いて学習したモデルを，ベースラインの構文解析器として使用した．
+構文森は100-best構文木に存在するhyper-edgeのみで構成し，その他については枝刈りした\footnote{Egretは極希に構文解析に失敗し，構文木を出力しない場合がある．そのため，構文解析に失敗した文は学習データから取り除いた．}．
+機械翻訳の精度はBLEU \cite{papineni02bleu}とRIBES \cite{isozaki10ribes} の2つの自動評価尺度，Acceptability \cite{goto11ntcir} という人手評価尺度を用いて評価した．
+また，文単位の機械翻訳精度はBLEU+1 \cite{lin04orange} を用いて評価した．
+自己学習に用いるデータは既存のモデルで使用している
+JDCに加え，ASPECのトレーニングデータの中から選択されたものとした．
+自己学習したモデルは，テスト時にDevセット，Testセットを構文解析する際のみに使用し，TrainセットについてはJDCで学習した既存のモデルで行った．
+Trainセットについても自己学習したモデルで構文解析することにより，さらなる精度向上の可能性はあるが，翻訳器を学習し直すには多くの計算量が必要になってしまう．
+そのため，本実験ではDevセット，Testセットについてのみ自己学習したモデルで構文解析を行った．
+実験で得られた結果は，ブートストラップ・リサンプリング法 \cite{koehn04sigtest} により統計的有意差を検証した．
+次節では，下記の手法を比較評価する．
+
+\begin{table}[b]
+\caption{ASPECに含まれる対訳文数}
+\label{tab:ASPEC}
+\input{02table01.txt}
+\end{table}
+
+\begin{description}
+\item[構文木の選択法]\mbox{}
+	\begin{description}
+	\item[Parser 1-best]\mbox{}\\
+		式(\ref{eq:best_tree})のように，構文解析器が出力した1-best構文木を自己学習に用いる．
+	\item[Frontier Node 1-best]\mbox{}\\
+		\ref{sec:frontier_node}節のように，既存の構文解析器が出力した5-best構文木の中から，フロンティアノードの数が最も多くなる構文木を学習に使用する．
+	\item[MT 1-best]\mbox{}\\
+		\ref{sec:mt_1best}節のように，構文森を翻訳器に入力し，1-best訳に使われた構文木を自己学習に使用する．
+	\item[BLEU+1 1-best]\mbox{}\\
+		\ref{sec:bleu_1best}節のように，構文森を翻訳器に入力し，翻訳器が出力した500-best訳の中から，最もBLEU+1スコアが高い訳に使われた構文木を選択し，自己学習に用いる．
+		この際，出力される$n$-best訳は全て重複が無い文となるようにする．
+	\end{description}
+\item[文の選択法]\mbox{}
+\begin{description}
+	\item[Random]\mbox{}\\
+		全トレーニングデータからランダムに文を選択する．この際ランダムに選択される文は手法毎に異ならず，同一になるようにする
+		\footnote{大規模なコーパス全てを用いて構文解析器を学習するには多くの計算量が必要になるため，今回はランダムに抽出した文のみを使用する．}．
+	\item[BLEU+1$\geq t$]\mbox{}\\
+		\ref{sec:bleu_threshold}節のように，Oracle訳とその構文木の中でも，訳のBLEU+1スコアが閾値$t$を超えた文のみを自己学習に使用する．
+	\item[BLEU+1 Gain]\mbox{}\\
+		\ref{sec:bleu_diff}節のように，Oracle訳とその構文木の中でも，翻訳器1-best訳とOracle訳のBLEU+1スコアの差が大きい文のみを自己学習に使用する．
+		この手法では，文の長さの分布を式(\ref{eq:length_1})，(\ref{eq:length_2})に従って調節する．
+\end{description}
+\end{description}
+
+なお文をランダムに抽出する場合は，日英翻訳では全トレーニングデータの$1/20$，日中翻訳では$1/10$を抽出した．
+また，他の手法とほぼ同様の文数となるように，BLEU+1 Gainに関しては上位10万文を抽出した．
+
+以下，\ref{sec:mt_eval}節では，自己学習した構文解析モデルを使用して翻訳を行った際の翻訳器の精度評価，
+\ref{sec:parser_eval}節では，構文解析器の精度評価を行う．
+
+
+\subsection{翻訳器の精度評価}
+\label{sec:mt_eval}
+
+各手法で自己学習した構文解析器を用いて，翻訳精度の変化を確認する．
+\ref{sec:automatic_eval}節では自動評価尺度を用いた評価結果を示し，\ref{sec:human_eval}節で人手評価による評価結果を示す．
+また，\ref{sec:ex_improve}節では提案手法により改善された翻訳例を示し，どのような場合に提案手法が有効かを検討する．
+
+
+\subsubsection{自動評価尺度による翻訳精度の評価}
+\label{sec:automatic_eval}
+
+日英・日中翻訳の実験結果を表\ref{tab:result}に示す．
+表中の短剣符は，提案手法の翻訳精度がベースラインシステムと比較して統計的に有意に高いことを示す($\dag:p<0.05,\ \ddag:p<0.01$)．
+また，表中の星印は，提案手法の翻訳精度がLiuらの手法（手法(c)）と比較して統計的に有意に高いことを示す($\star:p<0.05,\ \star\star:p<0.01$)．
+表\ref{tab:result}中の(b), (c), (d), (e)の手法で自己学習に使用している文は，Egretが構文解析に失敗した場合を除いて同一である
+\footnote{手法(d), (e)ではEgretが解析に失敗した場合，代替の構文解析器としてJDCで学習したCkylark \cite{oda15naacldemo} を用いた．}．
+なお，表中の``文数''は自己学習に使用した文数を示し，既存モデルで使用しているJDCの文数は含まない．
+本実験では，BLEU+1を文や構文木選択を行う際の指標としたため，以降では，主にBLEUスコアに着目して分析を行う．
+
+\begin{table}[b] 
+\caption{日英・日中翻訳の実験結果}
+\label{tab:result}
+\input{02table02.txt}
+\end{table}
+
+実験により，以下の3つの仮説について検証を行った．
+\begin{itemize}
+\item 構文木の選択法を用いた標的自己学習（\ref{sec:tree_selection}節）は翻訳精度向上に効果があるのか
+\item 文の選択法（\ref{sec:sentence_selection}節）は学習データ中のノイズを減らし，精度を向上させる効果があるのか
+\item 標的自己学習したモデルは目的言語に依存するのか，多言語に渡って使用できるのか
+\end{itemize}
+
+\textbf{構文木の選択法による効果：}Parser 1-bestの構文木を自己学習に使用する手法では，日英，日中翻訳ともにBLEUスコアの向上は見られなかった（表\ref{tab:result} (b)）．
+Frontier Node 1-bestを用いた場合，Parser 1-bestを用いた手法と比較して多少の精度向上は見られたものの，ベースラインとの有意な差は見られなかった（表\ref{tab:result} (c)）．
+また，日英翻訳でMT 1-bestを自己学習に用いた手法では，Parser 1-bestを用いた手法と比較すると精度は向上したもののベースラインシステムと比較すると精度は向上しなかった（表\ref{tab:result} (d)）．
+日中翻訳では，MT 1-bestを使用した手法はParser 1-bestを用いた手法とほぼ同じ結果となった（表\ref{tab:result} (d)）．
+この際に自己学習に用いられた構文木を確認したところ，正しい構文木もあるが誤った構文木も散見され，精度向上が確認できなかったのは誤った構文木が学習の妨げになったからだと考えられる．
+
+次にBLEU+1 1-bestを用いた手法では，Oracle訳に使われた構文木が選択されることにより，BLEUスコアが日英，日中翻訳ともに向上していることがわかる（表\ref{tab:result} (e)）．
+特に，日中翻訳についてはベースラインより有意に精度が向上している．
+図\ref{fig:oracle_bleu}に，この手法で自己学習に使われたOracle訳のBLEU+1スコア分布を示す．
+横軸の値$x$は，$x$以上$x+0.1$未満のBLEU+1を持つ文を表しており，縦軸が該当する文の数である．
+この図からもわかるように，Oracle訳であってもBLEU+1スコアが低い文は多く存在する．
+このため，\ref{sec:sentence_selection}節の文選択を実施した．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-4ia2f5.eps}
+\end{center}
+\caption{表\ref{tab:result} 手法(e)のBLEU+1スコア分布}
+\label{fig:oracle_bleu}
+\end{figure}
+
+\textbf{文の選択法による効果：}次に，BLEU+1スコアの閾値を用いた文選択手法の効果を確認する．
+結果から，日英翻訳，日中翻訳ともに，この手法は効果的であることがわかった（表\ref{tab:result} (f), (g), (h)）．
+Liuらの手法（表\ref{tab:result} (c)）と比較を行った場合でも，提案手法の一部では有意に高い精度が得られている．
+この結果から，自己学習を行う際には，精度が低いと思われる構文木を極力取り除き，精度が高いと思われる構文木のみを学習データとして使用することが重要であると言える．
+さらに，翻訳器1-best訳とOracle訳でBLEU+1スコアの差が大きい文のみを使用する手法でも，BLEU+1スコアの閾値を用いた手法と同程度の精度向上を達成することができた（表\ref{tab:result} (i)）．
+
+\textbf{目的言語への依存性：}最後に，日英対訳文で自己学習し，日英翻訳の精度改善に貢献した構文解析器のモデルを，他の言語対である日中翻訳に使用した場合の翻訳精度の変化を検証した．
+興味深いことに，この場合でも直接日中対訳文で自己学習したモデルとほぼ同程度の翻訳精度の改善が見られた（表\ref{tab:result} (j)）．
+これにより，学習されたモデルの目的言語に対する依存性はさほど強くなく複数の目的言語のデータを合わせて学習データとすることで，さらに効果的な自己学習が行える可能性があることが示唆された．
+
+
+\subsubsection{人手による翻訳精度の評価}
+\label{sec:human_eval}
+
+提案手法によりBLEUスコアは改善されたが，自動評価尺度は完璧ではなく，実際にどの程度の質で翻訳できたか明確に判断することは難しい．
+そのため，人手評価による翻訳精度の評価を行い，実際にどの程度翻訳の質が改善されたかを確認した．
+評価基準は，意味伝達と訳の自然性を両方加味するAcceptability \cite{goto11ntcir} とした．
+本研究と関わりが無いプロの翻訳者に各翻訳文に対し評価基準を基に5段階のスコアをつけてもらい，これらの平均を評価値とする．
+評価は日英翻訳システムを対象とし，Testセットからランダムで抽出した200文について評価を行った．
+
+各システムの評価結果を表\ref{tab:human_eval_result}に示す．
+既存の自己学習手法で学習したモデルでは，ベースラインシステムと比較して有意な翻訳精度向上は確認できなかった（表\ref{tab:human_eval_result} (b)）．
+一方，提案手法で自己学習したモデルでは，ベースラインシステムより有意に良い翻訳精度が実現できており，かつ既存の自己学習手法と比較しても$p<0.1$水準ではあるが精度が向上している（表\ref{tab:human_eval_result} (c)）．
+このように，自動評価尺度だけでなく，人手評価でも提案手法で自己学習したモデルを用いることにより，有意に翻訳精度が向上することが確認できた．
+
+\begin{table}[b] 
+\caption{人手による日英翻訳精度の評価}
+\label{tab:human_eval_result}
+\input{02table03.txt}
+\end{table}
+
+
+\subsubsection{自己学習による訳出改善の例}
+\label{sec:ex_improve}
+
+構文解析器の自己学習によって改善された日英訳の例を表\ref{tab:ex_better_trans}に示す．
+また，表\ref{tab:ex_better_trans}の訳出の際に使用された構文木を図\ref{fig:selftrain_tree}に示す．
+この文では，「C投与群」と「Rの活動」という名詞句が含まれている．
+ベースラインシステムの構文木は，これらの名詞句を正しく解析できておらず，この構文解析誤りが翻訳結果にも悪影響を与えてしまっている．
+一方，提案手法で自己学習したシステムでは，これらの名詞句を正しく解析できており，翻訳も正しく行われている．
+これはMcCloskyら \cite{mcclosky08coling} が報告していたように，既存モデルで使用している
+JDCで既知の単語が，ASPECで異なる文脈で現れた際に解析精度が向上した結果であると考えられる．
+
+\begin{table}[t]
+\caption{日英翻訳における訳出改善例}
+\label{tab:ex_better_trans}
+\input{02table04.txt}
+\vspace{0.5\Cvs}
+\end{table}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-4ia2f6.eps}
+\end{center}
+\caption{自己学習により構文解析の精度が改善した例} \label{fig:selftrain_tree}
+\end{figure}
+
+
+\subsection{構文解析器の精度評価}
+\label{sec:parser_eval}
+
+次に，提案手法により自己学習した構文解析器自体の精度を測定した．
+ASPECに含まれる日英対訳データの内，Testセット中の100文を人手でアノテーションを行い，正解構文木を作成した．
+その後，各構文解析器の精度をEvalb\footnote{http://nlp.cs.nyu.edu/evalb}を用いて測定した．
+評価には，再現率，適合率，およびそれぞれの調和平均であるF値を用いる．
+表\ref{tab:parser_result}に構文解析器の精度評価結果を示す．
+
+\begin{table}[t] 
+\caption{自己学習した日本語構文解析器の精度}
+\label{tab:parser_result}
+\input{02table05.txt}
+\end{table}
+
+表からもわかるように，Parser 1-bestを用いて自己学習したモデルはベースラインシステムと比較して$p<0.05$水準で有意に精度が向上している．
+これに加えて，Frontier Node 1-bestを用いた手法や提案手法で自己学習したモデルは$p<0.01$水準で有意に精度が向上している．
+これらの結果から，提案手法は機械翻訳の精度だけでなく，構文解析器自体の精度もより向上させることがわかった．
+よって，本手法は構文解析器を分野適応させる場合においても有効であるといえる．
+
+
+\subsection{翻訳器の精度が低い場合の自己学習効果}
+
+提案手法では，翻訳結果を用いて間接的に構文木を評価し構文解析器を改良する．
+そのため，使用する翻訳器の精度によっては十分な学習効果が得られない可能性がある．
+本節では，精度が低い翻訳器を使用し構文解析器の自己学習を行い，翻訳精度と自己学習効果の依存性について検討する．
+なお本実験では日英翻訳のみを対象として実験を行った．
+
+
+\subsubsection{実験設定}
+
+200万文使用していた学習データを25万文に制限し，低精度の翻訳器を新たに作成した．
+使用した対訳文数，および翻訳精度を表\ref{tab:low_accuracy_decoder}に示す．
+学習データが減ったことにより，以前のシステムと比較してBLEU，RIBESともに低下している．
+これ以外の条件は全て\ref{sec:experimental_setup}節と同一である．
+なお，\ref{sec:mt_eval}節の実験結果との比較のために，自己学習後の翻訳精度評価には200万文を使用して学習したシステムを用いる．
+
+\begin{table}[t] 
+\caption{使用した対訳文数と翻訳精度}
+\label{tab:low_accuracy_decoder}
+\input{02table06.txt}
+\end{table}
+
+
+\subsubsection{実験結果，考察}
+
+低精度翻訳器を自己学習時に使用し，自己学習した構文解析器を用いて翻訳器を構築しその精度を測定した．
+この実験結果を表\ref{tab:result_low_accuracy}に示す．
+また，構文解析器自体の精度も\ref{sec:parser_eval}節と同様に測定した．
+測定結果を表\ref{tab:parser_result_low_accuracy}に示す．
+
+\begin{table}[t] 
+\caption{日英翻訳の実験結果（低精度の翻訳器を用いて自己学習を行った場合）}
+\label{tab:result_low_accuracy}
+\input{02table07.txt}
+\end{table}
+\begin{table}[t]
+\caption{自己学習した日本語構文解析器の精度（低精度の翻訳器を用いて自己学習を行った場合）}
+\label{tab:parser_result_low_accuracy}
+\input{02table08.txt}
+\end{table}
+
+結果は，低精度翻訳器を使用した場合でも，以前の高精度翻訳器を使用して自己学習を行った場合（表\ref{tab:result_low_accuracy} (b)）と遜色ない自己学習効果が得られた．
+構文解析器の精度自体も，高精度翻訳器を用いた場合（表\ref{tab:parser_result_low_accuracy} (b)）と大きな差は無いことがわかった．
+これらの結果から，提案手法は既存翻訳器の翻訳精度に依存しないことが示された．
+これは，翻訳器が出した500-bestの中からOracle訳を選択しており，翻訳器が低精度の場合でも500-bestの中にはある程度誤りが少ない訳が含まれているため，比較的正確な構文木が選択できたからだと考えられる．
+そのため，$n$-bestの$n$を変えるとこの結果は多少変化する可能性がある．
+
+
+\subsection{自己学習を繰り返し行った場合の効果}
+
+構文解析器の自己学習では，1回自己学習を行った構文解析器をベースラインとして使用し2回目の自己学習を行うことで，さらなる精度向上が期待できる．
+本節では，自己学習を繰り返し行うことで，翻訳精度および構文解析精度にどのような影響が及ぶかを検証する．
+なお本実験では日英翻訳のみを対象として実験を行った．
+
+本実験では，1回自己学習を行ったものの構文解析モデルとして，表\ref{tab:result}中の(g)のモデルを用いる．
+その他の実験設定は\ref{sec:experimental_setup}節と同一である．
+
+自己学習を2回行った構文解析モデルを使用して翻訳精度を測定した結果を表\ref{tab:result_iterate_accuracy}に示す．
+また，構文解析器の精度自体も\ref{sec:parser_eval}節と同様に測定した．
+測定結果を表\ref{tab:parser_result_iterate_accuracy}に示す．
+
+\begin{table}[t] 
+\caption{日英翻訳の実験結果（2回の繰り返し学習）}
+\label{tab:result_iterate_accuracy}
+\input{02table09.txt}
+\end{table}
+\begin{table}[t]
+\caption{自己学習した日本語構文解析器の精度（2回の繰り返し学習）}
+\label{tab:parser_result_iterate_accuracy}
+\input{02table10.txt}
+\end{table}
+
+実験より，2回の繰り返し学習を行っても，1度のみの場合と比較して翻訳精度，構文解析精度ともに向上は見られなかった．
+これは，学習時に500-bestの中からOracle訳を選択しているため，1度目でも既にある程度精度の高い構文木が選ばれていたことが原因として考えられる．
+また，スコアを基に学習データを制限しているため，2度目の学習時に改善された構文木であっても，翻訳結果がスコアの制限を満たさず学習データとして使われなかった可能性がある．
+そのため，本手法では繰り返し学習の効果は薄いと考えられる．
+
+
+\section{おわりに}
+
+本論文では，統語ベース翻訳で用いられる構文解析器の標的自己学習手法を提案し，これによりF2S翻訳および構文解析の精度が向上することを検証した．
+具体的には，日英，日中翻訳を対象に実験を行い，本手法で標的自己学習した構文解析器を用いることで，ベースラインシステムと比較して有意に高精度な翻訳結果を得られるようになったことが確認できた．
+また，日英で自己学習した構文解析器のモデルを，日中の翻訳の際に用いても同様に精度が向上することが確認できた．
+日英翻訳については訳の人手評価も実施し，人手評価においても有意に翻訳精度の改善が見られた．
+さらに，提案手法では翻訳精度だけでなく，構文解析の精度自体も向上することを実験により検証した．
+また，既存翻訳器の精度が十分でない場合でもこの手法は適用可能であることを確認した．
+本手法の繰り返し適用に関する検討も行ったが，本手法では繰り返し学習の効果は薄いと考えられる．
+
+今後の課題としては，さらに多くの言語対で提案手法が適用可能であることを確認することが挙げられる．
+また，自己学習による効果は目的言語によらないという可能性が示唆されたため，実際に多言語で学習データを集めて適用することで，より翻訳精度および構文解析精度を向上させることが期待される．
+さらに，対訳コーパスに対して他の複数の構文解析器を用いて解析し，それらの解析結果が一致している文を正解とみなして構文解析器の学習に使用するtri-trainingとの比較についても検討を行いたいと考えている．
+
+
+\acknowledgment
+本論文の一部は，JSPS科研費25730136および24240032の助成を受け実施したものである．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Charniak}{Charniak}{1997}]{Charniak97}
+Charniak, E. \BBOP 1997\BBCP.
+\newblock \BBOQ Statistical Parsing with a Context-Free Grammar and Word
+  Statistics.\BBCQ\
+\newblock In {\Bem Proceedings of AAAI}, \mbox{\BPGS\ 598--603}.
+
+\bibitem[\protect\BCAY{Galley, Graehl, Knight, Marcu, DeNeefe, Wang, \BBA\
+  Thayer}{Galley et~al.}{2006}]{galley06syntaxmt}
+Galley, M., Graehl, J., Knight, K., Marcu, D., DeNeefe, S., Wang, W., \BBA\
+  Thayer, I. \BBOP 2006\BBCP.
+\newblock \BBOQ Scalable Inference and Training of Context-Rich Syntactic
+  Translation Models.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 961--968}.
+
+\bibitem[\protect\BCAY{Gasc{\'{o}}, Rocha, Sanchis-Trilles,
+  Andr{\'{e}}s-Ferrer, \BBA\ Casacuberta}{Gasc{\'{o}}
+  et~al.}{2012}]{gasco2012does}
+Gasc{\'{o}}, G., Rocha, M.-A., Sanchis-Trilles, G., Andr{\'{e}}s-Ferrer, J.,
+  \BBA\ Casacuberta, F. \BBOP 2012\BBCP.
+\newblock \BBOQ Does More Data Always Yield Better Translations?\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 152--161}.
+
+\bibitem[\protect\BCAY{Goto, Lu, Chow, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2011}]{goto11ntcir}
+Goto, I., Lu, B., Chow, K.~P., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2011\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at the NTCIR-9
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR}, \lowercase{\BVOL}~9, \mbox{\BPGS\
+  559--578}.
+
+\bibitem[\protect\BCAY{Huang \BBA\ Harper}{Huang \BBA\
+  Harper}{2009}]{huang2009self}
+Huang, Z.\BBACOMMA\ \BBA\ Harper, M. \BBOP 2009\BBCP.
+\newblock \BBOQ Self-Training PCFG Grammars with Latent Annotations Across
+  Languages.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 832--841}.
+
+\bibitem[\protect\BCAY{Isozaki, Hirao, Duh, Sudoh, \BBA\ Tsukada}{Isozaki
+  et~al.}{2010}]{isozaki10ribes}
+Isozaki, H., Hirao, T., Duh, K., Sudoh, K., \BBA\ Tsukada, H. \BBOP 2010\BBCP.
+\newblock \BBOQ Automatic Evaluation of Translation Quality for Distant
+  Language Pairs.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 944--952}.
+
+\bibitem[\protect\BCAY{Katz-Brown, Petrov, McDonald, Och, Talbot, Ichikawa,
+  Seno, \BBA\ Kazawa}{Katz-Brown
+  et~al.}{2011}]{katzbrown11targetedselftraining}
+Katz-Brown, J., Petrov, S., McDonald, R., Och, F., Talbot, D., Ichikawa, H.,
+  Seno, M., \BBA\ Kazawa, H. \BBOP 2011\BBCP.
+\newblock \BBOQ Training a Parser for Machine Translation Reordering.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 183--192}.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2004}]{koehn04sigtest}
+Koehn, P. \BBOP 2004\BBCP.
+\newblock \BBOQ Statistical Significance Tests for Machine Translation
+  Evaluation.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 388--395}.
+
+\bibitem[\protect\BCAY{Koehn, Och, \BBA\ Marcu}{Koehn
+  et~al.}{2003}]{koehn03phrasebased}
+Koehn, P., Och, F.~J., \BBA\ Marcu, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Phrase-based Translation.\BBCQ\
+\newblock In {\Bem Proceedings of HLT}, \mbox{\BPGS\ 48--54}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Och}{Lin \BBA\ Och}{2004}]{lin04orange}
+Lin, C.-Y.\BBACOMMA\ \BBA\ Och, F.~J. \BBOP 2004\BBCP.
+\newblock \BBOQ Orange: A Method for Evaluating Automatic Evaluation Metrics
+  for Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of COLING}, \mbox{\BPGS\ 501--507}.
+
+\bibitem[\protect\BCAY{Liu, Li, Li, \BBA\ Zhou}{Liu et~al.}{2012}]{liu12emnlp}
+Liu, S., Li, C.-H., Li, M., \BBA\ Zhou, M. \BBOP 2012\BBCP.
+\newblock \BBOQ Re-training Monolingual Parser Bilingually for Syntactic
+  SMT.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 854--862}.
+
+\bibitem[\protect\BCAY{Liu, Liu, \BBA\ Lin}{Liu
+  et~al.}{2006}]{liu06treetostring}
+Liu, Y., Liu, Q., \BBA\ Lin, S. \BBOP 2006\BBCP.
+\newblock \BBOQ Tree-to-String Alignment Template for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 609--616}.
+
+\bibitem[\protect\BCAY{Marcus, Marcinkiewicz, \BBA\ Santorini}{Marcus
+  et~al.}{1993}]{marcus93penntreebank}
+Marcus, M.~P., Marcinkiewicz, M.~A., \BBA\ Santorini, B. \BBOP 1993\BBCP.
+\newblock \BBOQ Building a Large Annotated Corpus of English: The Penn
+  Treebank.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  313--330}.
+
+\bibitem[\protect\BCAY{McClosky, Charniak, \BBA\ Johnson}{McClosky
+  et~al.}{2006}]{mcclosky2006effective}
+McClosky, D., Charniak, E., \BBA\ Johnson, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Effective Self-training for Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of HLT}, \mbox{\BPGS\ 152--159}.
+
+\bibitem[\protect\BCAY{McClosky, Charniak, \BBA\ Johnson}{McClosky
+  et~al.}{2008}]{mcclosky08coling}
+McClosky, D., Charniak, E., \BBA\ Johnson, M. \BBOP 2008\BBCP.
+\newblock \BBOQ When is Self-training Effective for Parsing?\BBCQ\
+\newblock In {\Bem Proceedings of COLING}, \mbox{\BPGS\ 561--568}.
+
+\bibitem[\protect\BCAY{Mi \BBA\ Huang}{Mi \BBA\ Huang}{2008}]{mi08forestrule}
+Mi, H.\BBACOMMA\ \BBA\ Huang, L. \BBOP 2008\BBCP.
+\newblock \BBOQ Forest-based Translation Rule Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 206--214}.
+
+\bibitem[\protect\BCAY{Mori, Ogura, \BBA\ Sasada}{Mori
+  et~al.}{2014}]{mori14jtb}
+Mori, S., Ogura, H., \BBA\ Sasada, T. \BBOP 2014\BBCP.
+\newblock \BBOQ A Japanese Word Dependency Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of LREC}, \mbox{\BPGS\ 753--758}.
+
+\bibitem[\protect\BCAY{Morishita, Akabe, Hatakoshi, Neubig, Yoshino, \BBA\
+  Nakamura}{Morishita et~al.}{2015}]{morishita15iwslt}
+Morishita, M., Akabe, K., Hatakoshi, Y., Neubig, G., Yoshino, K., \BBA\
+  Nakamura, S. \BBOP 2015\BBCP.
+\newblock \BBOQ Parser Self-Training for Syntax-Based Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of IWSLT}, \mbox{\BPGS\ 232--239}.
+
+\bibitem[\protect\BCAY{Nakazawa, Mino, Goto, Kurohashi, \BBA\ Sumita}{Nakazawa
+  et~al.}{2014}]{nakazawa14wat}
+Nakazawa, T., Mino, H., Goto, I., Kurohashi, S., \BBA\ Sumita, E. \BBOP
+  2014\BBCP.
+\newblock \BBOQ Overview of the 1st Workshop on Asian Translation.\BBCQ\
+\newblock In {\Bem Proceedings of WAT}, \mbox{\BPGS\ 1--19}.
+
+\bibitem[\protect\BCAY{Neubig}{Neubig}{2013}]{neubig13travatar}
+Neubig, G. \BBOP 2013\BBCP.
+\newblock \BBOQ Travatar: A Forest-to-String Machine Translation Engine based
+  on Tree Transducers.\BBCQ\
+\newblock In {\Bem Proceedings of ACL Demo Track}, \mbox{\BPGS\ 91--96}.
+
+\bibitem[\protect\BCAY{Neubig}{Neubig}{2014}]{neubig14wat}
+Neubig, G. \BBOP 2014\BBCP.
+\newblock \BBOQ Forest-to-String SMT for Asian Language Translation: NAIST at
+  WAT2014.\BBCQ\
+\newblock In {\Bem Proceedings of WAT}, \mbox{\BPGS\ 20--25}.
+
+\bibitem[\protect\BCAY{Neubig \BBA\ Duh}{Neubig \BBA\ Duh}{2014}]{neubig14acl}
+Neubig, G.\BBACOMMA\ \BBA\ Duh, K. \BBOP 2014\BBCP.
+\newblock \BBOQ On the Elements of an Accurate Tree-to-String Machine
+  Translation System.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 143--149}.
+
+\bibitem[\protect\BCAY{Oda, Neubig, Sakti, Toda, \BBA\ Nakamura}{Oda
+  et~al.}{2015}]{oda15naacldemo}
+Oda, Y., Neubig, G., Sakti, S., Toda, T., \BBA\ Nakamura, S. \BBOP 2015\BBCP.
+\newblock \BBOQ Ckylark: A More Robust PCFG-LA Parser.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL}, \mbox{\BPGS\ 41--45}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{papineni02bleu}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Yamada \BBA\ Knight}{Yamada \BBA\
+  Knight}{2001}]{yamada01syntaxmt}
+Yamada, K.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2001\BBCP.
+\newblock \BBOQ A Syntax-based Statistical Translation Model.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 523--530}.
+
+\bibitem[\protect\BCAY{Zhang \BBA\ Chiang}{Zhang \BBA\
+  Chiang}{2012}]{zhang12helporhurt}
+Zhang, H.\BBACOMMA\ \BBA\ Chiang, D. \BBOP 2012\BBCP.
+\newblock \BBOQ An Exploration of Forest-to-String Translation: Does
+  Translation Help or Hurt Parsing?\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 317--321}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{森下　　睦}{
+2015年同志社大学理工学部インテリジェント情報工学科中途退学（大学院への飛び入学のため）．
+現在，奈良先端科学技術大学院大学情報科学研究科博士前期課程在籍．
+機械翻訳，自然言語処理に関する研究に従事．
+}
+\bioauthor{赤部　晃一}{
+2015年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+機械翻訳，自然言語処理に関する研究に従事．
+}
+\bioauthor{波多腰優斗}{
+2015年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+現在，セイコーエプソン株式会社にて勤務．
+}
+\bioauthor[:]{Graham Neubig}{
+2005年米国イリノイ大学アーバナ・シャンペーン校工学部コンピュータ・サイエンス専攻卒業．
+2010年京都大学大学院情報学研究科修士課程修了．
+2012年同大学院博士後期課程修了．
+同年奈良先端科学技術大学院大学助教．
+機械翻訳，自然言語処理に関する研究に従事．
+}
+\bioauthor{吉野幸一郎}{
+2009年慶應義塾大学環境情報学部卒業．
+2011年京都大学大学院情報学研究科修士課程修了．
+2014年同博士後期課程修了．
+同年日本学術振興会特別研究員 (PD)．
+2015年より奈良先端科学技術大学院大学情報科学研究科特任助教．
+京都大学博士（情報学）．
+音声言語処理および自然言語処理，特に音声対話システムに関する研究に従事．
+2013年度人工知能学会研究会優秀賞受賞．
+IEEE，ACL，情報処理学会，言語処理学会各会員． 
+}
+\bioauthor{中村　　哲}{
+1981年京都工芸繊維大学電子卒．京都大学博士（工学）．シャープ株式会社．奈良
+先端大学助教授，2000年ATR音声言語コミュニケーション研究所室長，所長，2006
+年（独）情報通信研究機構研究センター長，けいはんな研究所長などを経て，現
+在，奈良先端大学教授．ATRフェロー．カールスルーエ大学客員教授．音声翻訳，音
+声対話，自然言語処理の研究に従事．情報処理学会喜安記念業績賞，総務大臣表彰，
+文部科学大臣表彰，Antonio Zampoli賞受賞． ISCA 理事，IEEE SLTC 委員，IEEE
+フェロー．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

@@ -1,0 +1,830 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+
+    \usepackage{amssymb}
+    \def\hl#1{}
+
+
+
+\Volume{23}
+\Number{5}
+\Month{December}
+\Year{2016}
+
+\received{2016}{4}{4}
+\revised{2016}{7}{11}
+\accepted{2016}{8}{31}
+
+\setcounter{page}{437}
+
+\jtitle{言語横断質問応答に適した機械翻訳評価尺度の調査}
+\jauthor{杉山享志朗\affiref{NAIST} \and 水上　雅博\affiref{NAIST} \and Graham Neubig\affiref{NAIST} \and 吉野幸一郎\affiref{NAIST} \and \\
+	鈴木　　優\affiref{NAIST} \and 中村　　哲\affiref{NAIST}}
+\jabstract{
+質問応答システムが高い精度で幅広い質問に解答するためには，大規模な知識ベースが必要である．
+しかし，整備されている知識ベースの規模は言語により異なり，小規模の知識ベースしか持たない言語で高精度な質問応答を行うためには，
+機械翻訳を用いて異なる言語の大規模知識ベースを利用して言語横断質問応答を行う必要がある．
+ところが，このようなシステムでは機械翻訳システムの翻訳精度が質問応答の精度に影響を与える．
+一般的に，機械翻訳システムは人間が与える評価と相関を持つ評価尺度により精度が評価されている．
+そのため，この評価尺度による評価値が高くなるように機械翻訳システムは最適化されている．
+しかし，質問応答に適した翻訳結果は，人間にとって良い翻訳結果と同一とは限らない．
+つまり，質問応答システムに適した翻訳システムの評価尺度は，人間の直感に相関する評価尺度とは必ずしも合致しないと考えた．
+そこで本論文では，複数の翻訳手法を用いて言語横断質問応答データセットを作成し，
+複数の評価尺度を用いてそれぞれの翻訳結果の精度を評価する．
+そして，作成したデータセットを用いて言語横断質問応答を行い，質問応答精度と翻訳精度との相関を調査する．
+これにより，質問応答精度に影響を与える翻訳の要因や，質問応答精度と相関が高い評価尺度を明らかにする．
+さらに，自動評価尺度を用いて翻訳結果のリランキングを行うことによって，言語横断質問応答の精度を改善できることを示す．
+}
+\jkeywords{言語横断質問応答，機械翻訳，自動評価尺度}
+
+\etitle{An Investigation of Machine Translation Evaluation Metrics in Cross-lingual Question Answering}
+\eauthor{Kyoshiro Sugiyama\affiref{NAIST} \and Masahiro Mizukami\affiref{NAIST} \and Graham Neubig\affiref{NAIST} \and Koichiro Yoshino\affiref{NAIST} \and Yu Suzuki\affiref{NAIST} \and Satoshi Nakamura\affiref{NAIST}} 
+\eabstract{
+Through using knowledge bases, question answering (QA) systems have come to be able to answer questions accurately over a variety of topics.
+However, knowledge bases are limited to only a few major languages, 
+and thus it is often necessary to build QA systems that answer questions in one language based on an information source in another language (cross-lingual QA: CLQA).
+Machine translation (MT) is one tool to achieve CLQA, and it is intuitively clear that a better MT system improves QA accuracy.
+However, it is not clear whether an MT system that is better for human consumption is also better for CLQA.
+In this paper, we investigate the relationship between manual and automatic translation evaluation metrics and CLQA accuracy
+by creating a data set using both manual and machine translation, and performing CLQA using this created data set.
+As a result, we find that QA accuracy is closely related with a metric that considers frequency of words,
+and as a result of manual analysis, we identify two factors of translation results that affect CLQA accuracy.
+One is mistranslation of content words and another is lack of question type words.
+In addition, we show that using a metric which has high correlation with CLQA accuracy 
+ can improve CLQA accuracy by choosing an appropriate translation result from translation candidates.
+}
+\ekeywords{Cross-lingual Question Answering, Machine Translation, Evaluation Metrics}
+
+\headauthor{杉山，水上，Neubig，吉野，鈴木，中村}
+\headtitle{言語横断質問応答に適した機械翻訳評価尺度の調査}
+
+\affilabel{NAIST}{奈良先端科学技術大学院大学情報科学研究科}{Nara Institute of Science and Technology, Graduate School of Information Science}
+
+
+
+\begin{document}
+\maketitle
+
+
+\vspace{0.5\Cvs}
+\section{はじめに}
+
+質問応答とは，入力された質問文に対する解答を出力するタスクであり，一般的に文書，Webページ，知識ベースなどの情報源から解答を検索することによって実現される．
+質問応答はその応答の種類によって，事実型（ファクトイド型）質問応答と非事実型（ノンファクトイド型）質問応答に分類され，本研究では事実型質問応答を取り扱う．
+近年の事実型質問応答では，様々な話題の質問に解答するために，構造化された大規模な知識ベースを情報源として用いる手法が盛んに研究されている
+\cite{kiyota2002,tunstall2010,fader2014}．
+知識ベースは言語によって規模が異なり，言語によっては小規模な知識ベースしか持たない．
+例えば，Web上に公開されている知識ベースにはFreebase\footnote{https://www.freebase.com/}や
+DBpedia\footnote{http://wiki.dbpedia.org/}などがあるが，
+2016年2月現在，英語のみに対応しているFreebaseに収録されているエンティティが約5,870万件，
+多言語に対応したDBpediaの中で英語で記述されたエンティティが約377万件であるのに対し，
+DBpediaに含まれる英語以外の言語で記述されたエンティティは1言語あたり最大125万件であり，収録数に大きな差がある．
+知識ベースの規模は解答可能な質問の数に直結するため，	特に言語資源の少ない言語での質問応答では，質問文の言語と異なる言語の情報源を使用する必要がある．
+このように，質問文と情報源の言語が異なる質問応答を，言語横断質問応答と呼ぶ．
+
+こうした言語横断質問応答を実現する手段として，機械翻訳システムを用いて質問文を知識ベースの言語へ翻訳する手法が挙げられる~\cite{shimizu2005,mori2005}．
+一般的な機械翻訳システムは，人間が高く評価する翻訳を出力することを目的としているが，人間にとって良い翻訳が必ずしも質問応答に適しているとは限らない．
+Hyodoら~\cite{hyodo2009}は，内容語のみからなる翻訳モデルが通常の翻訳モデルよりも良い性能を示したとしている．
+また，Riezlerらの提案したResponse-based~online~learningでは，翻訳結果評価関数の重みを学習する際に質問応答の結果を利用することで，言語横断質問応答に成功しやすい翻訳結果を出力する翻訳器を得られることが示されている\cite{riezler2014,haas2015}．
+{Reponse-based~learningでは学習時に質問応答を実行して正解できたかを確認する必要があるため，質問と正解の大規模な並列コーパスが必要となり，学習にかかる計算コストも大きい．
+これに対して，質問応答に成功しやすい文の特徴を明らかにすることができれば，質問応答成功率の高い翻訳結果を出力するよう翻訳器を最適化することが可能となり，効率的に言語横断質問応答の精度を向上させることが可能であると考えられる．
+さらに，質問と正解の並列コーパスではなく，比較的容易に整備できる対訳コーパスを用いて翻訳器を最適化することができるため，より容易に大規模なデータで学習を行うことができると考えられる．}
+
+本研究では，どのような翻訳結果が知識ベースを用いた言語横断質問応答に適しているかを明らかにするため，知識ベースを利用する質問応答システムを用いて2つの調査を行う．
+1つ目の調査では，言語横断質問応答精度に寄与する翻訳結果の特徴を調べ，2つ目の調査では，自動評価尺度を用いて翻訳結果のリランキングを行うことによる質問応答精度の変化を調べる．
+調査を行うため，異なる特徴を持つ様々な翻訳システムを用いて，言語横断質問応答データセットを作成する（\ref{sec:dataset}節）．
+作成したデータセットに対し，\ref{sec:QAsystem}節に述べる質問応答システムを用いて質問応答を行い，翻訳精度（\ref{sec:MTevalexp}節）と質問応答精度（\ref{sec:QAexp}節）との関係を分析する（\ref{sec:discussion1}節）．
+また，個別の質問応答事例について人手による分析を行い，翻訳結果がどのように質問応答結果に影響するかを考察する（\ref{sec:discussion2}節）．
+さらに，\ref{sec:discussion1}節および\ref{sec:discussion2}節における分析結果から明らかとなった，質問応答精度と高い相関を持つ自動評価尺度を利用して，	翻訳$N$ベストの中から翻訳結果を選択することによって，質問応答精度がどのように変化するかを調べる（\ref{sec:nbestselect}節）．
+{このようにして得られる知見は日英という言語対に限られたものとなるため，さらに一般化するために様々な言語対で言語横断質問応答を行い，言語対による影響を調査する（{\ref{sec:exp4}}節）．}
+
+最後に，言語横断質問応答に適した機械翻訳システムを実際に構築する際に有用な知見をまとめ，今後の展望を述べて本論文の結言とする（\ref{sec:conclusion}節）．
+
+
+\section{本調査の概観}
+\label{sec:how2research}
+
+本論文では2種類の調査を行う．
+{1つ目は言語横断質問応答に対する翻訳結果の影響に関する調査である．
+翻訳結果の訳質評価結果と言語横断質問応答精度の関係を求め，その結果からどのような特徴を持つ翻訳結果が言語横断質問応答に適しているかを明らかにする．}
+2つ目は1つ目の調査結果から，言語横断質問応答に適応した翻訳をできるかについての調査である．
+{具体的には1つ目の調査で質問応答精度との相関が高かったスコアを用いて翻訳結果のリランキングを行い，質問応答精度がどのように変化するかについて調べる．
+これにより，質問応答精度との相関が高いスコアを用いた翻訳結果によって質問応答精度を改善できることを確認する．}
+
+
+\subsection{言語横断質問応答精度に影響する翻訳結果の調査}
+\label{sec:how2exp1}
+
+1つ目の調査では，翻訳結果がどのように言語横断質問応答精度に影響を与えるかを調べる．
+実験の概要を図\ref{fig:how2exp1}に示す．
+本調査は，以下の手順で行う．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia3f1.eps}
+\end{center}
+\caption{質問応答精度に影響する翻訳結果の調査実験概要}
+\label{fig:how2exp1}
+\end{figure}
+
+\begin{description}
+\item[翻訳を用いたデータセット作成]
+質問応答に使用されることを前提として作成された英語質問応答データセットを用意し，その質問文を理想的な翻訳結果と仮定する．
+まず，理想的な英語質問セットを人手で和訳し（図中の「人手翻訳」），日本語質問セットを作成する．
+続いて，これらの日本語質問セットを，様々な翻訳手法を用いて英訳し（図中の「翻訳手法1〜$n$」），英語質問セットを作成する．
+
+\item[翻訳精度測定]
+作成した英語質問セットについて，複数の評価尺度を用いて翻訳精度の評価を行う（翻訳精度評価システム）．
+この時，参照訳は理想的な英語質問セットに含まれる質問文とする．
+
+\item[質問応答精度測定]
+理想的な英語質問セットと，作成した英語質問セットそれぞれについて，同一の質問応答器による質問応答実験を行い，質問応答精度を測定する．
+
+\item[分析]
+複数の翻訳精度評価尺度それぞれについて，どのような特徴を持つ評価尺度が質問応答精度と高い相関を持つかを調べる．
+また，質問セット単位ではなく，文単位でも翻訳精度と質問応答精度との相関を分析する．
+この際，正確な翻訳であっても正解するのが難しいと思われる質問が存在することを考慮するため，理想的な質問文で正解したかどうかで2グループに分けて分析する．
+さらに，個別の質問応答事例について人手で確認し，どのような翻訳結果が質問応答の結果を変化させるかを考察する．
+\end{description}	
+
+
+\subsection{自動評価尺度を用いた翻訳結果選択による質問応答精度改善}
+\label{sec:how2exp2}
+
+前節に述べた実験により得た知見を元に，できる限り既存の資源・システムを用いて言語横断質問応答精度を向上させる可能性を探る．
+図\ref{fig:how2exp2}に調査方法の概要を示す．
+まず，翻訳結果をもっともらしいものから$N$通り出力する$N$ベスト出力を行う．
+質問応答精度と高い相関を持つ評価尺度を用いて，$N$ベストから翻訳結果を選択することによって質問応答精度の向上が見られれば，
+そのような評価尺度が高くなるように翻訳結果を選択することで質問応答システムの精度が向上することが期待できる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-5ia3f2.eps}
+\end{center}
+\caption{自動評価尺度を用いた翻訳結果選択}
+\label{fig:how2exp2}
+\end{figure}
+
+
+\section{データセット作成}
+\label{sec:dataset}
+
+本調査では，日英言語横断質問応答を想定した実験を行うため，基本となる英語質問応答セットとそれを和訳した日本語質問応答セット，日本語質問応答セットから翻訳された英語質問応答セットという3種類の質問応答セットを用いた．
+本節では，これらのデータセットの作成方法について述べる．
+
+
+\subsection{作成手順}
+
+基本となる英語質問セットとして，Free917~\cite{cai2013}を用いた．
+Free917はFreebaseと呼ばれる大規模知識ベースを用いた質問応答のために作成されており，知識ベースを用いた質問応答の研究に広く利用されている~\cite{cai2013,berant2013}．
+このデータセットは917対の英語質問文と正解で構成され，各正解はFreebaseのクエリの形で与えられている．
+先行研究~\cite{cai2013}に従い，このデータセットをtrainセット（512対），devセット（129対），testセット（276対）に分割した．
+以降，この翻訳前のtestセットをORセットと呼ぶ．
+まず，ORセットに含まれる質問文を和訳し，日本語質問セット（JAセット）とした．
+和訳は，1名による人手翻訳で行った．
+なお，今回は日本語の人手翻訳を各セットに対して 1 通りのみ用意するが，この人手翻訳における微妙なニュアンスが以降の機械翻訳に影響を与える可能性がある．
+次に，JAセットに含まれる質問文を後述する5種類の翻訳手法によって翻訳し，各英語質問セット(HT, GT, YT, Mo, Tra)を作成した．
+質問応答セットの一部を表 1 に示す．
+
+\begin{table}[t]
+\caption{各質問セットに含まれる質問文と正解クエリの例}
+\label{tb:testSetExample}
+\input{03table01.txt}
+\end{table}
+
+
+\subsection{比較した翻訳手法}
+\label{sec:MTsystems}
+
+本節では，質問セット作成で比較のため用いた5種類の翻訳手法について述べる．
+
+\begin{description}
+\item[{人手翻訳}]
+翻訳業者に日英翻訳を依頼し，質問文の日英翻訳を行った．
+これによって作成したデータセットをHTセットと呼ぶ．
+人手による翻訳結果は人間にとってほぼ最良の翻訳であると考えられ，人間が高く評価する翻訳結果が言語横断質問応答にも適しているかを調べるためにHTセットを作成した．
+
+\item[商用翻訳システム]
+Webページを通して利用できる商用翻訳システムであるGoogle翻訳\footnote{https://translate.google.co.jp/, 2015年1月アクセス}とYahoo!翻訳\footnote{http://honyaku.yahoo.co.jp/, 2015年2月アクセス}を利用して日英翻訳を行った．
+これらの枠組みや学習に用いられているデータの詳細は公開されていない．
+Google翻訳の翻訳結果を用いて作成した英語質問応答セットをGTセット，Yahoo!翻訳の翻訳結果を用いて作成したものをYTセットと呼ぶ．
+これらの機械翻訳システムは商用目的に作成されており，実用的な品質を持つと考えられるため，機械翻訳の精度についての目安となることを期待して使用した．
+
+\item[フレーズベース翻訳]
+    統計的機械翻訳で最も代表的なシステムであるMoses (Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi, Cowan, Shen, Moran, Zens, Dyer, Bojar, \linebreak Constantin, and Herbst 2007)\nocite{moses}を用いて
+作成されたフレーズベース機械翻訳を用いて質問文を翻訳した．
+学習には，
+英辞郎例文\footnote{http://www.eijiro.jp/}，
+京都フリー翻訳タスクのWikipediaデータ\footnote{http://alaginrc.nict.go.jp/WikiCorpus/index.html}，
+田中コーパス\footnote{http://www.edrdg.org/wiki/index.php/Tanaka\_Corpus}，
+日英法令コーパス\footnote{http://www.phontron.com/jaen-law/index-ja.html}，
+青空文庫\footnote{http://www2.nict.go.jp/univ-com/multi\_trans/member/mutiyama/align/index.html}，
+TED講演\footnote{https://wit3.fbk.eu/}，
+BTEC，
+オープンソース対訳\footnote{http://www2.nict.go.jp/univ-com/multi\_trans/member/mutiyama/manual/index-ja.html}
+を利用した．
+また，辞書として
+英辞郎，WWWJDIC\footnote{http://www.csse.monash.edu.au/~jwb/wwwjdicinf.html\#dicfil\_tag}，
+Wikipediaの言語間リンク\footnote{https://en.wikipedia.org/wiki/Wikipedia:Database\_download}
+を利用した．
+合計で，対訳コーパス約255万文，辞書約277万エントリーである．
+Mosesによる翻訳結果を用いて作成したデータセットをMoセットと呼ぶ．
+
+\item[Tree-to-string翻訳]
+Tree-to-string機械翻訳システムであるTravatar~\cite{travatar}を用いて質問文を英訳した．
+学習に用いたデータはMosesと同様である．
+Travatarによる翻訳結果を用いて作成したデータセットをTraセットと呼ぶ．
+
+Moセット，Traセットの作成に用いた翻訳器は，翻訳過程に用いられる手法が明らかであり，翻訳過程という観点からの分析に必要であると考え，これらのセットを作成した．
+
+\end{description}
+
+
+\section{質問応答システム}
+\label{sec:QAsystem}
+
+本研究では，質問応答を行うためにSEMPRE\footnote{http://nlp.stanford.edu/software/sempre/}という質問応答フレームワークを利用した．
+SEMPREは，大規模知識ベースを利用し，高水準な質問応答精度が示されている~\cite{berant2013}．
+本節ではSEMPREの動作を述べ，言語横断質問応答に利用する場合に，どのような翻訳が各動作に影響を与えるかを考察する．
+図\ref{fig:sempre_framework}にSEMPREフレームワークの動作例を示し，その動作についてアライメント，ブリッジング，スコアリングの三段階に分けて説明する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia3f3.eps}
+\end{center}
+\caption{SEMPREフレームワークによる質問応答の動作例}
+\label{fig:sempre_framework}
+\end{figure}
+
+\begin{description}
+\item[アライメント(Alignment)]
+アライメントでは，質問文中のフレーズからクエリの一部となるエンティティやプロパティを生成する．
+このためには，レキシコン(Lexicon)と呼ばれる，自然言語フレーズからエンティティ／プロパティへのマッピングを事前に作成する必要がある．
+レキシコンは大規模なテキストコーパスと知識ベースを用いて共起情報などを元に作成される．
+本研究では先行研究\cite{berant2013}に従い，ClueWeb09\footnote{http://www.lemurproject.org/clueweb09.php/}~\cite{clueweb09}と呼ばれるデータセットに含まれる新聞記事のコーパスとFreebaseを用いて作成されたレキシコンを用いた．
+図\ref{fig:sempre_framework}の例では，{\it ``college''}からType.Universityのエンティティが生成され，{\it ``Obama''}からBarackObamaのエンティティが生成されている．
+
+アライメントに最も影響を及ぼすと考えられる翻訳の要因は，単語の変化である．
+質問文の中の部分文字列はアライメントにおける論理式の選択に用いられるため，誤って翻訳された単語はアライメントでの失敗を引き起こすと考えられる．
+
+\item[ブリッジング(Bridging)]
+アライメントによって作成されたエンティティ／プロパティの系列について，隣接するエンティティやプロパティを統合し，知識ベースに入力するクエリを生成する．
+ブリッジングは隣接する論理式から新たな論理式を生成し，統合する動作である．
+図\ref{fig:sempre_framework}の例では，Type.UniversityとBarackObamaが隣接しており，両者を繋ぐ論理式としてEducationが生成されている．
+
+ブリッジングに影響を及ぼすと考えられる翻訳の要因は，語順の変化である．
+語順が異なるとアライメントで生成される論理式の順序が変化するため，隣接する論理式の組み合わせが変化する．
+したがって，翻訳結果の語順が誤っていた場合，ブリッジングでの失敗を引き起こすと予想される．
+
+\item[スコアリング(Scoring)]
+アライメントとブリッジングでは，網羅的に組合せを試し，多数のクエリ候補を出力する．
+スコアリングでは，評価関数に基づいて候補の導出過程を評価し，最も適切な候補を選択する．
+図\ref{fig:sempre_framework}の例では，Type.University$\sqcap$Education.BarackObamaというクエリ候補のスコアを，
+「{\it ``college''}からType.Universityを生成」し，「{\it ``Obama''}からBarackObamaを生成」し，「Educationでブリッジする」という導出過程に対して決定する．
+質問応答システムの学習では，正解を返すクエリを導出することができた導出過程に高いスコアが付くよう評価関数を最適化する．
+
+言語横断質問応答に最適な評価関数は単言語質問応答と異なる可能性があり，翻訳はこの処理にも影響する可能性がある．
+しかしながら，言語横断質問応答に最適化するよう学習するためには翻訳された学習データセットが必要であり，
+その作成には大きなコストがかかる．そのため，本論文ではこれに関する調査は行っていない．
+\end{description}
+
+
+\section{実験}
+\label{sec:experiments}
+
+本実験では，言語横断質問応答においてどのような翻訳の要因が質問応答精度に影響を及ぼすかを調査した．
+そのために，\ref{sec:dataset}節で述べたデータセットと\ref{sec:QAsystem}節で述べた質問応答システムを用い，日本語の質問文を翻訳システムで英語の質問文に変換し，英語の単言語質問応答器によって解答を得るという状況を想定した実験を行った．
+
+
+\subsection{実験1: 翻訳された質問セットの訳質評価}
+\label{sec:MTevalexp}
+
+翻訳精度と質問応答精度の関係を調査するため，まず翻訳結果の訳質を評価した．
+
+
+\subsubsection{実験設定}
+\label{sec:mt_criterion}
+
+本実験では，JAセットの質問文から翻訳された5つの英語質問応答セットに含まれる質問文の訳質をいくつかの自動評価尺度および人手評価によって評価した．
+自動評価尺度の参照訳としては，ORセットの質問文を用いた．
+これは，JAセットの質問文の理想的な英訳がORセットの質問文であると仮定することに相当する．
+評価尺度には，4つの訳質自動評価尺度(BLEU+1~\cite{bleu+1}，NIST~\cite{nist}，RIBES~\cite{ribes}，WER~\cite{wer})と，人手による許容性評価(Acceptability)~\cite{goto2013}を用いた．
+
+\begin{description}
+\item[BLEU+1]
+BLEU+1は，最初に提案された自動評価尺度であるBLEU~\cite{bleu}の拡張（平滑化版）である．
+BLEUは，参照訳と翻訳仮説との間のn-gram適合率を基準とした評価を行うため，局所的な語順を評価する評価尺度であると言える．
+短い訳出には参照訳の長さに応じたペナルティを与えることで極端な翻訳に高いスコアを与えないよう設計されている．
+BLEUはコーパス単位の評価を想定した評価尺度であるが，BLEU+1は平滑化を導入することで文単位での評価でもBLEUと比べて極端な値が出づらくなっている．
+評価値は0〜1の実数で，参照訳と完全に一致した文の評価は1となる．
+
+\item[RIBES]
+RIBESは単語の順位相関係数に基づいた評価尺度であり，大域的な語順を捉えることができる．
+その特性から，日英・英日のように大きく異なる文構造の言語対の翻訳評価で人間評価と高い相関が認められている．
+評価値は0〜1 の実数で，参照訳と完全に一致した文の評価は1である．
+
+\item[NIST]
+NISTスコアは，BLEUやBLEU+1と同じくn-gram適合率に基づいた評価尺度であるが，各n-gramに出現頻度に基づいて重み付けをする点でそれらと異なる．
+低頻度の語ほど大きな重みが与えられ，結果として頻出する機能語よりも低頻度な内容語に重点を置いた評価尺度となる．
+評価値は正の実数で与えられ，上限が設定されない．
+本研究では，参照訳と完全に一致した文の評価値で除算することで，0〜1の範囲に正規化した値を用いる．
+
+\item[WER]
+WER（Word Error Rate: 単語誤り率）は参照訳と翻訳仮説の編集距離を語数で割ることで得られる尺度で，BLEUやRIBESより厳密に参照訳との語順・単語の一致を評価する．
+WERは誤り率を表し，低いほどよい翻訳仮説となるため，他の評価尺度と軸向きを揃えるために$1-{WER}$の値を用いた．
+
+\item[許容性(Acceptability)]
+許容性は人間による5段階の評価である．
+この評価尺度では，意味的に正しくなければ1と評価され，意味理解の容易さ，文法的な正しさ，流暢性によって2から5の評価が行われる．
+評価値は$1〜5$の整数であるが，他の評価尺度と比率を合わせるため，$0〜1$に正規化した値を用いる．
+\end{description}
+
+
+\subsubsection{実験結果}
+
+JAセットの質問文を入力とし，ORセットの質問文を参照訳とした時の各翻訳結果の評価値を図\ref{fig:mteval}に示す．
+
+図\ref{fig:mteval}より，人手翻訳の訳質は全ての評価尺度において機械翻訳のものよりも高いことが読み取れる．
+次に，GTとYTに着目すると，BLEUとNISTではGTが高く，RIBESと許容性ではYTが高い．
+これは先行研究~\cite{ribes}と同様の結果となっており，日英翻訳でのRIBESと人手評価による許容性との相関が高いという特性が確認された．
+また，MoとTraを比べると，Traの翻訳精度が劣っている．
+通常，日英間の翻訳では，文構造を捉えるTree-to-string翻訳の精度が比較的良くなるとされているが，今回は翻訳対象が質問文であるため，通常と異なる文型に偏っていることと，	各入力文がそれほど長くなく構造が単純である傾向があるため，文構造を捉える長所が生かされなかったことなどが原因と考えられる．
+次節で，このような特性が人間相手ではなく質問応答システムの入力として用いた場合でも同様に現れるかどうかを検証する．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-5ia3f4.eps}
+\end{center}
+\caption{訳質評価値（平均）}
+\label{fig:mteval}
+\vspace{1\Cvs}
+\end{figure}
+
+
+\subsection{実験2: 翻訳された質問セットを用いた質問応答}
+\label{sec:QAexp}
+
+次に，翻訳精度との関係を調査するため，作成したデータセットを用いて質問応答を行い，質問応答精度を測定した．
+
+
+\subsubsection{実験設定}
+
+本実験では\ref{sec:QAsystem}節で述べた質問応答フレームワークSEMPREを用いて，\ref{sec:dataset}節で述べた手順で作成した4つの質問セット及びORセットの質問応答実験を行い，各セットの質問応答精度を測定した．
+レキシコンには，ClueWeb09の新聞記事コーパスとFreebaseから構築されたものを使用した．
+また，評価関数の学習には，Free917のTrainセットとDevセットを用いた．
+テストセットとして使用した質問276問のうち12問で，正解論理式をFreebaseに入力した際に出力が得られなかったため，これらを除いた264問の結果を用いて質問応答精度を測定した．
+
+
+\subsubsection{実験結果}
+\label{sec:QAexpresult}
+
+各データセットの質問応答の結果を図\ref{fig:QAaccuracy}に示す．
+図\ref{fig:QAaccuracy}より，元のセット（ORセット）であっても約53\%の精度に留まっていることがわかる．
+また，HTセットの精度は機械翻訳で作成した他のデータセットと比較して高いことが読み取れる．
+しかしながら図\ref{fig:mteval}に示したように高い訳質を持つHTセットであっても，ORセットと比べると質問応答精度は{有意水準5\%で}有意に低いという結果となった（対応有りt検定）．
+{機械翻訳で作成したセットの中では，GTが最も質問応答精度が高く，HTセットの結果との差は有意と言えない結果となった．}
+また，YTはAcceptabilityにおいてGTを上回るが，質問応答精度はGTより{有意水準5\%で}有意に低かった．
+これらの結果は，{人間にとって分かりやすい翻訳結果は必ずしも質問応答に適する翻訳結果であるとは限らないことを示唆している}．
+\ref{sec:discussion1}節，\ref{sec:discussion2}節で，これらの現象について詳細な分析を行う．
+
+
+\subsection{質問応答精度と機械翻訳自動評価尺度の関係}
+\label{sec:discussion1}
+
+質問応答精度に影響を及ぼす翻訳結果の要因をより詳細に分析するため，訳質評価値と質問応答精度の相関を文単位で分析した．
+まず，図{\ref{fig:QAaccuracy}}に示すように，質問応答用に作成されたデータセット（ORセット）であっても約半数の質問は正解できていない．
+参照訳で正解できていない質問は翻訳の結果に関わらず正解することが難しいと考え，質問を2つのグループに分けた．
+「正解グループ」は，ORセットにおいて正解することができた141問の翻訳結果$141\times5=705$問からなるグループであり，
+「不正解グループ」は残りの123問の翻訳結果$123\times5=615$問からなるグループである．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-5ia3f5.eps}
+\end{center}
+\caption{各データセットにおける質問応答精度}
+\label{fig:QAaccuracy}
+\end{figure}
+
+正解グループにおける質問応答精度と訳質評価値の関係を図\ref{fig:result_correct}に示す．
+このグラフにおいて，棒グラフは評価値に対する質問数の分布を表し，折れ線グラフは評価値に対する正答率の変化を表す．
+例えば，BLEU+1の値が0.2--0.3の質問は正解グループの内30\%ほどを占め，それらの質問の正答率は35\%程度である．
+図中の$R^2$は決定係数である．
+決定係数は，線形回帰における全変動に対する回帰変動の割合を示し，値が1に近いほどよく当てはまる回帰直線であることを示す．
+この図より，本実験に使用した全ての評価尺度は質問応答精度と相関を持ち，言語横断質問応答において訳質は重要であることを示している．
+また，質問応答精度はNISTスコアと最も高い決定係数を示した．
+前述したように，NISTスコアは単語の出現頻度を考慮した尺度であり，機能語よりも内容語を重要視する特徴を持つ．
+この結果から，内容語が言語横断質問応答において重要な役割を持つことが確認でき，これを考慮した翻訳を行うことで質問応答精度が改善できると考えられる．
+これは，内容語が\ref{sec:QAsystem}節に述べたアライメントにおける論理式選択において重要であることを考えると自然な結果と言える．
+また，NISTスコアによってこの影響を自動的に適切に評価できる可能性もこの結果から読み取れる．
+
+一方で，人手評価との相関が高かったRIBESは，質問応答精度においては\hl{決定係数}が低いという結果となった．
+つまり，大域的な語順が言語横断質問応答のための翻訳にはそれほど重要ではない可能性があると言える．
+これらの結果を合わせると，語順に影響を受けやすいブリッジングよりも，単語の変化に影響を受けやすいアライメントの方が誤りに敏感であると考えられる．
+
+Acceptabilityの図に着目すると，1→2と3→4で精度の上昇の幅が大きく，2→3や4→5ではほとんど変化していない．
+Acceptabilityにおける評価値1は，「重要な情報が欠落しているか，内容が理解できない文」であることを示し，評価値2は「重要な情報が含まれており内容も理解できるが，文法的に誤っており理解が困難な文」であることを表す．
+このことからも，重要な情報や内容が欠落することは質問応答の精度に大きな影響を与えることがわかる．
+評価値2と3の差異は「容易に理解できるかどうか」である．この2つの評価値間で質問応答精度が大きく変わらないことは，人間にとっての理解の容易さは，質問応答精度の向上にはそれほど寄与しない可能性を示唆している．
+評価値3と4の差異は「文法的に正しいかどうか」である．
+この2つの間でも精度が大きく上昇しており文法が重要な可能性があるが，評価値4と評価された文が少ないため誤差が含まれている可能性もある．
+この点については後の分析で述べる．
+評価値4と5の差異は「ネイティブレベルの英語かどうか」である．
+この間では質問応答精度がほとんど変わらず，評価値5の方が少し下がる傾向が見られた．
+前述したように評価値4の文が少ないことによる誤差の可能性もあるが，ネイティブに用いられる言い回しが質問応答器にとっては逆効果となっている可能性も考えられる．
+
+\begin{figure}[p]
+\setlength{\captionwidth}{0.44\linewidth}
+\begin{minipage}[b]{0.44\linewidth}
+\begin{center}
+\includegraphics{23-5ia3f6.eps}
+\end{center}
+\hangcaption{評価尺度値と質問応答精度の相関（正解グループ） \protect \newline
+横軸：評価値の範囲 \protect \newline
+棒グラフ（左縦軸）：質問数の割合(\%) \protect \newline
+折れ線（右縦軸）：質問応答精度（範囲内平均）}
+\label{fig:result_correct}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.44\linewidth}
+\begin{center}
+\includegraphics{23-5ia3f7.eps}
+\end{center}
+\hangcaption{評価尺度値と質問応答精度の相関（不正解グループ） \protect \newline
+横軸：評価値の範囲 \protect \newline
+棒グラフ（左縦軸）：質問数の割合(\%) \protect \newline
+折れ線（右縦軸）：質問応答精度（範囲内平均）}
+\label{fig:result_wrong}
+\end{minipage}
+\end{figure}
+
+次に，不正解グループにおける訳質評価値と質問応答精度の関係を図\ref{fig:result_wrong}に示す．
+不正解グループにおいては，\hl{全ての自動評価尺度において正解グループと比較して決定係数が低いという結果となった．}
+この結果より，参照訳で質問応答器が解答できない問題では，翻訳を改善することで正解率を向上させるのが難しいということが言える．
+これは，言語横断質問応答のための翻訳器を評価する際の参照訳は質問応答器で正解可能であることが望ましいと言うこともできる．
+また，質問応答成功率を予測できれば，質問応答成功率が高い文を参照訳として機械翻訳を最適化することでこの問題を軽減できると考えられる．
+しかし，正解グループ・不正解グループのどちらにおいても，訳質評価尺度の値に対する質問数の分布は似通っており，訳質評価尺度でこの問題を解決することは困難であると考えられる．
+
+
+\subsection{質問応答事例分析}
+\label{sec:discussion2}
+
+本節では，翻訳によって質問応答の結果が変化した例を挙げながら，
+どのような翻訳結果の要因が影響しているかを考察する．
+
+\begin{table}[b]
+\caption{{内容語の変化による質問応答結果の変化の例}}
+\label{tb:example.cw}
+\input{03table02.txt}
+\end{table}
+
+内容語の変化による質問応答結果の変化の例を表{\ref{tb:example.cw}}に示す．
+{第1列は，各質問文での質問応答が成功したかどうかを表す記号であり，{$\circ$}が成功，{$\times$}が失敗を表す．}
+表{\ref{tb:example.cw}}の1つ目の例では，{\it ``interstate 579''}という内容語が翻訳によって様々に変化している（{\it ``interstate highway 579''}，{\it ``expressway 579''}など）．
+ORとTraの文のみが{\it ``interstate 579''}というフレーズを含んでおり，これらを入力とした場合のみ正しく答えることができている．
+出力された論理式を見比べると，不正解であった質問文ではinterstate\_579のエンティティが含まれておらず，別のエンティティに変換されていた．
+例えば，HTに含まれる{\it ``interstate highway 579''}というフレーズはinterstate\_highwayという音楽アルバムのエンティティに変換されていた．
+2つ目の例も同様に，{\it ``librettist''}という内容語が翻訳によって様々に変化し，不正解となっている．
+ここで，{\it ``librettist magic flute''}という質問文を作成し質問応答を行ったところ正解することができた{が，{\it ``who made magic flute''}では不正解であったことから，{\it ``librettist''}が重要な語であることがわかる}．
+この例でも1つ目の例と同様に，librettistというFreebase内のプロパティと一致する表現を含むことが質問応答の精度に寄与することが示唆される例である．
+
+このような例から，内容語が変化することでアライメントが失敗し，{正しいエンティティが生成されないことや誤ったエンティティが生成されること}が重要な問題であること{が確認できる}．
+{この問題は，正しいエンティティと結びつきやすい内容語の表現を翻訳の過程で考慮することで改善できる可能性がある．}
+また，これらの結果は本実験で使用した質問応答器の問題であるとも考えられ，言い換えを考慮できる質問応答器を用いることでも改善できる可能性がある．
+
+\begin{table}[b]
+\caption{{質問タイプ語の誤訳による質問応答結果の変化の例}}
+\label{tb:example.qt}
+\input{03table03.txt}
+\end{table}
+
+次に，質問タイプを表す語の誤訳が質問応答結果の変化の原因となる例を表{\ref{tb:example.qt}}に示す．
+1つ目の例では，内容語と考えられる{\it ``tv (television) programs''}，{\it ``danny devito''}（YTは綴りミスあり），{\it ``produce(d)''}の3つは全ての翻訳結果に含まれているが，HT以外は正解できていなかった．
+正解できた質問文とそれ以外の質問文を比較すると，{\it ``how many''}という質問タイプを表す語を含んでいることが必要である{と考えられる}．
+{GTやMoの質問文に対する解答を確認したところ，番組名をリストアップして答えており，正解とされる数と同じ数だけ答えていた．
+この例より，解答の形式を変化させるような質問タイプを示す語を，正確に翻訳する必要があることがわかる．
+一方で，2つ目の例では，{\it ``what''}や{\it ``which''}といった語が含まれていないMoの質問文でも正解することができている．
+この例より，質問タイプを表す語であっても重要度が低いものがあると考えられる．
+したがって，言語横断質問応答のための翻訳器は，解答の形式を変えるような質問タイプ語の一致を重視することが求められる．}
+質問タイプを表す語は内容語と異なり頻出するため，NISTスコアのように頻度に基づいて重要度を決めることは難しく，質問応答固有の指標が必要であると考えられる．
+
+文法{や語順}に関連する例を表{\ref{tb:example.ms}}に示す．
+1つ目の例では，YT以外の機械翻訳の結果は文法が整っていないにも関わらず全て正解している．
+一方，2つ目の例では，ORとHTでは文法が正しいにも関わらず不正解となっている．
+ORとHTの質問応答の結果を調べると，ベーブルースの打撃成績を出力していた．
+これは，{\it ``babe ruth''}と{\it ``play''}が隣接しており，ブリッジングの際に結びついたためと考えられる．
+{これらの例は，少なくともFree917に含まれるような単純な事実型質問においては，語順を正しく捉えることは質問応答精度の向上の観点からは必ずしも重要でないことを示している．
+ただし，より複雑な事実型質問や，非事実型質問に対して解答する際には，誤った語順の影響が強くなる可能性は否定できない．}
+
+\begin{table}[b]
+\caption{{文法誤りを含む訳による質問応答結果の例}}
+\label{tb:example.ms}
+\input{03table04.txt}
+\end{table}
+
+これらの例は，使用した質問応答システムが語順の影響を受けづらいものであったことによる可能性も考えられる．
+これを明らかにするためには様々な質問応答システムを用いて実験を行うことが必要であるが，それは今後の課題とする．
+
+{{\ref{sec:QAexpresult}}節で述べたように，人間にとってわかりやすい翻訳が質問応答にも成功しやすい翻訳とは限らない可能性がある．
+実際に質問応答の結果を見ると，質問応答の正誤とAcceptabilityの評価が反する例が確認された．
+その一例を表{\ref{tb:example.QAvsAccept}}に示す．
+1つ目の例では，{\it ``do you''}というフレーズを含むことによって文章の意味が変わっているためAcceptabilityは1と評価されているが，質問応答では正解できている．
+この例では内容語は正しく翻訳できており，{\it ``do you''}というフレーズを無視することができたため正解することができたと考えられる．
+2つ目の例では，主に前置詞の意味の違いによって，GTは2という低い評価が付けられている．
+一方でYTはGTと比較して意味的に正しく翻訳されており3と評価されているが，質問応答の結果は不正解であった．
+質問応答の過程を見ると，ORとGTの文からはareasというテーマパークのエリアを示すプロパティが得られたのに対し，YTの文からはareaという面積を示すプロパティが得られていた．
+このことから，意味的に正しい文であることよりも内容語の表層的な一致がより重要であることがわかる．
+3つ目の例では，YTは固有名詞である{\it ``manny pacquiao''}を{\it ``mannie pacquiao''}としており，質問応答結果が不正解となっている．
+人間が固有名詞を判断するときには少々の誤字が含まれていたとしても読み取れることから，YTの文に3という評価値が付けられたと考えられるが，機械による質問応答においては，特に固有名詞中の誤字は重大な問題であることがこの例により示唆される．}
+
+\begin{table}[t]
+\caption{{許容性と質問応答結果が反する例}}
+\label{tb:example.QAvsAccept}
+\input{03table05.txt}
+\end{table}
+
+
+\subsection{実験3: 自動評価尺度を用いてリスコアリングされた翻訳結果を用いた質問応答}
+\label{sec:nbestselect}
+
+\ref{sec:discussion1}節，\ref{sec:discussion2}節の分析の結果，質問応答精度と最も高い相関を持つ自動評価尺度はNISTスコアであった．
+したがって，NISTスコアが高評価となるよう翻訳システムを学習させることで，質問応答に適した翻訳システムとなる可能性がある．
+そこでまず，多数の翻訳結果からNISTスコアが最も高い翻訳結果を選択することで，質問応答精度が向上するかどうかを調べる．
+
+
+\subsubsection{実験設定}
+
+翻訳$N$ベストの内，最もNISTの高い翻訳を使用した時の質問応答精度を調査する．
+本実験では，翻訳器にMosesとTravatarを用い，$N=100$とした．
+また，比較のためBLEU+1についても同様の実験を行った．
+
+
+\subsubsection{実験結果}
+
+表\ref{table:reordering_result}に実験結果を示す．
+また，比較のため翻訳システム第一位の結果を用いた場合の精度も表中に示す．
+表より，翻訳$N$ベストの中から適切な選択を行うことで，質問応答の精度が向上することがわかる．
+{特にTravatarを用いた言語横断質問応答において，BLEU+1およびNISTスコアを用いて翻訳結果を選択することで，有意水準5\%で統計的有意に質問応答精度が向上している．}
+また，選択基準にNISTスコアを選んだ場合の正答率は，選択基準にBLEU+1を選んだ時の正答率よりも向上する傾向にある．
+これらの結果は，{機械翻訳器の最適化によって言語横断質問応答の精度を改善できる可能性を示している．}
+
+\begin{table}[t]
+\caption{翻訳$100$ベスト選択実験結果}
+\label{table:reordering_result}
+\input{03table06.txt}
+\end{table}
+
+{本実験で使用した選択手法は，質問応答精度の高い参照訳が必要であり，未知の入力の翻訳結果選択に直接用いることはできない．
+しかし，質問応答精度と高い相関を持つ評価尺度に基づいて翻訳器を最適化することで，質問応答精度の高い翻訳結果を得ることが可能であると考えられる．}
+
+
+\subsection{{実験4: 様々な言語対での翻訳精度と質問応答精度の関係調査}}
+\label{sec:exp4}
+
+{実験1から3では，日英言語横断を行い，訳質と翻訳精度の関係について調査した．
+次に，日英以外の言語対における言語横断質問応答においても，同様の結果が得られるかどうかを調査する．}		
+
+
+\subsubsection{{データセット作成}}
+
+{Haasらによって作成されたドイツ語版の{free917}セット~{\cite{haas2015}}を入手し，そのテストセットに含まれる質問文を{Google}翻訳{\footnote{https://translate.google.co.jp/, 2016年6月アクセス}}および{Bing}翻訳{\footnote{https://www.bing.com/translator, 2016年6月アクセス}}を用いて英訳し，{DE-GT}セットおよび{DE-Bing}セット（独英）を作成した．
+また，{\ref{sec:dataset}}章に示す手順に従い，ORセットに含まれる質問文を中国語，インドネシア（尼）語，ベトナム（越）語の母語話者に依頼して人手翻訳してもらい，それぞれの言語の質問セットを新たに作成した．
+次に，これらの3つの質問セットをそれぞれGoogle翻訳およびBing翻訳を用いて英訳し，ZH-GTセット（中英），ID-GTセット（尼英），VI-GTセット（越英），ZH-Bingセット，VI-Bingセット，ID-Bingセットの6つの英語質問セットを作成した．
+また比較のため，JAセットをBing翻訳を用いて英訳し，JA-Bingセット（日英）を作成した．}
+
+
+\subsubsection{{訳質評価と質問応答精度の関係}}
+
+{作成した9つの質問セットを用いて，{\ref{sec:QAsystem}}章に示す質問応答システムによる質問応答を行い，質問応答精度を評価した．
+その結果を図{\ref{fig:MltLngQAacc}}に示す．
+比較のため，同翻訳手法を用いた日英の質問セット(JA-GT)での結果を合わせて示す．
+図より，どの言語対においても，翻訳による質問応答精度の低下は起こっており，その影響を緩和するような翻訳結果を得ることは重要であると言える．
+また，中英セットと越英セットの質問応答精度が他と比較して低いことから，同じ翻訳手法を用いても言語対によって影響に差があることがわかる．}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-5ia3f8.eps}
+\end{center}
+\caption{{様々な言語対における質問応答精度}}
+\label{fig:MltLngQAacc}
+\end{figure}
+
+{次に，{\ref{sec:mt_criterion}}節に示す評価尺度の内，許容性評価を除く4つの評価尺度を用いて，前節で作成した9つの質問セットの訳質を評価した．
+また各質問セットについて，{\ref{sec:discussion1}}節と同様に参照訳での質問応答が正解できているかどうかで2つのグループに分け，各グループ内での各評価尺度と質問応答精度との相関を測定した．
+ただし本実験では，評価値の範囲で平均するのではなく，各文の評価値と質問応答結果（完全正解で1，完全不正解で0）を直接使用した．
+表{\ref{tb:exp4result}}，表{\ref{tb:exp4resultBing}}に示す結果より，どの言語対においても不正解グループの決定係数は正解グループに比べて小さく，無相関に近いことがわかる．
+正解グループの決定係数も最大0.200となっており図{\ref{fig:result_correct}}の値と比べると小さいが，これはほぼ2値で表現される質問応答結果と連続値で表される評価尺度の間で相関を計算したことが原因であると考えられる．
+まず，全言語対の結果をまとめて計算した時（表中の右端の列），最も相関が高い評価尺度はNISTスコアであり，本実験で使用したどの言語対においても内容語の表層の一致が重要であることがうかがえる．
+各言語対の正解グループの決定係数に着目すると，日英と中英では似た傾向がある一方で，尼英では1-WERが最大の決定係数を持っており，言語対によっては異なった特徴が現れている．
+また独英では，他言語対と比べてNISTスコアとBLEU+1の差が大きく，両評価尺度の差である内容語の一致が特に重要であることが予想できる．
+このことから，全体としてNISTスコアが質問応答精度と強く相関するが，言語対の特徴を考慮することでより強い相関を持った尺度を得ることができると考えられる．
+しかしながら，言語対によって異なる特徴については，現段階では詳細に至るまで分析できておらず，今後さらなる分析が必要とされる．}
+
+\begin{table}[t]
+\caption{評価尺度と質問応答精度との決定係数(GT) （太字は正解グループ内の最大値）}
+\label{tb:exp4result}
+\input{03table07.txt}
+\end{table}
+\begin{table}[t]
+\caption{評価尺度と質問応答精度との決定係数(Bing) （太字は正解グループ内の最大値）}
+\label{tb:exp4resultBing}
+\input{03table08.txt}
+\end{table}
+
+
+\section{まとめ} \label{sec:conclusion}
+
+本研究では，言語横断質問応答システムの精度を向上させるため，翻訳結果が質問応答の結果に与える影響を調査した．
+
+
+具体的には，翻訳精度評価（{\ref{sec:MTevalexp}}節）と言語横断質問応答精度の評価（{\ref{sec:QAexp}}節）を行い，両者の関係を分析した（{\ref{sec:discussion1}}節）．
+その結果，内容語の一致を重視するNISTスコアが質問応答精度と高い相関を持つことがわかった．
+これは質問応答において内容語が重要であるという直感にも合致する結果である．
+一方で，人手評価がNISTスコアやBLEU+1といった自動評価よりも相関が低いこともわかった．
+この結果より，人間が正しいと評価する翻訳が必ずしも質問応答に適しているとは限らないという知見が得られた．
+
+この結果に対して，質問応答結果の事例分析（{\ref{sec:discussion2}}節）を行ったところ，以下の2つのことがわかった．
+1つ目は，人間が正しいと評価した内容語でも質問応答システムが正しく解答できない場合もあり，翻訳結果に含まれる内容語の正しさの評価基準は人間と質問応答システムで必ずしも一致しないということがわかった．
+2つ目は，質問タイプを表す語の中には，正しい解答を出すために重要な語と重要でない語があることがわかった．
+具体的には，{\it ``how many''}など解答の形式を変化させる語は正しい翻訳が必須であり，{\it ``what''}や{\it ``which''}などの語は翻訳結果に含まれていなくても正しく解答することができている例が確認できた．
+
+また，NISTスコアに基づいて選択された翻訳結果の質問応答実験（{\ref{sec:nbestselect}}節）により，内容語に重点を置いた翻訳結果を使用することで言語横断質問応答精度が改善されることがわかった．
+この結果から，機械翻訳器の最適化を行うことで，言語横断質問応答の精度を改善できる可能性を示した．
+
+最後に，日英以外の言語対における言語横断質問応答実験（{\ref{sec:exp4}}節）では，日英以外の3言語対においても日英と同様に内容語を重視する訳質評価尺度が質問応答精度と相関が高い傾向が見られた．
+このことから，内容語を重視した訳質評価尺度と質問応答精度が高い相関を持つという知見は多くの言語対で見られ，一般性のある知見であることが示された．
+
+今後の課題としては，様々な言語対および質問応答システムを用いた言語横断質問応答を行うことでより一般性のある知見を得ることや，
+質問応答精度と高い相関を持つ評価尺度の作成，そのような尺度を用いて機械翻訳器を最適化することによる質問応答精度の変化を確認することなどが挙げられる．
+
+
+
+\acknowledgment
+
+\vspace{-0.5\Cvs}
+本研究の一部は，NAISTビッグデータプロジェクトおよびマイクロソフトリサーチCORE連携研究プログラムの活動として行ったものである．
+また，本研究開発の一部は総務省SCOPE（受付番号152307004）の委託を受けたものである．
+
+\vspace{-0.4\Cvs}
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Berant, Chou, Frostig, \BBA\ Liang}{Berant
+  et~al.}{2013}]{berant2013}
+Berant, J., Chou, A., Frostig, R., \BBA\ Liang, P. \BBOP 2013\BBCP.
+\newblock \BBOQ Semantic Parsing on Freebase from Question-Answer Pairs.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 1533--1544}.
+
+\bibitem[\protect\BCAY{Cai \BBA\ Yates}{Cai \BBA\ Yates}{2013}]{cai2013}
+Cai, Q.\BBACOMMA\ \BBA\ Yates, A. \BBOP 2013\BBCP.
+\newblock \BBOQ Large-scale Semantic Parsing via Schema Matching and Lexicon
+  Extension.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 423--433}.
+
+\bibitem[\protect\BCAY{Callan, Hoy, Yoo, \BBA\ Zhao}{Callan
+  et~al.}{2009}]{clueweb09}
+Callan, J., Hoy, M., Yoo, C., \BBA\ Zhao, L. \BBOP 2009\BBCP.
+\newblock \BBOQ Clueweb09 Dataset.\BBCQ.
+
+\bibitem[\protect\BCAY{Doddington}{Doddington}{2002}]{nist}
+Doddington, G. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic Evaluation of Machine Translation Quality Using
+  N-gram Co-occurrence Statistics.\BBCQ\
+\newblock In {\Bem Proceedings of HLT}, \mbox{\BPGS\ 138--145}.
+
+\bibitem[\protect\BCAY{Fader, Zettlemoyer, \BBA\ Etzioni}{Fader
+  et~al.}{2014}]{fader2014}
+Fader, A., Zettlemoyer, L., \BBA\ Etzioni, O. \BBOP 2014\BBCP.
+\newblock \BBOQ Open Question Answering over Curated and Extracted Knowledge
+  Bases.\BBCQ\
+\newblock In {\Bem Proceedings of ACM SIGKDD}, \mbox{\BPGS\ 1156--1165}.
+
+\bibitem[\protect\BCAY{Goto, Chow, Lu, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2013}]{goto2013}
+Goto, I., Chow, K.~P., Lu, B., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2013\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at The NTCIR-10
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR-10}, \mbox{\BPGS\ 260--286}.
+
+\bibitem[\protect\BCAY{Haas \BBA\ Riezler}{Haas \BBA\ Riezler}{2015}]{haas2015}
+Haas, C.\BBACOMMA\ \BBA\ Riezler, S. \BBOP 2015\BBCP.
+\newblock \BBOQ Response-based Learning for Machine Translation of Open-domain
+  Database Queries.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL HLT}, \mbox{\BPGS\ 1339--1344}.
+
+\bibitem[\protect\BCAY{Hyodo \BBA\ Akiba}{Hyodo \BBA\ Akiba}{2009}]{hyodo2009}
+Hyodo, T.\BBACOMMA\ \BBA\ Akiba, T. \BBOP 2009\BBCP.
+\newblock \BBOQ Improving Translation Model for SMT-based Cross Language
+  Question Answering.\BBCQ\
+\newblock In {\Bem Proceedings of FIT}, \lowercase{\BVOL}~8, \mbox{\BPGS\
+  289--292}.
+
+\bibitem[\protect\BCAY{Isozaki, Hirao, Duh, Sudoh, \BBA\ Tsukada}{Isozaki
+  et~al.}{2010}]{ribes}
+Isozaki, H., Hirao, T., Duh, K., Sudoh, K., \BBA\ Tsukada, H. \BBOP 2010\BBCP.
+\newblock \BBOQ Automatic Evaluation of Translation Quality for Distant
+  Language Pairs.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 944--952}.
+
+\bibitem[\protect\BCAY{Kiyota, Kurohashi, \BBA\ Kido}{Kiyota
+  et~al.}{2002}]{kiyota2002}
+Kiyota, Y., Kurohashi, S., \BBA\ Kido, F. \BBOP 2002\BBCP.
+\newblock \BBOQ Dialog Navigator: A Question Answering System based on Large
+  Text Knowledge Base.\BBCQ\
+\newblock In {\Bem Proceedings of COLING}, \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{moses}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 177--180}.
+
+\bibitem[\protect\BCAY{Leusch, Ueffing, \BBA\ Ney}{Leusch et~al.}{2003}]{wer}
+Leusch, G., Ueffing, N., \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Novel String-to-string Distance Measure with Applications to
+  Machine Translation Evaluation.\BBCQ\
+\newblock In {\Bem Proceedings of MT Summit IX}, \mbox{\BPGS\ 240--247}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Och}{Lin \BBA\ Och}{2004}]{bleu+1}
+Lin, C.-Y.\BBACOMMA\ \BBA\ Och, F.~J. \BBOP 2004\BBCP.
+\newblock \BBOQ ORANGE: A Method for Evaluating Automatic Evaluation Metrics
+  for Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of COLING}, \mbox{\BPGS\ 501--507}.
+
+\bibitem[\protect\BCAY{Mori \BBA\ Kawagishi}{Mori \BBA\
+  Kawagishi}{2005}]{mori2005}
+Mori, T.\BBACOMMA\ \BBA\ Kawagishi, M. \BBOP 2005\BBCP.
+\newblock \BBOQ A Method of Cross Language Question-answering based on Machine
+  Translation and Transliteration.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR-5}, \mbox{\BPGS\ 182--189}.
+
+\bibitem[\protect\BCAY{Neubig}{Neubig}{2013}]{travatar}
+Neubig, G. \BBOP 2013\BBCP.
+\newblock \BBOQ Travatar: A Forest-to-String Machine Translation Engine based
+  on Tree Transducers.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 91--96}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{bleu}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Riezler, Simianer, \BBA\ Haas}{Riezler
+  et~al.}{2014}]{riezler2014}
+Riezler, S., Simianer, P., \BBA\ Haas, C. \BBOP 2014\BBCP.
+\newblock \BBOQ Response-based Learning for Grounded Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 881--891}.
+
+\bibitem[\protect\BCAY{Shimizu, Fujii, \BBA\ Itou}{Shimizu
+  et~al.}{2005}]{shimizu2005}
+Shimizu, K., Fujii, A., \BBA\ Itou, K. \BBOP 2005\BBCP.
+\newblock \BBOQ Bi-directional Cross Language Question Answering using a Single
+  Monolingual QA System.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR-5}, \mbox{\BPGS\ 455--462}.
+
+\bibitem[\protect\BCAY{Tunstall-Pedoe}{Tunstall-Pedoe}{2010}]{tunstall2010}
+Tunstall-Pedoe, W. \BBOP 2010\BBCP.
+\newblock \BBOQ True Knowledge: Open-domain Question Answering Using Structured
+  Knowledge and Inference.\BBCQ\
+\newblock {\Bem AI Magazine}, {\Bbf 31}  (3), \mbox{\BPGS\ 80--92}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{杉山享志朗}{
+2014年呉工業高等専門学校機械電気専攻卒業．2016年奈良先端科学技術大学院大学情報科学研究科修士課程修了．同年より，同大学院博士後期課程在学．自然言語処理に関する研究に従事．
+}
+\bioauthor{水上　雅博}{
+2012年同志社大学理工学部卒業．2014年奈良先端科学技術大学院大学情報科学研究科修士課程修了．同年より同大学院博士後期課程在学．自然言語処理および音声対話システムに関する研究に従事．人工知能学会，音響学会，言語処理学会各会員．
+}
+\bioauthor[:]{Graham Neubig}{
+2005年米国イリノイ大学アーバナ・シャンペーン校工学部コンピュータ・サイエンス専攻卒業．2010年京都大学大学院情報学研究科修士課程修了．2012年同大学院博士後期課程修了．同年奈良先端科学技術大学院大学助教．2016年より米国カーネギーメロン大学助教．機械翻訳，自然言語処理に関する研究に従事．
+}
+\bioauthor{吉野幸一郎}{
+2009年慶應義塾大学環境情報学部卒業．2011年京都大学大学院情報学研究科修士課程修了．2014年同博士後期課程修了．同年日本学術振興会特別研究員 (PD)．2015年より奈良先端科学技術大学院大学情報科学研究科特任助教．2016年より同助教．京都大学博士（情報学）．音声言語処理および自然言語処理，特に音声対話システムに関する研究に従事．2013年度人工知能学会研究会優秀賞受賞．IEEE，ACL，情報処理学会，言語処理学会各会員．
+}
+\bioauthor{鈴木　　優}{
+2004年奈良先端科学技術大学博士後期課程修了．博士（工学）．現在，奈良先端科学技術大学院大学情報科学研究科特任准教授．情報検索やクラウドソーシングに関する研究開発に従事．情報処理学会，電子情報通信学会，ACM，IEEE Computer各会員．
+}
+\bioauthor{中村　　哲}{
+1981年京都工芸繊維大学工芸学部電子工学科卒業．京都大学博士（工学）．シャープ株式会社．奈良先端科学技術大学院大学助教授，2000年ATR音声言語コミュニケーション研究所室長，所長，2006年（独）情報通信研究機構研究センター長，けいはんな研究所長などを経て，現在，奈良先端科学技術大学院大学教授．ATRフェロー．カールスルーエ大学客員教授．音声翻訳，音声対話，自然言語処理の研究に従事．情報処理学会喜安記念業績賞，総務大臣表彰，文部科学大臣表彰，AntonioZampoli賞受賞．IEEESLTC委員，ISCA理事，IEEEフェロー．
+}
+\end{biography}
+
+
+\biodate
+
+
+
+
+
+\end{document}
